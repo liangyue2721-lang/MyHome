@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.stock.mapper.StockTradesMapper">
+
+    <resultMap type="StockTrades" id="StockTradesResult">
+        <result property="id" column="id"/>
+        <result property="stockCode" column="stock_code"/>
+        <result property="stockName" column="stock_name"/>
+        <result property="initialShares" column="initial_shares"/>
+        <result property="buyPrice" column="buy_price"/>
+        <result property="sellTargetPrice" column="sell_target_price"/>
+        <result property="targetNetProfit" column="target_net_profit"/>
+        <result property="sellPrice" column="sell_price"/>
+        <result property="additionalPrice1" column="additional_price_1"/>
+        <result property="additionalShares1" column="additional_shares_1"/>
+        <result property="additionalPrice2" column="additional_price_2"/>
+        <result property="additionalShares2" column="additional_shares_2"/>
+        <result property="additionalPrice3" column="additional_price_3"/>
+        <result property="additionalShares3" column="additional_shares_3"/>
+        <result property="totalCost" column="total_cost"/>
+        <result property="netProfit" column="net_profit"/>
+        <result property="syncStatus" column="sync_status"/>
+        <result property="isSell" column="is_sell"/>
+        <result property="syncStatus" column="sync_status"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="stockApi" column="stock_api"/>
+        <result property="userId" column="user_id"/>
+    </resultMap>
+
+    <sql id="selectStockTradesVo">
+        select id,
+               stock_code,
+               stock_name,
+               initial_shares,
+               buy_price,
+               sell_target_price,
+               target_net_profit,
+               sell_price,
+               additional_price_1,
+               additional_shares_1,
+               additional_price_2,
+               additional_shares_2,
+               additional_price_3,
+               additional_shares_3,
+               total_cost,
+               net_profit,
+               is_sell,
+               sync_status,
+               create_time,
+               update_time,
+               stock_api,
+               user_id
+        from stock_trades
+    </sql>
+
+    <select id="selectStockTradesList" parameterType="StockTrades" resultMap="StockTradesResult">
+        <include refid="selectStockTradesVo"/>
+        <where>
+            <if test="stockCode != null  and stockCode != ''">and stock_code = #{stockCode}</if>
+            <if test="stockName != null  and stockName != ''">and stock_name like concat('%', #{stockName}, '%')</if>
+            <if test="initialShares != null ">and initial_shares = #{initialShares}</if>
+            <if test="buyPrice != null ">and buy_price = #{buyPrice}</if>
+            <if test="sellTargetPrice != null ">and sell_target_price = #{sellTargetPrice}</if>
+            <if test="targetNetProfit != null ">and target_net_profit = #{targetNetProfit}</if>
+            <if test="sellPrice != null ">and sell_price = #{sellPrice}</if>
+            <if test="additionalPrice1 != null ">and additional_price_1 = #{additionalPrice1}</if>
+            <if test="additionalShares1 != null ">and additional_shares_1 = #{additionalShares1}</if>
+            <if test="additionalPrice2 != null ">and additional_price_2 = #{additionalPrice2}</if>
+            <if test="additionalShares2 != null ">and additional_shares_2 = #{additionalShares2}</if>
+            <if test="additionalPrice3 != null ">and additional_price_3 = #{additionalPrice3}</if>
+            <if test="additionalShares3 != null ">and additional_shares_3 = #{additionalShares3}</if>
+            <if test="totalCost != null ">and total_cost = #{totalCost}</if>
+            <if test="netProfit != null ">and net_profit = #{netProfit}</if>
+            <if test="isSell != null">and is_sell = #{isSell}</if>
+            <if test="syncStatus != null ">and sync_status = #{syncStatus}</if>
+            <if test="stockApi != null  and stockApi != ''">and stock_api = #{stockApi}</if>
+            <if test="userId != null ">and user_id = #{userId}</if>
+        </where>
+        order by create_time desc
+    </select>
+
+    <select id="selectStockTradesById" parameterType="Long" resultMap="StockTradesResult">
+        <include refid="selectStockTradesVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertStockTrades" parameterType="StockTrades" useGeneratedKeys="true" keyProperty="id">
+        insert into stock_trades
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="stockCode != null">stock_code,</if>
+            <if test="stockName != null">stock_name,</if>
+            <if test="initialShares != null">initial_shares,</if>
+            <if test="buyPrice != null">buy_price,</if>
+            <if test="sellTargetPrice != null">sell_target_price,</if>
+            <if test="targetNetProfit != null">target_net_profit,</if>
+            <if test="sellPrice != null">sell_price,</if>
+            <if test="additionalPrice1 != null">additional_price_1,</if>
+            <if test="additionalShares1 != null">additional_shares_1,</if>
+            <if test="additionalPrice2 != null">additional_price_2,</if>
+            <if test="additionalShares2 != null">additional_shares_2,</if>
+            <if test="additionalPrice3 != null">additional_price_3,</if>
+            <if test="additionalShares3 != null">additional_shares_3,</if>
+            <if test="totalCost != null">total_cost,</if>
+            <if test="netProfit != null">net_profit,</if>
+            <if test="isSell != null">is_sell,</if>
+            <if test="syncStatus != null">sync_status,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="stockApi != null">stock_api,</if>
+            <if test="userId != null">user_id,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="stockCode != null">#{stockCode},</if>
+            <if test="stockName != null">#{stockName},</if>
+            <if test="initialShares != null">#{initialShares},</if>
+            <if test="buyPrice != null">#{buyPrice},</if>
+            <if test="sellTargetPrice != null">#{sellTargetPrice},</if>
+            <if test="targetNetProfit != null">#{targetNetProfit},</if>
+            <if test="sellPrice != null">#{sellPrice},</if>
+            <if test="additionalPrice1 != null">#{additionalPrice1},</if>
+            <if test="additionalShares1 != null">#{additionalShares1},</if>
+            <if test="additionalPrice2 != null">#{additionalPrice2},</if>
+            <if test="additionalShares2 != null">#{additionalShares2},</if>
+            <if test="additionalPrice3 != null">#{additionalPrice3},</if>
+            <if test="additionalShares3 != null">#{additionalShares3},</if>
+            <if test="totalCost != null">#{totalCost},</if>
+            <if test="netProfit != null">#{netProfit},</if>
+            <if test="isSell != null">#{isSell},</if>
+            <if test="syncStatus != null">#{syncStatus},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="stockApi != null">#{stockApi},</if>
+            <if test="userId != null">#{userId},</if>
+        </trim>
+    </insert>
+
+    <update id="updateStockTrades" parameterType="StockTrades">
+        update stock_trades
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="stockCode != null">stock_code = #{stockCode},</if>
+            <if test="stockName != null">stock_name = #{stockName},</if>
+            <if test="initialShares != null">initial_shares = #{initialShares},</if>
+            <if test="buyPrice != null">buy_price = #{buyPrice},</if>
+            <if test="sellTargetPrice != null">sell_target_price = #{sellTargetPrice},</if>
+            <if test="targetNetProfit != null">target_net_profit = #{targetNetProfit},</if>
+            <if test="sellPrice != null">sell_price = #{sellPrice},</if>
+            <if test="additionalPrice1 != null">additional_price_1 = #{additionalPrice1},</if>
+            <if test="additionalShares1 != null">additional_shares_1 = #{additionalShares1},</if>
+            <if test="additionalPrice2 != null">additional_price_2 = #{additionalPrice2},</if>
+            <if test="additionalShares2 != null">additional_shares_2 = #{additionalShares2},</if>
+            <if test="additionalPrice3 != null">additional_price_3 = #{additionalPrice3},</if>
+            <if test="additionalShares3 != null">additional_shares_3 = #{additionalShares3},</if>
+            <if test="totalCost != null">total_cost = #{totalCost},</if>
+            <if test="netProfit != null">net_profit = #{netProfit},</if>
+            <if test="isSell != null">is_sell = #{isSell},</if>
+            <if test="syncStatus != null">sync_status = #{syncStatus},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="stockApi != null">stock_api = #{stockApi},</if>
+            <if test="userId != null">user_id = #{userId},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteStockTradesById" parameterType="Long">
+        delete
+        from stock_trades
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteStockTradesByIds" parameterType="String">
+        delete from stock_trades where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+
+    <update id="updateStockTradesByCode" parameterType="StockTrades">
+        update stock_trades
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="stockCode != null">stock_code = #{stockCode},</if>
+            <if test="stockName != null">stock_name = #{stockName},</if>
+            <if test="initialShares != null">initial_shares = #{initialShares},</if>
+            <if test="buyPrice != null">buy_price = #{buyPrice},</if>
+            <if test="sellPrice != null">sell_price = #{sellPrice},</if>
+            <if test="additionalPrice1 != null">additional_price_1 = #{additionalPrice1},</if>
+            <if test="additionalShares1 != null">additional_shares_1 = #{additionalShares1},</if>
+            <if test="additionalPrice2 != null">additional_price_2 = #{additionalPrice2},</if>
+            <if test="additionalShares2 != null">additional_shares_2 = #{additionalShares2},</if>
+            <if test="additionalPrice3 != null">additional_price_3 = #{additionalPrice3},</if>
+            <if test="additionalShares3 != null">additional_shares_3 = #{additionalShares3},</if>
+            <if test="totalCost != null">total_cost = #{totalCost},</if>
+            <if test="netProfit != null">net_profit = #{netProfit},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="stockApi != null">stock_api = #{stockApi},</if>
+            <if test="sellTargetPrice != null">sell_target_price = #{sellTargetPrice},</if>
+            <if test="targetNetProfit != null">target_net_profit = #{targetNetProfit},</if>
+        </trim>
+        where `stock_code` = #{stockCode} and is_sell = '0'
+    </update>
+    <update id="updateStockTradesBatch" parameterType="java.util.List">
+        update stock_trades
+        set
+        sync_status = 1
+        where id in
+        <foreach collection="list" item="item" open="(" separator="," close=")">
+            #{item.id}
+        </foreach>
+    </update>
+
+
+
+    <select id="selectStockTradesOne" parameterType="StockTrades" resultMap="StockTradesResult">
+        <include refid="selectStockTradesVo"/>
+        <where>
+            <if test="stockCode != null">stock_code = #{stockCode}</if>
+        </where>
+        and is_sell = '0'
+    </select>
+
+
+</mapper>

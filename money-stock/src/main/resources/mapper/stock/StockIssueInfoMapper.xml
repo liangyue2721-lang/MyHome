@@ -1,0 +1,334 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.stock.mapper.StockIssueInfoMapper">
+
+    <resultMap type="StockIssueInfo" id="StockIssueInfoResult">
+        <result property="applyCode" column="apply_code"/>
+        <result property="infoCode" column="info_code"/>
+        <result property="securityCode" column="security_code"/>
+        <result property="securityName" column="security_name"/>
+        <result property="tradeMarketCode" column="trade_market_code"/>
+        <result property="tradeMarket" column="trade_market"/>
+        <result property="marketType" column="market_type"/>
+        <result property="orgType" column="org_type"/>
+        <result property="mainBusiness" column="main_business"/>
+        <result property="issueNum" column="issue_num"/>
+        <result property="onlineIssueNum" column="online_issue_num"/>
+        <result property="offlinePlacingNum" column="offline_placing_num"/>
+        <result property="issuePrice" column="issue_price"/>
+        <result property="afterIssuePe" column="after_issue_pe"/>
+        <result property="initialMultiple" column="initial_multiple"/>
+        <result property="latelyPrice" column="lately_price"/>
+        <result property="closePrice" column="close_price"/>
+        <result property="limitUpPrice" column="limit_up_price"/>
+        <result property="newestPrice" column="newest_price"/>
+        <result property="applyDate" column="apply_date"/>
+        <result property="ballotNumDate" column="ballot_num_date"/>
+        <result property="ballotPayDate" column="ballot_pay_date"/>
+        <result property="listingDate" column="listing_date"/>
+        <result property="openPrice" column="open_price"/>
+        <result property="ldOpenPremium" column="ld_open_premium"/>
+        <result property="ldCloseChange" column="ld_close_change"/>
+        <result property="turnoverrate" column="turnoverrate"/>
+        <result property="ldHighChang" column="ld_high_chang"/>
+        <result property="ldAveragePrice" column="ld_average_price"/>
+        <result property="predictOnfundUpper" column="predict_onfund_upper"/>
+        <result property="predictPeThree" column="predict_pe_three"/>
+        <result property="industryPe" column="industry_pe"/>
+        <result property="isBeijing" column="is_beijing"/>
+        <result property="isRegistration" column="is_registration"/>
+        <result property="totalChange" column="total_change"/>
+        <result property="profit" column="profit"/>
+        <result property="onlineIssueLwr" column="online_issue_lwr"/>
+        <result property="topApplyMarketcap" column="top_apply_marketcap"/>
+        <result property="onlineApplyUpper" column="online_apply_upper"/>
+        <result property="predictOnapplyUpper" column="predict_onapply_upper"/>
+        <result property="industryPeNew" column="industry_pe_new"/>
+        <result property="offlineEpObject" column="offline_ep_object"/>
+        <result property="continuous1wordNum" column="continuous_1word_num"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <sql id="selectStockIssueInfoVo">
+        select apply_code,
+               info_code,
+               security_code,
+               security_name,
+               trade_market_code,
+               trade_market,
+               market_type,
+               org_type,
+               main_business,
+               issue_num,
+               online_issue_num,
+               offline_placing_num,
+               issue_price,
+               after_issue_pe,
+               initial_multiple,
+               lately_price,
+               close_price,
+               limit_up_price,
+               newest_price,
+               apply_date,
+               ballot_num_date,
+               ballot_pay_date,
+               listing_date,
+               open_price,
+               ld_open_premium,
+               ld_close_change,
+               turnoverrate,
+               ld_high_chang,
+               ld_average_price,
+               predict_onfund_upper,
+               predict_pe_three,
+               industry_pe,
+               is_beijing,
+               is_registration,
+               total_change,
+               profit,
+               online_issue_lwr,
+               top_apply_marketcap,
+               online_apply_upper,
+               predict_onapply_upper,
+               industry_pe_new,
+               offline_ep_object,
+               continuous_1word_num,
+               create_time,
+               update_time
+        from stock_issue_info
+    </sql>
+
+    <select id="selectStockIssueInfoList" parameterType="StockIssueInfo" resultMap="StockIssueInfoResult">
+        <include refid="selectStockIssueInfoVo"/>
+        <where>
+            <if test="infoCode != null  and infoCode != ''">and info_code = #{infoCode}</if>
+            <if test="securityCode != null  and securityCode != ''">and security_code like concat('%', #{securityCode},
+                '%')
+            </if>
+            <if test="securityName != null  and securityName != ''">and security_name like concat('%', #{securityName},
+                '%')
+            </if>
+            <if test="tradeMarketCode != null  and tradeMarketCode != ''">and trade_market_code = #{tradeMarketCode}
+            </if>
+            <if test="tradeMarket != null  and tradeMarket != ''">and trade_market = #{tradeMarket}</if>
+            <if test="marketType != null  and marketType != ''">and market_type = #{marketType}</if>
+            <if test="orgType != null  and orgType != ''">and org_type = #{orgType}</if>
+            <if test="mainBusiness != null  and mainBusiness != ''">and main_business = #{mainBusiness}</if>
+            <if test="issueNum != null ">and issue_num = #{issueNum}</if>
+            <if test="onlineIssueNum != null ">and online_issue_num = #{onlineIssueNum}</if>
+            <if test="offlinePlacingNum != null ">and offline_placing_num = #{offlinePlacingNum}</if>
+            <if test="issuePrice != null ">and issue_price = #{issuePrice}</if>
+            <if test="afterIssuePe != null ">and after_issue_pe = #{afterIssuePe}</if>
+            <if test="initialMultiple != null ">and initial_multiple = #{initialMultiple}</if>
+            <if test="latelyPrice != null ">and lately_price = #{latelyPrice}</if>
+            <if test="closePrice != null ">and close_price = #{closePrice}</if>
+            <if test="limitUpPrice != null ">and limit_up_price = #{limitUpPrice}</if>
+            <if test="newestPrice != null ">and newest_price = #{newestPrice}</if>
+            <if test="applyDate != null ">and apply_date = #{applyDate}</if>
+            <if test="ballotNumDate != null ">and ballot_num_date = #{ballotNumDate}</if>
+            <if test="ballotPayDate != null ">and ballot_pay_date = #{ballotPayDate}</if>
+            <if test="listingDate != null ">and listing_date = #{listingDate}</if>
+            <if test="openPrice != null ">and open_price = #{openPrice}</if>
+            <if test="ldOpenPremium != null ">and ld_open_premium = #{ldOpenPremium}</if>
+            <if test="ldCloseChange != null ">and ld_close_change = #{ldCloseChange}</if>
+            <if test="turnoverrate != null ">and turnoverrate = #{turnoverrate}</if>
+            <if test="ldHighChang != null ">and ld_high_chang = #{ldHighChang}</if>
+            <if test="ldAveragePrice != null ">and ld_average_price = #{ldAveragePrice}</if>
+            <if test="predictOnfundUpper != null ">and predict_onfund_upper = #{predictOnfundUpper}</if>
+            <if test="predictPeThree != null ">and predict_pe_three = #{predictPeThree}</if>
+            <if test="industryPe != null ">and industry_pe = #{industryPe}</if>
+            <if test="isBeijing != null ">and is_beijing = #{isBeijing}</if>
+            <if test="isRegistration != null  and isRegistration != ''">and is_registration = #{isRegistration}</if>
+            <if test="totalChange != null ">and total_change = #{totalChange}</if>
+            <if test="profit != null ">and profit = #{profit}</if>
+            <if test="onlineIssueLwr != null ">and online_issue_lwr = #{onlineIssueLwr}</if>
+            <if test="topApplyMarketcap != null ">and top_apply_marketcap = #{topApplyMarketcap}</if>
+            <if test="onlineApplyUpper != null ">and online_apply_upper = #{onlineApplyUpper}</if>
+            <if test="predictOnapplyUpper != null ">and predict_onapply_upper = #{predictOnapplyUpper}</if>
+            <if test="industryPeNew != null ">and industry_pe_new = #{industryPeNew}</if>
+            <if test="offlineEpObject != null  and offlineEpObject != ''">and offline_ep_object = #{offlineEpObject}
+            </if>
+            <if test="continuous1wordNum != null  and continuous1wordNum != ''">and continuous_1word_num =
+                #{continuous1wordNum}
+            </if>
+        </where>
+        order by `apply_date` desc
+    </select>
+
+    <select id="selectStockIssueInfoByApplyCode" parameterType="String" resultMap="StockIssueInfoResult">
+        <include refid="selectStockIssueInfoVo"/>
+        where security_code = #{securityCode}
+    </select>
+
+    <insert id="insertStockIssueInfo" parameterType="StockIssueInfo">
+        insert into stock_issue_info
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="applyCode != null">apply_code,</if>
+            <if test="infoCode != null">info_code,</if>
+            <if test="securityCode != null and securityCode != ''">security_code,</if>
+            <if test="securityName != null and securityName != ''">security_name,</if>
+            <if test="tradeMarketCode != null and tradeMarketCode != ''">trade_market_code,</if>
+            <if test="tradeMarket != null and tradeMarket != ''">trade_market,</if>
+            <if test="marketType != null and marketType != ''">market_type,</if>
+            <if test="orgType != null">org_type,</if>
+            <if test="mainBusiness != null">main_business,</if>
+            <if test="issueNum != null">issue_num,</if>
+            <if test="onlineIssueNum != null">online_issue_num,</if>
+            <if test="offlinePlacingNum != null">offline_placing_num,</if>
+            <if test="issuePrice != null">issue_price,</if>
+            <if test="afterIssuePe != null">after_issue_pe,</if>
+            <if test="initialMultiple != null">initial_multiple,</if>
+            <if test="latelyPrice != null">lately_price,</if>
+            <if test="closePrice != null">close_price,</if>
+            <if test="limitUpPrice != null">limit_up_price,</if>
+            <if test="newestPrice != null">newest_price,</if>
+            <if test="applyDate != null">apply_date,</if>
+            <if test="ballotNumDate != null">ballot_num_date,</if>
+            <if test="ballotPayDate != null">ballot_pay_date,</if>
+            <if test="listingDate != null">listing_date,</if>
+            <if test="openPrice != null">open_price,</if>
+            <if test="ldOpenPremium != null">ld_open_premium,</if>
+            <if test="ldCloseChange != null">ld_close_change,</if>
+            <if test="turnoverrate != null">turnoverrate,</if>
+            <if test="ldHighChang != null">ld_high_chang,</if>
+            <if test="ldAveragePrice != null">ld_average_price,</if>
+            <if test="predictOnfundUpper != null">predict_onfund_upper,</if>
+            <if test="predictPeThree != null">predict_pe_three,</if>
+            <if test="industryPe != null">industry_pe,</if>
+            <if test="isBeijing != null">is_beijing,</if>
+            <if test="isRegistration != null">is_registration,</if>
+            <if test="totalChange != null">total_change,</if>
+            <if test="profit != null">profit,</if>
+            <if test="onlineIssueLwr != null">online_issue_lwr,</if>
+            <if test="topApplyMarketcap != null">top_apply_marketcap,</if>
+            <if test="onlineApplyUpper != null">online_apply_upper,</if>
+            <if test="predictOnapplyUpper != null">predict_onapply_upper,</if>
+            <if test="industryPeNew != null">industry_pe_new,</if>
+            <if test="offlineEpObject != null">offline_ep_object,</if>
+            <if test="continuous1wordNum != null">continuous_1word_num,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateTime != null">update_time,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="applyCode != null">#{applyCode},</if>
+            <if test="infoCode != null">#{infoCode},</if>
+            <if test="securityCode != null and securityCode != ''">#{securityCode},</if>
+            <if test="securityName != null and securityName != ''">#{securityName},</if>
+            <if test="tradeMarketCode != null and tradeMarketCode != ''">#{tradeMarketCode},</if>
+            <if test="tradeMarket != null and tradeMarket != ''">#{tradeMarket},</if>
+            <if test="marketType != null and marketType != ''">#{marketType},</if>
+            <if test="orgType != null">#{orgType},</if>
+            <if test="mainBusiness != null">#{mainBusiness},</if>
+            <if test="issueNum != null">#{issueNum},</if>
+            <if test="onlineIssueNum != null">#{onlineIssueNum},</if>
+            <if test="offlinePlacingNum != null">#{offlinePlacingNum},</if>
+            <if test="issuePrice != null">#{issuePrice},</if>
+            <if test="afterIssuePe != null">#{afterIssuePe},</if>
+            <if test="initialMultiple != null">#{initialMultiple},</if>
+            <if test="latelyPrice != null">#{latelyPrice},</if>
+            <if test="closePrice != null">#{closePrice},</if>
+            <if test="limitUpPrice != null">#{limitUpPrice},</if>
+            <if test="newestPrice != null">#{newestPrice},</if>
+            <if test="applyDate != null">#{applyDate},</if>
+            <if test="ballotNumDate != null">#{ballotNumDate},</if>
+            <if test="ballotPayDate != null">#{ballotPayDate},</if>
+            <if test="listingDate != null">#{listingDate},</if>
+            <if test="openPrice != null">#{openPrice},</if>
+            <if test="ldOpenPremium != null">#{ldOpenPremium},</if>
+            <if test="ldCloseChange != null">#{ldCloseChange},</if>
+            <if test="turnoverrate != null">#{turnoverrate},</if>
+            <if test="ldHighChang != null">#{ldHighChang},</if>
+            <if test="ldAveragePrice != null">#{ldAveragePrice},</if>
+            <if test="predictOnfundUpper != null">#{predictOnfundUpper},</if>
+            <if test="predictPeThree != null">#{predictPeThree},</if>
+            <if test="industryPe != null">#{industryPe},</if>
+            <if test="isBeijing != null">#{isBeijing},</if>
+            <if test="isRegistration != null">#{isRegistration},</if>
+            <if test="totalChange != null">#{totalChange},</if>
+            <if test="profit != null">#{profit},</if>
+            <if test="onlineIssueLwr != null">#{onlineIssueLwr},</if>
+            <if test="topApplyMarketcap != null">#{topApplyMarketcap},</if>
+            <if test="onlineApplyUpper != null">#{onlineApplyUpper},</if>
+            <if test="predictOnapplyUpper != null">#{predictOnapplyUpper},</if>
+            <if test="industryPeNew != null">#{industryPeNew},</if>
+            <if test="offlineEpObject != null">#{offlineEpObject},</if>
+            <if test="continuous1wordNum != null">#{continuous1wordNum},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+        </trim>
+    </insert>
+
+    <update id="updateStockIssueInfo" parameterType="StockIssueInfo">
+        update stock_issue_info
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="infoCode != null">info_code = #{infoCode},</if>
+            <if test="securityCode != null and securityCode != ''">security_code = #{securityCode},</if>
+            <if test="securityName != null and securityName != ''">security_name = #{securityName},</if>
+            <if test="tradeMarketCode != null and tradeMarketCode != ''">trade_market_code = #{tradeMarketCode},</if>
+            <if test="tradeMarket != null and tradeMarket != ''">trade_market = #{tradeMarket},</if>
+            <if test="marketType != null and marketType != ''">market_type = #{marketType},</if>
+            <if test="orgType != null">org_type = #{orgType},</if>
+            <if test="mainBusiness != null">main_business = #{mainBusiness},</if>
+            <if test="issueNum != null">issue_num = #{issueNum},</if>
+            <if test="onlineIssueNum != null">online_issue_num = #{onlineIssueNum},</if>
+            <if test="offlinePlacingNum != null">offline_placing_num = #{offlinePlacingNum},</if>
+            <if test="issuePrice != null">issue_price = #{issuePrice},</if>
+            <if test="afterIssuePe != null">after_issue_pe = #{afterIssuePe},</if>
+            <if test="initialMultiple != null">initial_multiple = #{initialMultiple},</if>
+            <if test="latelyPrice != null">lately_price = #{latelyPrice},</if>
+            <if test="closePrice != null">close_price = #{closePrice},</if>
+            <if test="limitUpPrice != null">limit_up_price = #{limitUpPrice},</if>
+            <if test="newestPrice != null">newest_price = #{newestPrice},</if>
+            <if test="applyDate != null">apply_date = #{applyDate},</if>
+            <if test="ballotNumDate != null">ballot_num_date = #{ballotNumDate},</if>
+            <if test="ballotPayDate != null">ballot_pay_date = #{ballotPayDate},</if>
+            <if test="listingDate != null">listing_date = #{listingDate},</if>
+            <if test="openPrice != null">open_price = #{openPrice},</if>
+            <if test="ldOpenPremium != null">ld_open_premium = #{ldOpenPremium},</if>
+            <if test="ldCloseChange != null">ld_close_change = #{ldCloseChange},</if>
+            <if test="turnoverrate != null">turnoverrate = #{turnoverrate},</if>
+            <if test="ldHighChang != null">ld_high_chang = #{ldHighChang},</if>
+            <if test="ldAveragePrice != null">ld_average_price = #{ldAveragePrice},</if>
+            <if test="predictOnfundUpper != null">predict_onfund_upper = #{predictOnfundUpper},</if>
+            <if test="predictPeThree != null">predict_pe_three = #{predictPeThree},</if>
+            <if test="industryPe != null">industry_pe = #{industryPe},</if>
+            <if test="isBeijing != null">is_beijing = #{isBeijing},</if>
+            <if test="isRegistration != null">is_registration = #{isRegistration},</if>
+            <if test="totalChange != null">total_change = #{totalChange},</if>
+            <if test="profit != null">profit = #{profit},</if>
+            <if test="onlineIssueLwr != null">online_issue_lwr = #{onlineIssueLwr},</if>
+            <if test="topApplyMarketcap != null">top_apply_marketcap = #{topApplyMarketcap},</if>
+            <if test="onlineApplyUpper != null">online_apply_upper = #{onlineApplyUpper},</if>
+            <if test="predictOnapplyUpper != null">predict_onapply_upper = #{predictOnapplyUpper},</if>
+            <if test="industryPeNew != null">industry_pe_new = #{industryPeNew},</if>
+            <if test="offlineEpObject != null">offline_ep_object = #{offlineEpObject},</if>
+            <if test="continuous1wordNum != null">continuous_1word_num = #{continuous1wordNum},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+        </trim>
+        where apply_code = #{applyCode}
+    </update>
+
+    <delete id="deleteStockIssueInfoByApplyCode" parameterType="String">
+        delete
+        from stock_issue_info
+        where apply_code = #{applyCode}
+    </delete>
+
+    <delete id="deleteStockIssueInfoByApplyCodes" parameterType="String">
+        delete from stock_issue_info where apply_code in
+        <foreach item="applyCode" collection="array" open="(" separator="," close=")">
+            #{applyCode}
+        </foreach>
+    </delete>
+
+    <select id="selectStockIssueInfoExistCode" resultType="java.lang.String">
+        select apply_code
+        from stock_issue_info
+        where apply_code = #{applyCode}
+    </select>
+
+</mapper>

@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.stock.mapper.StockListingNoticeMapper">
+
+    <resultMap type="StockListingNotice" id="StockListingNoticeResult">
+        <result property="id" column="id"/>
+        <result property="securityCode" column="security_code"/>
+        <result property="securityName" column="security_name"/>
+        <result property="issuePrice" column="issue_price"/>
+        <result property="listingDate" column="listing_date"/>
+        <result property="currentPrice" column="current_price"/>
+        <result property="netProfit" column="net_profit"/>
+        <result property="profitMargin" column="profit_margin"/>
+        <result property="notifyCount" column="notify_count"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="selectStockListingNoticeVo">
+        select id,
+               security_code,
+               security_name,
+               issue_price,
+               listing_date,
+               current_price,
+               net_profit,
+               profit_margin,
+               notify_count,
+               created_at,
+               updated_at
+        from stock_listing_notice
+    </sql>
+
+    <select id="selectStockListingNoticeList" parameterType="StockListingNotice" resultMap="StockListingNoticeResult">
+        <include refid="selectStockListingNoticeVo"/>
+        <where>
+            <if test="securityCode != null  and securityCode != ''">and security_code = #{securityCode}</if>
+            <if test="securityName != null  and securityName != ''">and security_name like concat('%', #{securityName},
+                '%')
+            </if>
+            <if test="issuePrice != null ">and issue_price = #{issuePrice}</if>
+            <if test="listingDate != null ">and listing_date = #{listingDate}</if>
+            <if test="currentPrice != null ">and current_price = #{currentPrice}</if>
+            <if test="netProfit != null ">and net_profit = #{netProfit}</if>
+            <if test="profitMargin != null ">and profit_margin = #{profitMargin}</if>
+            <if test="notifyCount != null ">and notify_count = #{notifyCount}</if>
+        </where>
+        order by listing_date desc
+    </select>
+
+    <select id="selectStockListingNoticeById" parameterType="String" resultMap="StockListingNoticeResult">
+        <include refid="selectStockListingNoticeVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertStockListingNotice" parameterType="StockListingNotice" useGeneratedKeys="true" keyProperty="id">
+        insert into stock_listing_notice
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="securityCode != null and securityCode != ''">security_code,</if>
+            <if test="securityName != null and securityName != ''">security_name,</if>
+            <if test="issuePrice != null">issue_price,</if>
+            <if test="listingDate != null">listing_date,</if>
+            <if test="currentPrice != null">current_price,</if>
+            <if test="netProfit != null">net_profit,</if>
+            <if test="profitMargin != null">profit_margin,</if>
+            <if test="notifyCount != null">notify_count,</if>
+            <if test="createdAt != null">created_at,</if>
+            <if test="updatedAt != null">updated_at,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="securityCode != null and securityCode != ''">#{securityCode},</if>
+            <if test="securityName != null and securityName != ''">#{securityName},</if>
+            <if test="issuePrice != null">#{issuePrice},</if>
+            <if test="listingDate != null">#{listingDate},</if>
+            <if test="currentPrice != null">#{currentPrice},</if>
+            <if test="netProfit != null">#{netProfit},</if>
+            <if test="profitMargin != null">#{profitMargin},</if>
+            <if test="notifyCount != null">#{notifyCount},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+            <if test="updatedAt != null">#{updatedAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateStockListingNotice" parameterType="StockListingNotice">
+        update stock_listing_notice
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="securityCode != null and securityCode != ''">security_code = #{securityCode},</if>
+            <if test="securityName != null and securityName != ''">security_name = #{securityName},</if>
+            <if test="issuePrice != null">issue_price = #{issuePrice},</if>
+            <if test="listingDate != null">listing_date = #{listingDate},</if>
+            <if test="currentPrice != null">current_price = #{currentPrice},</if>
+            <if test="netProfit != null">net_profit = #{netProfit},</if>
+            <if test="profitMargin != null">profit_margin = #{profitMargin},</if>
+            <if test="notifyCount != null">notify_count = #{notifyCount},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteStockListingNoticeById" parameterType="String">
+        delete
+        from stock_listing_notice
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteStockListingNoticeByIds" parameterType="String">
+        delete from stock_listing_notice where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

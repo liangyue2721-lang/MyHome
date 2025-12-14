@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.finance.mapper.CbcCreditCardTransactionMapper">
+
+    <resultMap type="CbcCreditCardTransaction" id="CbcCreditCardTransactionResult">
+        <result property="id" column="id"/>
+        <result property="tradeDate" column="trade_date"/>
+        <result property="postDate" column="post_date"/>
+        <result property="cardLast4" column="card_last4"/>
+        <result property="description" column="description"/>
+        <result property="transAmount" column="trans_amount"/>
+        <result property="settleAmount" column="settle_amount"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="remark" column="remark"/>
+        <result property="userId" column="user_id"/>
+    </resultMap>
+
+    <sql id="selectCbcCreditCardTransactionVo">
+        select id,
+               trade_date,
+               post_date,
+               card_last4,
+               description,
+               trans_amount,
+               settle_amount,
+               create_time,
+               update_time,
+               remark,
+               user_id
+        from cbc_credit_card_transaction
+    </sql>
+
+    <select id="selectCbcCreditCardTransactionList" parameterType="CbcCreditCardTransaction"
+            resultMap="CbcCreditCardTransactionResult">
+        <include refid="selectCbcCreditCardTransactionVo"/>
+        <where>
+            <if test="tradeDate != null ">and trade_date = #{tradeDate}</if>
+            <if test="postDate != null ">and post_date = #{postDate}</if>
+            <if test="cardLast4 != null  and cardLast4 != ''">and card_last4 = #{cardLast4}</if>
+            <if test="description != null  and description != ''">and description = #{description}</if>
+            <if test="transAmount != null ">and trans_amount = #{transAmount}</if>
+            <if test="settleAmount != null ">and settle_amount = #{settleAmount}</if>
+            <if test="userId != null ">and user_id = #{userId}</if>
+        </where>
+    </select>
+
+    <select id="selectCbcCreditCardTransactionById" parameterType="Long" resultMap="CbcCreditCardTransactionResult">
+        <include refid="selectCbcCreditCardTransactionVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertCbcCreditCardTransaction" parameterType="CbcCreditCardTransaction" useGeneratedKeys="true"
+            keyProperty="id">
+        insert into cbc_credit_card_transaction
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="tradeDate != null">trade_date,</if>
+            <if test="postDate != null">post_date,</if>
+            <if test="cardLast4 != null and cardLast4 != ''">card_last4,</if>
+            <if test="description != null and description != ''">description,</if>
+            <if test="transAmount != null">trans_amount,</if>
+            <if test="settleAmount != null">settle_amount,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="remark != null">remark,</if>
+            <if test="userId != null">user_id,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="tradeDate != null">#{tradeDate},</if>
+            <if test="postDate != null">#{postDate},</if>
+            <if test="cardLast4 != null and cardLast4 != ''">#{cardLast4},</if>
+            <if test="description != null and description != ''">#{description},</if>
+            <if test="transAmount != null">#{transAmount},</if>
+            <if test="settleAmount != null">#{settleAmount},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="remark != null">#{remark},</if>
+            <if test="userId != null">#{userId},</if>
+        </trim>
+    </insert>
+
+    <update id="updateCbcCreditCardTransaction" parameterType="CbcCreditCardTransaction">
+        update cbc_credit_card_transaction
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="tradeDate != null">trade_date = #{tradeDate},</if>
+            <if test="postDate != null">post_date = #{postDate},</if>
+            <if test="cardLast4 != null and cardLast4 != ''">card_last4 = #{cardLast4},</if>
+            <if test="description != null and description != ''">description = #{description},</if>
+            <if test="transAmount != null">trans_amount = #{transAmount},</if>
+            <if test="settleAmount != null">settle_amount = #{settleAmount},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="userId != null">user_id = #{userId},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteCbcCreditCardTransactionById" parameterType="Long">
+        delete
+        from cbc_credit_card_transaction
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteCbcCreditCardTransactionByIds" parameterType="String">
+        delete from cbc_credit_card_transaction where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

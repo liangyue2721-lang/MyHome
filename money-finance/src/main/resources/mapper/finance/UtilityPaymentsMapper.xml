@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.finance.mapper.UtilityPaymentsMapper">
+
+    <resultMap type="UtilityPayments" id="UtilityPaymentsResult">
+        <result property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="fee" column="fee"/>
+        <result property="paymentType" column="payment_type"/>
+        <result property="paymentStatus" column="payment_status"/>
+        <result property="paymentDate" column="payment_date"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="selectUtilityPaymentsVo">
+        select id,
+               user_id,
+               fee,
+               payment_type,
+               payment_status,
+               payment_date,
+               created_at,
+               updated_at
+        from utility_payments
+    </sql>
+
+    <select id="selectUtilityPaymentsList" parameterType="UtilityPayments" resultMap="UtilityPaymentsResult">
+        <include refid="selectUtilityPaymentsVo"/>
+        <where>
+            <if test="userId != null ">and user_id = #{userId}</if>
+            <if test="fee != null ">and fee = #{fee}</if>
+            <if test="paymentType != null ">and payment_type = #{paymentType}</if>
+            <if test="paymentStatus != null ">and payment_status = #{paymentStatus}</if>
+            <if test="paymentDate != null ">and payment_date = #{paymentDate}</if>
+            <if test="updatedAt != null ">and updated_at = #{updatedAt}</if>
+        </where>
+        order by payment_date desc
+    </select>
+
+    <select id="selectUtilityPaymentsById" parameterType="Integer" resultMap="UtilityPaymentsResult">
+        <include refid="selectUtilityPaymentsVo"/>
+        where id = #{id}
+    </select>
+    <select id="queryUtilityPaymentsList" parameterType="UtilityPayments" resultMap="UtilityPaymentsResult">
+        <include refid="selectUtilityPaymentsVo"/>
+        <where>
+            <if test="userId != null ">and user_id = #{userId}</if>
+            <if test="fee != null ">and fee = #{fee}</if>
+            <if test="paymentType != null ">and payment_type = #{paymentType}</if>
+            <if test="paymentStatus != null ">and payment_status = #{paymentStatus}</if>
+            <!-- 整年搜索：paymentDate 被拆成 startDate + endDate -->
+            <if test="startDate != null">and payment_date &gt;= #{startDate}</if>
+            <if test="endDate != null">and payment_date &lt;= #{endDate}</if>
+
+            <if test="updatedAt != null ">and updated_at = #{updatedAt}</if>
+        </where>
+        order by payment_date desc
+    </select>
+
+    <insert id="insertUtilityPayments" parameterType="UtilityPayments" useGeneratedKeys="true" keyProperty="id">
+        insert into utility_payments
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="userId != null">user_id,</if>
+            <if test="fee != null">fee,</if>
+            <if test="paymentType != null">payment_type,</if>
+            <if test="paymentStatus != null">payment_status,</if>
+            <if test="paymentDate != null">payment_date,</if>
+            <if test="createdAt != null">created_at,</if>
+            <if test="updatedAt != null">updated_at,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="userId != null">#{userId},</if>
+            <if test="fee != null">#{fee},</if>
+            <if test="paymentType != null">#{paymentType},</if>
+            <if test="paymentStatus != null">#{paymentStatus},</if>
+            <if test="paymentDate != null">#{paymentDate},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+            <if test="updatedAt != null">#{updatedAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateUtilityPayments" parameterType="UtilityPayments">
+        update utility_payments
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="userId != null">user_id = #{userId},</if>
+            <if test="fee != null">fee = #{fee},</if>
+            <if test="paymentType != null">payment_type = #{paymentType},</if>
+            <if test="paymentStatus != null">payment_status = #{paymentStatus},</if>
+            <if test="paymentDate != null">payment_date = #{paymentDate},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteUtilityPaymentsById" parameterType="Integer">
+        delete
+        from utility_payments
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteUtilityPaymentsByIds" parameterType="String">
+        delete from utility_payments where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

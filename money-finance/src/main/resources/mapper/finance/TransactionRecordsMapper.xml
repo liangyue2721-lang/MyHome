@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.finance.mapper.TransactionRecordsMapper">
+
+    <resultMap type="TransactionRecords" id="TransactionRecordsResult">
+        <result property="id" column="id"/>
+        <result property="transactionTime" column="transaction_time"/>
+        <result property="transactionType" column="transaction_type"/>
+        <result property="counterparty" column="counterparty"/>
+        <result property="counterpartyAccount" column="counterparty_account"/>
+        <result property="product" column="product"/>
+        <result property="productType" column="product_type"/>
+        <result property="source" column="source"/>
+        <result property="inOut" column="in_out"/>
+        <result property="amount" column="amount"/>
+        <result property="paymentMethod" column="payment_method"/>
+        <result property="transactionStatus" column="transaction_status"/>
+        <result property="transactionId" column="transaction_id"/>
+        <result property="merchantId" column="merchant_id"/>
+        <result property="note" column="note"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+        <result property="userId" column="user_id"/>
+    </resultMap>
+
+    <sql id="selectTransactionRecordsVo">
+        select id,
+               transaction_time,
+               transaction_type,
+               counterparty,
+               counterparty_account,
+               product,
+               product_type,
+               source,
+               in_out,
+               amount,
+               payment_method,
+               transaction_status,
+               transaction_id,
+               merchant_id,
+               note,
+               created_at,
+               user_id
+        from transaction_records
+    </sql>
+
+    <select id="selectTransactionRecordsList" parameterType="TransactionRecords" resultMap="TransactionRecordsResult">
+        <include refid="selectTransactionRecordsVo"/>
+        <where>
+            <if test="transactionTime != null ">and transaction_time = #{transactionTime}</if>
+            <if test="transactionType != null  and transactionType != ''">and transaction_type = #{transactionType}</if>
+            <if test="counterparty != null  and counterparty != ''">and counterparty = #{counterparty}</if>
+            <if test="counterpartyAccount != null  and counterpartyAccount != ''">and counterparty_account =
+                #{counterpartyAccount}
+            </if>
+            <if test="product != null  and product != ''">and product = #{product}</if>
+            <if test="productType != null  and productType != ''">and product_type = #{productType}</if>
+            <if test="source != null  and source != ''">and source = #{source}</if>
+            <if test="inOut != null  and inOut != ''">and in_out = #{inOut}</if>
+            <if test="amount != null ">and amount = #{amount}</if>
+            <if test="paymentMethod != null  and paymentMethod != ''">and payment_method = #{paymentMethod}</if>
+            <if test="transactionId != null  and transactionId != ''">and transaction_id = #{transactionId}</if>
+            <if test="merchantId != null  and merchantId != ''">and merchant_id = #{merchantId}</if>
+            <if test="note != null  and note != ''">and note = #{note}</if>
+            <if test="createdAt != null ">and created_at = #{createdAt}</if>
+            <if test="updatedAt != null ">and updated_at = #{updatedAt}</if>
+            <if test="userId != null ">and user_id = #{userId}</if>
+        </where>
+        order by  transaction_time desc
+    </select>
+
+    <select id="selectTransactionRecordsById" parameterType="Long" resultMap="TransactionRecordsResult">
+        <include refid="selectTransactionRecordsVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertTransactionRecords" parameterType="TransactionRecords" useGeneratedKeys="true" keyProperty="id">
+        insert into transaction_records
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="transactionTime != null">transaction_time,</if>
+            <if test="transactionType != null and transactionType != ''">transaction_type,</if>
+            <if test="counterparty != null and counterparty != ''">counterparty,</if>
+            <if test="counterpartyAccount != null">counterparty_account,</if>
+            <if test="product != null and product != ''">product,</if>
+            <if test="productType != null">product_type,</if>
+            <if test="source != null and source != ''">source,</if>
+            <if test="inOut != null and inOut != ''">in_out,</if>
+            <if test="amount != null">amount,</if>
+            <if test="paymentMethod != null">payment_method,</if>
+            <if test="transactionStatus != null">transaction_status,</if>
+            <if test="transactionId != null and transactionId != ''">transaction_id,</if>
+            <if test="merchantId != null">merchant_id,</if>
+            <if test="note != null">note,</if>
+            <if test="createdAt != null">created_at,</if>
+            <if test="updatedAt != null">updated_at,</if>
+            <if test="userId != null">user_id,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="transactionTime != null">#{transactionTime},</if>
+            <if test="transactionType != null and transactionType != ''">#{transactionType},</if>
+            <if test="counterparty != null and counterparty != ''">#{counterparty},</if>
+            <if test="counterpartyAccount != null">#{counterpartyAccount},</if>
+            <if test="product != null and product != ''">#{product},</if>
+            <if test="productType != null">#{productType},</if>
+            <if test="source != null and source != ''">#{source},</if>
+            <if test="inOut != null and inOut != ''">#{inOut},</if>
+            <if test="amount != null">#{amount},</if>
+            <if test="paymentMethod != null">#{paymentMethod},</if>
+            <if test="transactionStatus != null">#{transactionStatus},</if>
+            <if test="transactionId != null and transactionId != ''">#{transactionId},</if>
+            <if test="merchantId != null">#{merchantId},</if>
+            <if test="note != null">#{note},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+            <if test="updatedAt != null">#{updatedAt},</if>
+            <if test="userId != null">#{userId},</if>
+        </trim>
+    </insert>
+
+    <update id="updateTransactionRecords" parameterType="TransactionRecords">
+        update transaction_records
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="transactionTime != null">transaction_time = #{transactionTime},</if>
+            <if test="transactionType != null and transactionType != ''">transaction_type = #{transactionType},</if>
+            <if test="counterparty != null and counterparty != ''">counterparty = #{counterparty},</if>
+            <if test="counterpartyAccount != null">counterparty_account = #{counterpartyAccount},</if>
+            <if test="product != null and product != ''">product = #{product},</if>
+            <if test="productType != null">product_type = #{productType},</if>
+            <if test="source != null and source != ''">source = #{source},</if>
+            <if test="inOut != null and inOut != ''">in_out = #{inOut},</if>
+            <if test="amount != null">amount = #{amount},</if>
+            <if test="paymentMethod != null">payment_method = #{paymentMethod},</if>
+            <if test="transactionStatus != null">transaction_status = #{transactionStatus},</if>
+            <if test="transactionId != null and transactionId != ''">transaction_id = #{transactionId},</if>
+            <if test="merchantId != null">merchant_id = #{merchantId},</if>
+            <if test="note != null">note = #{note},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
+            <if test="userId != null">user_id = #{userId},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteTransactionRecordsById" parameterType="Long">
+        delete
+        from transaction_records
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteTransactionRecordsByIds" parameterType="String">
+        delete from transaction_records where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <select id="selectTransactionTypePieChartData" resultType="java.util.Map">
+        SELECT product_type AS type, COUNT(*) AS amount
+        FROM transaction_records
+        WHERE transaction_time >= DATE_SUB(CURDATE(), INTERVAL 1 YEAR)
+        AND user_id = #{userId}
+        GROUP BY product_type;
+    </select>
+
+    <select id="selectTotalAmountPieChartData" resultType="java.util.Map">
+        SELECT product_type as category, SUM(amount) AS amount
+        FROM transaction_records
+        WHERE transaction_time >= DATE_SUB(CURDATE(), INTERVAL 1 YEAR)
+        AND user_id = #{userId}
+        GROUP BY product_type;
+    </select>
+
+    <select id="getTotalAmountChartData" resultType="java.util.Map">
+        SELECT
+            DATE_FORMAT(transaction_time, '%Y-%m') AS month,  -- 提取年-月格式
+        SUM(amount) AS totalAmount  -- 每月总金额
+        FROM
+            transaction_records
+        WHERE
+            transaction_time >= DATE_SUB(CURDATE(), INTERVAL 1 YEAR)  -- 过去一年的数据
+        AND user_id = #{userId}
+        GROUP BY
+            month  -- 按月份分组
+        ORDER BY
+            month DESC;
+
+    </select>
+
+    <select id="selectTotalAmountColumnChartData" resultType="java.util.Map">
+        SELECT counterparty as category, SUM(amount) AS amount
+        FROM transaction_records
+        WHERE transaction_time >= DATE_SUB(CURDATE(), INTERVAL 1 YEAR)
+        AND user_id = #{userId}
+        GROUP BY counterparty;
+    </select>
+
+</mapper>

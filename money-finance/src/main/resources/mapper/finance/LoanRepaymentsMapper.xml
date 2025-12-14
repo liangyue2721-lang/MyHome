@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.finance.mapper.LoanRepaymentsMapper">
+
+    <resultMap type="LoanRepayments" id="LoanRepaymentsResult">
+        <result property="id" column="id"/>
+        <result property="totalAmount" column="total_amount"/>
+        <result property="repaymentAge" column="repayment_age"/>
+        <result property="installments" column="installments"/>
+        <result property="repaymentDate" column="repayment_date"/>
+        <result property="principal" column="principal"/>
+        <result property="interest" column="interest"/>
+        <result property="totalPrincipalAndInterest" column="total_principal_and_interest"/>
+        <result property="isSettled" column="is_settled"/>
+        <result property="floatingInterestRate" column="floating_interest_rate"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="userId" column="user_id"/>
+    </resultMap>
+
+    <sql id="selectLoanRepaymentsVo">
+        select id,
+               total_amount,
+               repayment_age,
+               installments,
+               repayment_date,
+               principal,
+               interest,
+               total_principal_and_interest,
+               is_settled,
+               floating_interest_rate,
+               create_time,
+               update_time,
+               user_id
+        from loan_repayments
+    </sql>
+
+    <select id="selectLoanRepaymentsList" parameterType="LoanRepayments" resultMap="LoanRepaymentsResult">
+        <include refid="selectLoanRepaymentsVo"/>
+        <where>
+            <if test="totalAmount != null">AND total_amount = #{totalAmount}</if>
+            <if test="installments != null">AND installments = #{installments}</if>
+            <if test="repaymentDate != null">AND repayment_date = #{repaymentDate}</if>
+            <if test="principal != null">AND principal = #{principal}</if>
+            <if test="interest != null">AND interest = #{interest}</if>
+            <if test="totalPrincipalAndInterest != null">
+                AND total_principal_and_interest = #{totalPrincipalAndInterest}
+            </if>
+            <if test="isSettled != null">AND is_settled = #{isSettled}</if>
+            <if test="floatingInterestRate != null">AND floating_interest_rate = #{floatingInterestRate}</if>
+            <if test="userId != null">AND user_id = #{userId}</if>
+            <if test="startDate != null and endDate != null">
+                AND repayment_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+        </where>
+        ORDER BY is_settled ASC, repayment_date ASC
+    </select>
+
+    <select id="selectLoanRepaymentsChart" parameterType="LoanRepayments" resultMap="LoanRepaymentsResult">
+        <include refid="selectLoanRepaymentsVo"/>
+        <where>
+            <if test="userId != null">AND user_id = #{userId}</if>
+            <if test="startDate != null and endDate != null">
+                AND repayment_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+        </where>
+    </select>
+
+    <select id="selectLoanRepaymentsById" parameterType="Long" resultMap="LoanRepaymentsResult">
+        <include refid="selectLoanRepaymentsVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertLoanRepayments" parameterType="LoanRepayments" useGeneratedKeys="true" keyProperty="id">
+        insert into loan_repayments
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="totalAmount != null">total_amount,</if>
+            <if test="repaymentAge != null">repayment_age,</if>
+            <if test="installments != null">installments,</if>
+            <if test="repaymentDate != null">repayment_date,</if>
+            <if test="principal != null">principal,</if>
+            <if test="interest != null">interest,</if>
+            <if test="totalPrincipalAndInterest != null">total_principal_and_interest,</if>
+            <if test="isSettled != null">is_settled,</if>
+            <if test="floatingInterestRate != null">floating_interest_rate,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="userId != null">user_id,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="totalAmount != null">#{totalAmount},</if>
+            <if test="repaymentAge != null">#{repaymentAge},</if>
+            <if test="installments != null">#{installments},</if>
+            <if test="repaymentDate != null">#{repaymentDate},</if>
+            <if test="principal != null">#{principal},</if>
+            <if test="interest != null">#{interest},</if>
+            <if test="totalPrincipalAndInterest != null">#{totalPrincipalAndInterest},</if>
+            <if test="isSettled != null">#{isSettled},</if>
+            <if test="floatingInterestRate != null">#{floatingInterestRate},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="userId != null">#{userId},</if>
+        </trim>
+    </insert>
+
+    <update id="updateLoanRepayments" parameterType="LoanRepayments">
+        update loan_repayments
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="totalAmount != null">total_amount = #{totalAmount},</if>
+            <if test="repaymentAge != null">repayment_age = #{repaymentAge},</if>
+            <if test="installments != null">installments = #{installments},</if>
+            <if test="repaymentDate != null">repayment_date = #{repaymentDate},</if>
+            <if test="principal != null">principal = #{principal},</if>
+            <if test="interest != null">interest = #{interest},</if>
+            <if test="totalPrincipalAndInterest != null">total_principal_and_interest = #{totalPrincipalAndInterest},
+            </if>
+            <if test="isSettled != null">is_settled = #{isSettled},</if>
+            <if test="floatingInterestRate != null">floating_interest_rate = #{floatingInterestRate},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="userId != null">user_id = #{userId},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteLoanRepaymentsById" parameterType="Long">
+        delete
+        from loan_repayments
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteLoanRepaymentsByIds" parameterType="String">
+        delete from loan_repayments where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <select id="selectUnpaidLoansList" parameterType="LoanRepayments" resultMap="LoanRepaymentsResult">
+        select id,
+               total_amount,
+               installments,
+               repayment_age,
+               repayment_date,
+               principal,
+               interest,
+               total_principal_and_interest,
+               is_settled,
+               floating_interest_rate,
+               create_time,
+               update_time
+        from loan_repayments
+        where is_settled = "0"
+    </select>
+    <select id="selectLoanRepaymentsByDate" resultMap="LoanRepaymentsResult">
+        <include refid="selectLoanRepaymentsVo"/>
+        where repayment_date = #{repaymentDate}
+    </select>
+
+    <update id="updateLoanRepaymentsById" parameterType="LoanRepayments">
+        update loan_repayments
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="installments != null">installments = #{installments},</if>
+            <if test="principal != null">principal = #{principal},</if>
+            <if test="interest != null">interest = #{interest},</if>
+            <if test="totalPrincipalAndInterest != null">total_principal_and_interest = #{totalPrincipalAndInterest},
+            </if>
+        </trim>
+        where id = #{installments} and repayment_date = #{repaymentDate}
+    </update>
+
+
+</mapper>

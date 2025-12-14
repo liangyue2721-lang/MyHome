@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.finance.mapper.AssetRecordMapper">
+
+    <resultMap type="AssetRecord" id="AssetRecordResult">
+        <result property="assetId" column="asset_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="assetType" column="asset_type"/>
+        <result property="amount" column="amount"/>
+        <result property="currency" column="currency"/>
+        <result property="assetStatus" column="asset_status"/>
+        <result property="sourceChannel" column="source_channel"/>
+        <result property="remark" column="remark"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="selectAssetRecordVo">
+        select asset_id,
+               user_id,
+               asset_type,
+               amount,
+               currency,
+               asset_status,
+               source_channel,
+               remark,
+               created_at,
+               updated_at
+        from asset_record
+    </sql>
+
+    <select id="selectAssetRecordList" parameterType="AssetRecord" resultMap="AssetRecordResult">
+        <include refid="selectAssetRecordVo"/>
+        <where>
+            <if test="userId != null ">and user_id = #{userId}</if>
+            <if test="assetType != null ">and asset_type = #{assetType}</if>
+            <if test="amount != null ">and amount = #{amount}</if>
+            <if test="currency != null  and currency != ''">and currency = #{currency}</if>
+            <if test="assetStatus != null ">and asset_status = #{assetStatus}</if>
+            <if test="sourceChannel != null  and sourceChannel != ''">and source_channel = #{sourceChannel}</if>
+        </where>
+    </select>
+
+    <select id="selectAssetRecordListByUserId" parameterType="AssetRecord" resultMap="AssetRecordResult">
+        <include refid="selectAssetRecordVo"/>
+        <where>
+            <if test="userId != null ">and user_id = #{userId}</if>
+        </where>
+    </select>
+
+    <select id="selectAssetRecordByAssetId" parameterType="Long" resultMap="AssetRecordResult">
+        <include refid="selectAssetRecordVo"/>
+        where asset_id = #{assetId}
+    </select>
+
+    <insert id="insertAssetRecord" parameterType="AssetRecord" useGeneratedKeys="true" keyProperty="assetId">
+        insert into asset_record
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="userId != null">user_id,</if>
+            <if test="assetType != null">asset_type,</if>
+            <if test="amount != null">amount,</if>
+            <if test="currency != null">currency,</if>
+            <if test="assetStatus != null">asset_status,</if>
+            <if test="sourceChannel != null">source_channel,</if>
+            <if test="remark != null">remark,</if>
+            <if test="createdAt != null">created_at,</if>
+            <if test="updatedAt != null">updated_at,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="userId != null">#{userId},</if>
+            <if test="assetType != null">#{assetType},</if>
+            <if test="amount != null">#{amount},</if>
+            <if test="currency != null">#{currency},</if>
+            <if test="assetStatus != null">#{assetStatus},</if>
+            <if test="sourceChannel != null">#{sourceChannel},</if>
+            <if test="remark != null">#{remark},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+            <if test="updatedAt != null">#{updatedAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateAssetRecord" parameterType="AssetRecord">
+        update asset_record
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="userId != null">user_id = #{userId},</if>
+            <if test="assetType != null">asset_type = #{assetType},</if>
+            <if test="amount != null">amount = #{amount},</if>
+            <if test="currency != null">currency = #{currency},</if>
+            <if test="assetStatus != null">asset_status = #{assetStatus},</if>
+            <if test="sourceChannel != null">source_channel = #{sourceChannel},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
+        </trim>
+        where asset_id = #{assetId}
+    </update>
+
+    <delete id="deleteAssetRecordByAssetId" parameterType="Long">
+        delete
+        from asset_record
+        where asset_id = #{assetId}
+    </delete>
+
+    <delete id="deleteAssetRecordByAssetIds" parameterType="String">
+        delete from asset_record where asset_id in
+        <foreach item="assetId" collection="array" open="(" separator="," close=")">
+            #{assetId}
+        </foreach>
+    </delete>
+</mapper>

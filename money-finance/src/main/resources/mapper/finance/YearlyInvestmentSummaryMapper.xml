@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.finance.mapper.YearlyInvestmentSummaryMapper">
+
+    <resultMap type="YearlyInvestmentSummary" id="YearlyInvestmentSummaryResult">
+        <result property="id" column="id"/>
+        <result property="year" column="year"/>
+        <result property="startPrincipal" column="start_principal"/>
+        <result property="expectedGrowthRate" column="expected_growth_rate"/>
+        <result property="expectedEndValue" column="expected_end_value"/>
+        <result property="actualGrowthRate" column="actual_growth_rate"/>
+        <result property="actualEndValue" column="actual_end_value"/>
+        <result property="isCompleted" column="is_completed"/>
+        <result property="remark" column="remark"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="userId" column="user_id"/>
+    </resultMap>
+
+    <sql id="selectYearlyInvestmentSummaryVo">
+        select id, year, start_principal, expected_growth_rate, expected_end_value, actual_growth_rate, actual_end_value, is_completed, remark, create_time, update_time, user_id
+        from yearly_investment_summary
+    </sql>
+
+    <select id="selectYearlyInvestmentSummaryList" parameterType="YearlyInvestmentSummary"
+            resultMap="YearlyInvestmentSummaryResult">
+        <include refid="selectYearlyInvestmentSummaryVo"/>
+        <where>
+            <if test="year != null ">and year = #{year}</if>
+            <if test="startPrincipal != null ">and start_principal = #{startPrincipal}</if>
+            <if test="expectedGrowthRate != null ">and expected_growth_rate = #{expectedGrowthRate}</if>
+            <if test="expectedEndValue != null ">and expected_end_value = #{expectedEndValue}</if>
+            <if test="actualGrowthRate != null ">and actual_growth_rate = #{actualGrowthRate}</if>
+            <if test="actualEndValue != null ">and actual_end_value = #{actualEndValue}</if>
+            <if test="isCompleted != null  and isCompleted != ''">and is_completed = #{isCompleted}</if>
+            <if test="userId != null ">and user_id = #{userId}</if>
+        </where>
+    </select>
+
+    <select id="selectYearlyInvestmentSummaryById" parameterType="Long" resultMap="YearlyInvestmentSummaryResult">
+        <include refid="selectYearlyInvestmentSummaryVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertYearlyInvestmentSummary" parameterType="YearlyInvestmentSummary" useGeneratedKeys="true"
+            keyProperty="id">
+        insert into yearly_investment_summary
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="year != null">year,</if>
+            <if test="startPrincipal != null">start_principal,</if>
+            <if test="expectedGrowthRate != null">expected_growth_rate,</if>
+            <if test="expectedEndValue != null">expected_end_value,</if>
+            <if test="actualGrowthRate != null">actual_growth_rate,</if>
+            <if test="actualEndValue != null">actual_end_value,</if>
+            <if test="isCompleted != null and isCompleted != ''">is_completed,</if>
+            <if test="remark != null">remark,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="userId != null">user_id,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="year != null">#{year},</if>
+            <if test="startPrincipal != null">#{startPrincipal},</if>
+            <if test="expectedGrowthRate != null">#{expectedGrowthRate},</if>
+            <if test="expectedEndValue != null">#{expectedEndValue},</if>
+            <if test="actualGrowthRate != null">#{actualGrowthRate},</if>
+            <if test="actualEndValue != null">#{actualEndValue},</if>
+            <if test="isCompleted != null and isCompleted != ''">#{isCompleted},</if>
+            <if test="remark != null">#{remark},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="userId != null">#{userId},</if>
+        </trim>
+    </insert>
+
+    <update id="updateYearlyInvestmentSummary" parameterType="YearlyInvestmentSummary">
+        update yearly_investment_summary
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="year != null">year = #{year},</if>
+            <if test="startPrincipal != null">start_principal = #{startPrincipal},</if>
+            <if test="expectedGrowthRate != null">expected_growth_rate = #{expectedGrowthRate},</if>
+            <if test="expectedEndValue != null">expected_end_value = #{expectedEndValue},</if>
+            <if test="actualGrowthRate != null">actual_growth_rate = #{actualGrowthRate},</if>
+            <if test="actualEndValue != null">actual_end_value = #{actualEndValue},</if>
+            <if test="isCompleted != null and isCompleted != ''">is_completed = #{isCompleted},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="userId != null">user_id = #{userId},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteYearlyInvestmentSummaryById" parameterType="Long">
+        delete
+        from yearly_investment_summary
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteYearlyInvestmentSummaryByIds" parameterType="String">
+        delete from yearly_investment_summary where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

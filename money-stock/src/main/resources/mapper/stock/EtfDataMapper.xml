@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.stock.mapper.EtfDataMapper">
+
+    <resultMap type="EtfData" id="EtfDataResult">
+        <result property="id" column="id"/>
+        <result property="etfCode" column="etf_code"/>
+        <result property="etfName" column="etf_name"/>
+        <result property="tradeDate" column="trade_date"/>
+        <result property="openPrice" column="open_price"/>
+        <result property="highPrice" column="high_price"/>
+        <result property="lowPrice" column="low_price"/>
+        <result property="closePrice" column="close_price"/>
+        <result property="volume" column="volume"/>
+        <result property="turnover" column="turnover"/>
+        <result property="bidPrice" column="bid_price"/>
+        <result property="askPrice" column="ask_price"/>
+        <result property="externalMarketVolume" column="external_market_volume"/>
+        <result property="internalMarketVolume" column="internal_market_volume"/>
+        <result property="buy1Price" column="buy1_price"/>
+        <result property="buy1Volume" column="buy1_volume"/>
+        <result property="stockApi" column="stock_api"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <sql id="selectEtfDataVo">
+        select id,
+               etf_code,
+               etf_name,
+               trade_date,
+               open_price,
+               high_price,
+               low_price,
+               close_price,
+               volume,
+               turnover,
+               bid_price,
+               ask_price,
+               external_market_volume,
+               internal_market_volume,
+               buy1_price,
+               buy1_volume,
+               stock_api,
+               create_time,
+               update_time
+        from etf_data
+    </sql>
+
+    <select id="selectEtfDataList" parameterType="EtfData" resultMap="EtfDataResult">
+        <include refid="selectEtfDataVo"/>
+        <where>
+            <if test="etfName != null  and etfName != ''">and etf_name like concat('%', #{etfName}, '%')</if>
+            <if test="openPrice != null ">and open_price = #{openPrice}</if>
+            <if test="highPrice != null ">and high_price = #{highPrice}</if>
+            <if test="lowPrice != null ">and low_price = #{lowPrice}</if>
+            <if test="closePrice != null ">and close_price = #{closePrice}</if>
+            <if test="volume != null ">and volume = #{volume}</if>
+            <if test="turnover != null ">and turnover = #{turnover}</if>
+            <if test="bidPrice != null ">and bid_price = #{bidPrice}</if>
+            <if test="askPrice != null ">and ask_price = #{askPrice}</if>
+            <if test="externalMarketVolume != null ">and external_market_volume = #{externalMarketVolume}</if>
+            <if test="internalMarketVolume != null ">and internal_market_volume = #{internalMarketVolume}</if>
+            <if test="buy1Price != null ">and buy1_price = #{buy1Price}</if>
+            <if test="buy1Volume != null ">and buy1_volume = #{buy1Volume}</if>
+            <if test="stockApi != null  and stockApi != ''">and stock_api = #{stockApi}</if>
+        </where>
+    </select>
+
+    <select id="selectEtfDataByEtfCode" parameterType="String" resultMap="EtfDataResult">
+        <include refid="selectEtfDataVo"/>
+        where etf_code = #{etfCode}
+    </select>
+
+    <insert id="insertEtfData" parameterType="EtfData">
+        insert into etf_data
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="etfCode != null and etfCode != ''">etf_code,</if>
+            <if test="etfName != null and etfName != ''">etf_name,</if>
+            <if test="tradeDate != null">trade_date,</if>
+            <if test="openPrice != null">open_price,</if>
+            <if test="highPrice != null">high_price,</if>
+            <if test="lowPrice != null">low_price,</if>
+            <if test="closePrice != null">close_price,</if>
+            <if test="volume != null">volume,</if>
+            <if test="turnover != null">turnover,</if>
+            <if test="bidPrice != null">bid_price,</if>
+            <if test="askPrice != null">ask_price,</if>
+            <if test="externalMarketVolume != null">external_market_volume,</if>
+            <if test="internalMarketVolume != null">internal_market_volume,</if>
+            <if test="buy1Price != null">buy1_price,</if>
+            <if test="buy1Volume != null">buy1_volume,</if>
+            <if test="stockApi != null">stock_api,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateTime != null">update_time,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="etfCode != null and etfCode != ''">#{etfCode},</if>
+            <if test="etfName != null and etfName != ''">#{etfName},</if>
+            <if test="tradeDate != null">#{tradeDate},</if>
+            <if test="openPrice != null">#{openPrice},</if>
+            <if test="highPrice != null">#{highPrice},</if>
+            <if test="lowPrice != null">#{lowPrice},</if>
+            <if test="closePrice != null">#{closePrice},</if>
+            <if test="volume != null">#{volume},</if>
+            <if test="turnover != null">#{turnover},</if>
+            <if test="bidPrice != null">#{bidPrice},</if>
+            <if test="askPrice != null">#{askPrice},</if>
+            <if test="externalMarketVolume != null">#{externalMarketVolume},</if>
+            <if test="internalMarketVolume != null">#{internalMarketVolume},</if>
+            <if test="buy1Price != null">#{buy1Price},</if>
+            <if test="buy1Volume != null">#{buy1Volume},</if>
+            <if test="stockApi != null">#{stockApi},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+        </trim>
+    </insert>
+
+    <update id="updateEtfData" parameterType="EtfData">
+        update etf_data
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="id != null">id = #{id},</if>
+            <if test="etfName != null and etfName != ''">etf_name = #{etfName},</if>
+            <if test="tradeDate != null">trade_date = #{tradeDate},</if>
+            <if test="openPrice != null">open_price = #{openPrice},</if>
+            <if test="highPrice != null">high_price = #{highPrice},</if>
+            <if test="lowPrice != null">low_price = #{lowPrice},</if>
+            <if test="closePrice != null">close_price = #{closePrice},</if>
+            <if test="volume != null">volume = #{volume},</if>
+            <if test="turnover != null">turnover = #{turnover},</if>
+            <if test="bidPrice != null">bid_price = #{bidPrice},</if>
+            <if test="askPrice != null">ask_price = #{askPrice},</if>
+            <if test="externalMarketVolume != null">external_market_volume = #{externalMarketVolume},</if>
+            <if test="internalMarketVolume != null">internal_market_volume = #{internalMarketVolume},</if>
+            <if test="buy1Price != null">buy1_price = #{buy1Price},</if>
+            <if test="buy1Volume != null">buy1_volume = #{buy1Volume},</if>
+            <if test="stockApi != null">stock_api = #{stockApi},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+        </trim>
+        where etf_code = #{etfCode}
+    </update>
+    <update id="batchUpdateEtfData">
+        UPDATE etf_data
+        <set>
+            close_price = CASE etf_code
+            <foreach collection="list" item="item">
+                WHEN #{item.etfCode} THEN #{item.closePrice}
+            </foreach>
+            END,
+
+            high_price = CASE etf_code
+            <foreach collection="list" item="item">
+                WHEN #{item.etfCode} THEN #{item.highPrice}
+            </foreach>
+            END,
+
+            low_price = CASE etf_code
+            <foreach collection="list" item="item">
+                WHEN #{item.etfCode} THEN #{item.lowPrice}
+            </foreach>
+            END,
+
+            volume = CASE etf_code
+            <foreach collection="list" item="item">
+                WHEN #{item.etfCode} THEN #{item.volume}
+            </foreach>
+            END,
+
+            turnover = CASE etf_code
+            <foreach collection="list" item="item">
+                WHEN #{item.etfCode} THEN #{item.turnover}
+            </foreach>
+            END,
+
+            update_time = NOW()
+        </set>
+
+        WHERE etf_code IN
+        <foreach collection="list" item="item" separator="," open="(" close=")">
+            #{item.etfCode}
+        </foreach>
+    </update>
+
+
+    <delete id="deleteEtfDataByEtfCode" parameterType="String">
+        delete
+        from etf_data
+        where etf_code = #{etfCode}
+    </delete>
+
+    <delete id="deleteEtfDataByEtfCodes" parameterType="String">
+        delete from etf_data where etf_code in
+        <foreach item="etfCode" collection="array" open="(" separator="," close=")">
+            #{etfCode}
+        </foreach>
+    </delete>
+</mapper>

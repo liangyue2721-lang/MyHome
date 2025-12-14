@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.finance.mapper.HouseExpenseMapper">
+
+    <resultMap type="HouseExpense" id="HouseExpenseResult">
+        <result property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="houseName" column="house_name"/>
+        <result property="location" column="location"/>
+        <result property="area" column="area"/>
+        <result property="totalPrice" column="total_price"/>
+        <result property="expenseType" column="expense_type"/>
+        <result property="amount" column="amount"/>
+        <result property="paymentDate" column="payment_date"/>
+        <result property="payee" column="payee"/>
+        <result property="stage" column="stage"/>
+        <result property="notes" column="notes"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+        <result property="createdName" column="created_name"/>
+    </resultMap>
+
+    <sql id="selectHouseExpenseVo">
+        select id,
+               user_id,
+               house_name,
+               location,
+               area,
+               total_price,
+               expense_type,
+               amount,
+               payment_date,
+               payee,
+               stage,
+               notes,
+               created_at,
+               updated_at,
+               created_name
+        from house_expense
+    </sql>
+
+    <select id="selectHouseExpenseList" parameterType="HouseExpense" resultMap="HouseExpenseResult">
+        <include refid="selectHouseExpenseVo"/>
+        <where>
+            <if test="userId != null ">and user_id = #{userId}</if>
+            <if test="houseName != null  and houseName != ''">and house_name like concat('%', #{houseName}, '%')</if>
+            <if test="location != null  and location != ''">and location = #{location}</if>
+            <if test="area != null ">and area = #{area}</if>
+            <if test="totalPrice != null ">and total_price = #{totalPrice}</if>
+            <if test="expenseType != null  and expenseType != ''">and expense_type = #{expenseType}</if>
+            <if test="amount != null ">and amount = #{amount}</if>
+            <if test="paymentDate != null ">and payment_date = #{paymentDate}</if>
+            <if test="payee != null  and payee != ''">and payee = #{payee}</if>
+            <if test="stage != null  and stage != ''">and stage = #{stage}</if>
+            <if test="notes != null  and notes != ''">and notes = #{notes}</if>
+            <if test="createdAt != null ">and created_at = #{createdAt}</if>
+            <if test="updatedAt != null ">and updated_at = #{updatedAt}</if>
+            <if test="createdName != null ">and created_name like concat('%', #{createdName}, '%')</if>
+        </where>
+    </select>
+
+    <select id="selectHouseExpenseById" parameterType="Long" resultMap="HouseExpenseResult">
+        <include refid="selectHouseExpenseVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertHouseExpense" parameterType="HouseExpense" useGeneratedKeys="true" keyProperty="id">
+        insert into house_expense
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="userId != null">user_id,</if>
+            <if test="houseName != null">house_name,</if>
+            <if test="location != null">location,</if>
+            <if test="area != null">area,</if>
+            <if test="totalPrice != null">total_price,</if>
+            <if test="expenseType != null">expense_type,</if>
+            <if test="amount != null">amount,</if>
+            <if test="paymentDate != null">payment_date,</if>
+            <if test="payee != null">payee,</if>
+            <if test="stage != null">stage,</if>
+            <if test="notes != null">notes,</if>
+            <if test="createdAt != null">created_at,</if>
+            <if test="updatedAt != null">updated_at,</if>
+            <if test="createdName != null">created_name,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="userId != null">#{userId},</if>
+            <if test="houseName != null">#{houseName},</if>
+            <if test="location != null">#{location},</if>
+            <if test="area != null">#{area},</if>
+            <if test="totalPrice != null">#{totalPrice},</if>
+            <if test="expenseType != null">#{expenseType},</if>
+            <if test="amount != null">#{amount},</if>
+            <if test="paymentDate != null">#{paymentDate},</if>
+            <if test="payee != null">#{payee},</if>
+            <if test="stage != null">#{stage},</if>
+            <if test="notes != null">#{notes},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+            <if test="updatedAt != null">#{updatedAt},</if>
+            <if test="createdName != null">#{createdName},</if>
+        </trim>
+    </insert>
+
+    <update id="updateHouseExpense" parameterType="HouseExpense">
+        update house_expense
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="userId != null">user_id = #{userId},</if>
+            <if test="houseName != null">house_name = #{houseName},</if>
+            <if test="location != null">location = #{location},</if>
+            <if test="area != null">area = #{area},</if>
+            <if test="totalPrice != null">total_price = #{totalPrice},</if>
+            <if test="expenseType != null">expense_type = #{expenseType},</if>
+            <if test="amount != null">amount = #{amount},</if>
+            <if test="paymentDate != null">payment_date = #{paymentDate},</if>
+            <if test="payee != null">payee = #{payee},</if>
+            <if test="stage != null">stage = #{stage},</if>
+            <if test="notes != null">notes = #{notes},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
+            <if test="createdName != null">created_name = #{createdName},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteHouseExpenseById" parameterType="Long">
+        delete
+        from house_expense
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteHouseExpenseByIds" parameterType="String">
+        delete from house_expense where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.finance.mapper.IncomeMapper">
+
+    <resultMap type="Income" id="IncomeResult">
+        <result property="incomeId" column="income_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="amount" column="amount"/>
+        <result property="source" column="source"/>
+        <result property="incomeDate" column="income_date"/>
+        <result property="category" column="category"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="selectIncomeVo">
+        select income_id,
+               user_id,
+               amount,
+               source,
+               income_date,
+               category,
+               created_at,
+               updated_at
+        from income
+    </sql>
+
+    <select id="selectIncomeList" parameterType="Income" resultMap="IncomeResult">
+        <include refid="selectIncomeVo"/>
+        <where>
+            <if test="userId != null ">and user_id = #{userId}</if>
+            <if test="amount != null ">and amount = #{amount}</if>
+            <if test="source != null  and source != ''">and source = #{source}</if>
+            <if test="incomeDate != null ">and income_date = #{incomeDate}</if>
+            <if test="category != null  and category != ''">and category = #{category}</if>
+            <if test="startDate != null and endDate != null">
+                AND income_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+        </where>
+        order by income_date desc
+    </select>
+
+    <select id="selectIncomeByIncomeId" parameterType="Long" resultMap="IncomeResult">
+        <include refid="selectIncomeVo"/>
+        where income_id = #{incomeId}
+    </select>
+
+    <insert id="insertIncome" parameterType="Income" useGeneratedKeys="true" keyProperty="incomeId">
+        insert into income
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="userId != null">user_id,</if>
+            <if test="amount != null">amount,</if>
+            <if test="source != null">source,</if>
+            <if test="incomeDate != null">income_date,</if>
+            <if test="category != null">category,</if>
+            <if test="createdAt != null">created_at,</if>
+            <if test="updatedAt != null">updated_at,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="userId != null">#{userId},</if>
+            <if test="amount != null">#{amount},</if>
+            <if test="source != null">#{source},</if>
+            <if test="incomeDate != null">#{incomeDate},</if>
+            <if test="category != null">#{category},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+            <if test="updatedAt != null">#{updatedAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateIncome" parameterType="Income">
+        update income
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="userId != null">user_id = #{userId},</if>
+            <if test="amount != null">amount = #{amount},</if>
+            <if test="source != null">source = #{source},</if>
+            <if test="incomeDate != null">income_date = #{incomeDate},</if>
+            <if test="category != null">category = #{category},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
+        </trim>
+        where income_id = #{incomeId}
+    </update>
+
+    <delete id="deleteIncomeByIncomeId" parameterType="Long">
+        delete
+        from income
+        where income_id = #{incomeId}
+    </delete>
+
+    <delete id="deleteIncomeByIncomeIds" parameterType="String">
+        delete from income where income_id in
+        <foreach item="incomeId" collection="array" open="(" separator="," close=")">
+            #{incomeId}
+        </foreach>
+    </delete>
+
+    <select id="selectCurrentMonthIncomeTotal" resultType="java.math.BigDecimal">
+        select SUM(amount)
+        from income
+        WHERE income_date BETWEEN #{startDate} AND #{endDate}
+        AND user_id = #{userId}
+    </select>
+    <select id="selectIncomeByUserIdAndDate" resultMap="IncomeResult">
+        <include refid="selectIncomeVo"/>
+        where user_id = #{userId}
+        AND  income_date = #{incomeDate}
+        AND `source` = 0
+    </select>
+
+
+</mapper>

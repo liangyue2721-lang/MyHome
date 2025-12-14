@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.finance.mapper.IndicatorsMapper">
+
+    <resultMap type="Indicators" id="IndicatorsResult">
+        <result property="id" column="id"/>
+        <result property="name" column="name"/>
+        <result property="description" column="description"/>
+        <result property="targetValue" column="target_value"/>
+        <result property="currentValue" column="current_value"/>
+        <result property="startDate" column="start_date"/>
+        <result property="endDate" column="end_date"/>
+        <result property="status" column="status"/>
+        <result property="changedBy" column="changed_by"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+        <result property="userId" column="user_id"/>
+    </resultMap>
+
+    <sql id="selectIndicatorsVo">
+        select id,
+               name,
+               description,
+               target_value,
+               current_value,
+               start_date,
+               end_date,
+               status,
+               changed_by,
+               created_at,
+               updated_at,
+               user_id
+        from indicators
+    </sql>
+
+    <select id="selectIndicatorsList" parameterType="Indicators" resultMap="IndicatorsResult">
+        <include refid="selectIndicatorsVo"/>
+        <where>
+            <if test="name != null  and name != ''">and name like concat('%', #{name}, '%')</if>
+            <if test="description != null  and description != ''">and description = #{description}</if>
+            <if test="targetValue != null ">and target_value = #{targetValue}</if>
+            <if test="currentValue != null ">and current_value = #{currentValue}</if>
+            <if test="startDate != null ">and start_date = #{startDate}</if>
+            <if test="endDate != null ">and end_date = #{endDate}</if>
+            <if test="status != null  and status != ''">and status = #{status}</if>
+            <if test="changedBy != null ">and changed_by = #{changedBy}</if>
+            <if test="createdAt != null ">and created_at = #{createdAt}</if>
+            <if test="updatedAt != null ">and updated_at = #{updatedAt}</if>
+            <if test="userId != null ">and user_id = #{userId}</if>
+        </where>
+    </select>
+
+    <select id="selectIndicatorsById" parameterType="Long" resultMap="IndicatorsResult">
+        <include refid="selectIndicatorsVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertIndicators" parameterType="Indicators" useGeneratedKeys="true" keyProperty="id">
+        insert into indicators
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="name != null and name != ''">name,</if>
+            <if test="description != null">description,</if>
+            <if test="targetValue != null">target_value,</if>
+            <if test="currentValue != null">current_value,</if>
+            <if test="startDate != null">start_date,</if>
+            <if test="endDate != null">end_date,</if>
+            <if test="status != null">status,</if>
+            <if test="changedBy != null">changed_by,</if>
+            <if test="createdAt != null">created_at,</if>
+            <if test="updatedAt != null">updated_at,</if>
+            <if test="userId != null">user_id,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="name != null and name != ''">#{name},</if>
+            <if test="description != null">#{description},</if>
+            <if test="targetValue != null">#{targetValue},</if>
+            <if test="currentValue != null">#{currentValue},</if>
+            <if test="startDate != null">#{startDate},</if>
+            <if test="endDate != null">#{endDate},</if>
+            <if test="status != null">#{status},</if>
+            <if test="changedBy != null">#{changedBy},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+            <if test="updatedAt != null">#{updatedAt},</if>
+            <if test="userId != null">#{userId},</if>
+        </trim>
+    </insert>
+
+    <update id="updateIndicators" parameterType="Indicators">
+        update indicators
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="name != null and name != ''">name = #{name},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="targetValue != null">target_value = #{targetValue},</if>
+            <if test="currentValue != null">current_value = #{currentValue},</if>
+            <if test="startDate != null">start_date = #{startDate},</if>
+            <if test="endDate != null">end_date = #{endDate},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="changedBy != null">changed_by = #{changedBy},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
+            <if test="userId != null">user_id = #{userId},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteIndicatorsById" parameterType="Long">
+        delete
+        from indicators
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteIndicatorsByIds" parameterType="String">
+        delete from indicators where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

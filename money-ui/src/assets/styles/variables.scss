@@ -1,0 +1,79 @@
+// base color
+$blue:#324157;
+$light-blue:#3A71A8;
+$red:#C03639;
+$pink: #E65D6E;
+$green: #30B08F;
+$tiffany: #4AB7BD;
+$yellow:#FEC171;
+$panGreen: #30B08F;
+
+// 默认菜单主题风格
+$base-menu-color:#bfcbd9;
+$base-menu-color-active:#f4f4f5;
+$base-menu-background:#304156;
+$base-logo-title-color: #ffffff;
+
+$base-menu-light-color:rgba(0,0,0,.70);
+$base-menu-light-background:#ffffff;
+$base-logo-light-title-color: #001529;
+
+$base-sub-menu-background:#1f2d3d;
+$base-sub-menu-hover:#001528;
+
+// 自定义暗色菜单风格
+/**
+$base-menu-color:hsla(0,0%,100%,.65);
+$base-menu-color-active:#fff;
+$base-menu-background:#001529;
+$base-logo-title-color: #ffffff;
+
+$base-menu-light-color:rgba(0,0,0,.70);
+$base-menu-light-background:#ffffff;
+$base-logo-light-title-color: #001529;
+
+$base-sub-menu-background:#000c17;
+$base-sub-menu-hover:#001528;
+*/
+
+$base-sidebar-width: 200px;
+
+// 夜间模式颜色变量
+:root {
+  --body-bg-color: #f0f2f5;
+  --component-bg-color: #ffffff;
+  --border-color: #ebeef5;
+  --header-bg-color: #ffffff;
+  --sidebar-bg-color: #304156;
+  --sidebar-text-color: #bfcbd9;
+  --card-bg-color: #ffffff;
+  --hover-bg-color: #f5f7fa;
+}
+
+// 夜间模式变量
+.dark-mode {
+  --body-bg-color: #1a1a1a;
+  --component-bg-color: #2d2d2d;
+  --text-color: #e0e0e0;
+  --border-color: #444444;
+  --header-bg-color: #252525;
+  --sidebar-bg-color: #1e1e1e;
+  --sidebar-text-color: #aaaaaa;
+  --card-bg-color: #2d2d2d;
+  --hover-bg-color: #383838;
+}
+
+// the :export directive is the magic sauce for webpack
+// https://www.bluematador.com/blog/how-to-share-variables-between-js-and-sass
+:export {
+  menuColor: $base-menu-color;
+  menuLightColor: $base-menu-light-color;
+  menuColorActive: $base-menu-color-active;
+  menuBackground: $base-menu-background;
+  menuLightBackground: $base-menu-light-background;
+  subMenuBackground: $base-sub-menu-background;
+  subMenuHover: $base-sub-menu-hover;
+  sideBarWidth: $base-sidebar-width;
+  logoTitleColor: $base-logo-title-color;
+  logoLightTitleColor: $base-logo-light-title-color
+}

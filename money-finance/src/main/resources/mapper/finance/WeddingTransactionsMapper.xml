@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.finance.mapper.WeddingTransactionsMapper">
+
+    <resultMap type="WeddingTransactions" id="WeddingTransactionsResult">
+        <result property="id" column="id"/>
+        <result property="transactionDate" column="transaction_date"/>
+        <result property="transactionType" column="transaction_type"/>
+        <result property="category" column="category"/>
+        <result property="itemName" column="item_name"/>
+        <result property="amount" column="amount"/>
+        <result property="paymentMethod" column="payment_method"/>
+        <result property="participant" column="participant"/>
+        <result property="notes" column="notes"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+        <result property="userId" column="user_id"/>
+    </resultMap>
+
+    <sql id="selectWeddingTransactionsVo">
+        select id,
+               transaction_date,
+               transaction_type,
+               category,
+               item_name,
+               amount,
+               payment_method,
+               participant,
+               notes,
+               created_at,
+               updated_at,
+               user_id
+        from wedding_transactions
+    </sql>
+
+    <select id="selectWeddingTransactionsList" parameterType="WeddingTransactions"
+            resultMap="WeddingTransactionsResult">
+        <include refid="selectWeddingTransactionsVo"/>
+        <where>
+            <if test="transactionDate != null ">and transaction_date = #{transactionDate}</if>
+            <if test="transactionType != null  and transactionType != ''">and transaction_type = #{transactionType}</if>
+            <if test="category != null  and category != ''">and category = #{category}</if>
+            <if test="itemName != null  and itemName != ''">and item_name like concat('%', #{itemName}, '%')</if>
+            <if test="amount != null ">and amount = #{amount}</if>
+            <if test="paymentMethod != null  and paymentMethod != ''">and payment_method = #{paymentMethod}</if>
+            <if test="participant != null  and participant != ''">and participant = #{participant}</if>
+            <if test="notes != null  and notes != ''">and notes = #{notes}</if>
+            <if test="createdAt != null ">and created_at = #{createdAt}</if>
+            <if test="updatedAt != null ">and updated_at = #{updatedAt}</if>
+            <if test="userId != null ">and user_id = #{userId}</if>
+        </where>
+    </select>
+
+    <select id="selectWeddingTransactionsById" parameterType="Long" resultMap="WeddingTransactionsResult">
+        <include refid="selectWeddingTransactionsVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertWeddingTransactions" parameterType="WeddingTransactions" useGeneratedKeys="true" keyProperty="id">
+        insert into wedding_transactions
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="transactionDate != null">transaction_date,</if>
+            <if test="transactionType != null and transactionType != ''">transaction_type,</if>
+            <if test="category != null and category != ''">category,</if>
+            <if test="itemName != null and itemName != ''">item_name,</if>
+            <if test="amount != null">amount,</if>
+            <if test="paymentMethod != null">payment_method,</if>
+            <if test="participant != null">participant,</if>
+            <if test="notes != null">notes,</if>
+            <if test="createdAt != null">created_at,</if>
+            <if test="updatedAt != null">updated_at,</if>
+            <if test="userId != null">user_id,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="transactionDate != null">#{transactionDate},</if>
+            <if test="transactionType != null and transactionType != ''">#{transactionType},</if>
+            <if test="category != null and category != ''">#{category},</if>
+            <if test="itemName != null and itemName != ''">#{itemName},</if>
+            <if test="amount != null">#{amount},</if>
+            <if test="paymentMethod != null">#{paymentMethod},</if>
+            <if test="participant != null">#{participant},</if>
+            <if test="notes != null">#{notes},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+            <if test="updatedAt != null">#{updatedAt},</if>
+            <if test="userId != null">#{userId},</if>
+        </trim>
+    </insert>
+
+    <update id="updateWeddingTransactions" parameterType="WeddingTransactions">
+        update wedding_transactions
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="transactionDate != null">transaction_date = #{transactionDate},</if>
+            <if test="transactionType != null and transactionType != ''">transaction_type = #{transactionType},</if>
+            <if test="category != null and category != ''">category = #{category},</if>
+            <if test="itemName != null and itemName != ''">item_name = #{itemName},</if>
+            <if test="amount != null">amount = #{amount},</if>
+            <if test="paymentMethod != null">payment_method = #{paymentMethod},</if>
+            <if test="participant != null">participant = #{participant},</if>
+            <if test="notes != null">notes = #{notes},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
+            <if test="userId != null">user_id = #{userId},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteWeddingTransactionsById" parameterType="Long">
+        delete
+        from wedding_transactions
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteWeddingTransactionsByIds" parameterType="String">
+        delete from wedding_transactions where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

@@ -1,0 +1,363 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.stock.mapper.WatchstockMapper">
+
+    <resultMap type="Watchstock" id="WatchstockResult">
+        <result property="id" column="id"/>
+        <result property="date" column="date"/>
+        <result property="code" column="code"/>
+        <result property="name" column="name"/>
+        <result property="newPrice" column="new_price"/>
+        <result property="changeRate" column="change_rate"/>
+        <result property="upsDowns" column="ups_downs"/>
+        <result property="previousClose" column="previous_close"/>
+        <result property="thresholdPrice" column="threshold_price"/>
+        <result property="stockApi" column="stock_api"/>
+        <result property="num" column="num"/>
+        <result property="updatedAt" column="updated_at"/>
+        <result property="yearLow" column="year_low"/>
+        <result property="compareYearLow" column="compare_year_low"/>
+        <result property="weekLow" column="week_low"/>
+        <result property="yearHigh" column="year_high"/>
+        <result property="compareYearHigh" column="compare_year_high"/>
+        <result property="weekHigh" column="week_high"/>
+        <result property="highPrice" column="high_price"/>
+        <result property="lowPrice" column="low_price"/>
+    </resultMap>
+
+    <sql id="selectWatchstockVo">
+        select id, date, code, name, new_price, change_rate, ups_downs, previous_close, threshold_price, stock_api, num, updated_at, year_low, compare_year_low, week_low, year_high, compare_year_high, week_high, high_price, low_price
+        from watchstock
+    </sql>
+
+    <select id="selectWatchstockList" parameterType="Watchstock" resultMap="WatchstockResult">
+        <include refid="selectWatchstockVo"/>
+        <where>
+            <if test="date != null ">and date = #{date}</if>
+            <if test="code != null  and code != ''">and code like concat('%', #{code}, '%')</if>
+            <if test="name != null  and name != ''">and name like concat('%', #{name}, '%')</if>
+            <if test="newPrice != null ">and new_price = #{newPrice}</if>
+            <if test="changeRate != null ">and change_rate = #{changeRate}</if>
+            <if test="upsDowns != null ">and ups_downs = #{upsDowns}</if>
+            <if test="previousClose != null ">and previous_close = #{previousClose}</if>
+            <if test="thresholdPrice != null ">and threshold_price = #{thresholdPrice}</if>
+            <if test="stockApi != null  and stockApi != ''">and stock_api = #{stockApi}</if>
+            <if test="num != null ">and num = #{num}</if>
+            <if test="updatedAt != null ">and updated_at = #{updatedAt}</if>
+            <if test="yearLow != null ">and year_low = #{yearLow}</if>
+            <if test="compareYearLow != null ">and compare_year_low = #{compareYearLow}</if>
+            <if test="weekLow != null ">and week_low = #{weekLow}</if>
+            <if test="yearHigh != null ">and year_high = #{yearHigh}</if>
+            <if test="compareYearHigh != null ">and compare_year_high = #{compareYearHigh}</if>
+            <if test="weekHigh != null ">and week_high = #{weekHigh}</if>
+            <if test="highPrice != null ">and high_price = #{highPrice}</if>
+            <if test="lowPrice != null ">and low_price = #{lowPrice}</if>
+        </where>
+    </select>
+
+    <select id="selectWatchstockById" parameterType="Long" resultMap="WatchstockResult">
+        <include refid="selectWatchstockVo"/>
+        where id = #{id}
+    </select>
+    <select id="getWatchstockAllList" resultMap="WatchstockResult">
+        select id, date, code, name, new_price, change_rate, ups_downs, previous_close, threshold_price, stock_api, num, updated_at, high_price, low_price
+        from watchstock
+    </select>
+
+    <insert id="insertWatchstock" parameterType="Watchstock" useGeneratedKeys="true" keyProperty="id">
+        insert into watchstock
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="date != null">date,</if>
+            <if test="code != null">code,</if>
+            <if test="name != null">name,</if>
+            <if test="newPrice != null">new_price,</if>
+            <if test="changeRate != null">change_rate,</if>
+            <if test="upsDowns != null">ups_downs,</if>
+            <if test="previousClose != null">previous_close,</if>
+            <if test="thresholdPrice != null">threshold_price,</if>
+            <if test="stockApi != null">stock_api,</if>
+            <if test="num != null">num,</if>
+            <if test="updatedAt != null">updated_at,</if>
+            <if test="yearLow != null">year_low,</if>
+            <if test="compareYearLow != null">compare_year_low,</if>
+            <if test="weekLow != null">week_low,</if>
+            <if test="yearHigh != null">year_high,</if>
+            <if test="compareYearHigh != null">compare_year_high,</if>
+            <if test="weekHigh != null">week_high,</if>
+            <if test="highPrice != null">high_price,</if>
+            <if test="lowPrice != null">low_price,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="date != null">#{date},</if>
+            <if test="code != null">#{code},</if>
+            <if test="name != null">#{name},</if>
+            <if test="newPrice != null">#{newPrice},</if>
+            <if test="changeRate != null">#{changeRate},</if>
+            <if test="upsDowns != null">#{upsDowns},</if>
+            <if test="previousClose != null">#{previousClose},</if>
+            <if test="thresholdPrice != null">#{thresholdPrice},</if>
+            <if test="stockApi != null">#{stockApi},</if>
+            <if test="num != null">#{num},</if>
+            <if test="updatedAt != null">#{updatedAt},</if>
+            <if test="yearLow != null">#{yearLow},</if>
+            <if test="compareYearLow != null">#{compareYearLow},</if>
+            <if test="weekLow != null">#{weekLow},</if>
+            <if test="yearHigh != null">#{yearHigh},</if>
+            <if test="compareYearHigh != null">#{compareYearHigh},</if>
+            <if test="weekHigh != null">#{weekHigh},</if>
+            <if test="highPrice != null">#{highPrice},</if>
+            <if test="lowPrice != null">#{lowPrice},</if>
+        </trim>
+    </insert>
+
+    <update id="updateWatchstock" parameterType="Watchstock">
+        update watchstock
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="date != null">`date` = #{date},</if>
+            <if test="code != null">`code` = #{code},</if>
+            <if test="name != null">`name` = #{name},</if>
+            <if test="newPrice != null">new_price = #{newPrice},</if>
+            <if test="changeRate != null">change_rate = #{changeRate},</if>
+            <if test="upsDowns != null">ups_downs = #{upsDowns},</if>
+            <if test="previousClose != null">previous_close = #{previousClose},</if>
+            <if test="thresholdPrice != null">threshold_price = #{thresholdPrice},</if>
+            <if test="stockApi != null">stock_api = #{stockApi},</if>
+            <if test="num != null">num = #{num},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
+            <if test="yearLow != null">year_low = #{yearLow},</if>
+            <if test="compareYearLow != null">compare_year_low = #{compareYearLow},</if>
+            <if test="weekLow != null">week_low = #{weekLow},</if>
+            <if test="yearHigh != null">year_high = #{yearHigh},</if>
+            <if test="compareYearHigh != null">compare_year_high = #{compareYearHigh},</if>
+            <if test="weekHigh != null">week_high = #{weekHigh},</if>
+            <if test="highPrice != null">high_price = #{highPrice},</if>
+            <if test="lowPrice != null">low_price = #{lowPrice},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <update id="updateWatchstockBatchById">
+        UPDATE watchstock
+        <set>
+
+            `date` = CASE id
+            <foreach collection="list" item="item">
+                WHEN #{item.id} THEN
+                <choose>
+                    <when test="item.date != null">#{item.date}</when>
+                    <otherwise>`date`</otherwise>
+                </choose>
+            </foreach>
+            END,
+
+            `code` = CASE id
+            <foreach collection="list" item="item">
+                WHEN #{item.id} THEN
+                <choose>
+                    <when test="item.code != null">#{item.code}</when>
+                    <otherwise>`code`</otherwise>
+                </choose>
+            </foreach>
+            END,
+
+            `name` = CASE id
+            <foreach collection="list" item="item">
+                WHEN #{item.id} THEN
+                <choose>
+                    <when test="item.name != null">#{item.name}</when>
+                    <otherwise>`name`</otherwise>
+                </choose>
+            </foreach>
+            END,
+
+            new_price = CASE id
+            <foreach collection="list" item="item">
+                WHEN #{item.id} THEN
+                <choose>
+                    <when test="item.newPrice != null">#{item.newPrice}</when>
+                    <otherwise>new_price</otherwise>
+                </choose>
+            </foreach>
+            END,
+
+            change_rate = CASE id
+            <foreach collection="list" item="item">
+                WHEN #{item.id} THEN
+                <choose>
+                    <when test="item.changeRate != null">#{item.changeRate}</when>
+                    <otherwise>change_rate</otherwise>
+                </choose>
+            </foreach>
+            END,
+
+            ups_downs = CASE id
+            <foreach collection="list" item="item">
+                WHEN #{item.id} THEN
+                <choose>
+                    <when test="item.upsDowns != null">#{item.upsDowns}</when>
+                    <otherwise>ups_downs</otherwise>
+                </choose>
+            </foreach>
+            END,
+
+            previous_close = CASE id
+            <foreach collection="list" item="item">
+                WHEN #{item.id} THEN
+                <choose>
+                    <when test="item.previousClose != null">#{item.previousClose}</when>
+                    <otherwise>previous_close</otherwise>
+                </choose>
+            </foreach>
+            END,
+
+            threshold_price = CASE id
+            <foreach collection="list" item="item">
+                WHEN #{item.id} THEN
+                <choose>
+                    <when test="item.thresholdPrice != null">#{item.thresholdPrice}</when>
+                    <otherwise>threshold_price</otherwise>
+                </choose>
+            </foreach>
+            END,
+
+            stock_api = CASE id
+            <foreach collection="list" item="item">
+                WHEN #{item.id} THEN
+                <choose>
+                    <when test="item.stockApi != null">#{item.stockApi}</when>
+                    <otherwise>stock_api</otherwise>
+                </choose>
+            </foreach>
+            END,
+
+            num = CASE id
+            <foreach collection="list" item="item">
+                WHEN #{item.id} THEN
+                <choose>
+                    <when test="item.num != null">#{item.num}</when>
+                    <otherwise>num</otherwise>
+                </choose>
+            </foreach>
+            END,
+
+            updated_at = CASE id
+            <foreach collection="list" item="item">
+                WHEN #{item.id} THEN
+                <choose>
+                    <when test="item.updatedAt != null">#{item.updatedAt}</when>
+                    <otherwise>updated_at</otherwise>
+                </choose>
+            </foreach>
+            END,
+
+            year_low = CASE id
+            <foreach collection="list" item="item">
+                WHEN #{item.id} THEN
+                <choose>
+                    <when test="item.yearLow != null">#{item.yearLow}</when>
+                    <otherwise>year_low</otherwise>
+                </choose>
+            </foreach>
+            END,
+
+            compare_year_low = CASE id
+            <foreach collection="list" item="item">
+                WHEN #{item.id} THEN
+                <choose>
+                    <when test="item.compareYearLow != null">#{item.compareYearLow}</when>
+                    <otherwise>compare_year_low</otherwise>
+                </choose>
+            </foreach>
+            END,
+
+            week_low = CASE id
+            <foreach collection="list" item="item">
+                WHEN #{item.id} THEN
+                <choose>
+                    <when test="item.weekLow != null">#{item.weekLow}</when>
+                    <otherwise>week_low</otherwise>
+                </choose>
+            </foreach>
+            END,
+
+            year_high = CASE id
+            <foreach collection="list" item="item">
+                WHEN #{item.id} THEN
+                <choose>
+                    <when test="item.yearHigh != null">#{item.yearHigh}</when>
+                    <otherwise>year_high</otherwise>
+                </choose>
+            </foreach>
+            END,
+
+            compare_year_high = CASE id
+            <foreach collection="list" item="item">
+                WHEN #{item.id} THEN
+                <choose>
+                    <when test="item.compareYearHigh != null">#{item.compareYearHigh}</when>
+                    <otherwise>compare_year_high</otherwise>
+                </choose>
+            </foreach>
+            END,
+
+            week_high = CASE id
+            <foreach collection="list" item="item">
+                WHEN #{item.id} THEN
+                <choose>
+                    <when test="item.weekHigh != null">#{item.weekHigh}</when>
+                    <otherwise>week_high</otherwise>
+                </choose>
+            </foreach>
+            END,
+
+            high_price = CASE id
+            <foreach collection="list" item="item">
+                WHEN #{item.id} THEN
+                <choose>
+                    <when test="item.highPrice != null">#{item.highPrice}</when>
+                    <otherwise>high_price</otherwise>
+                </choose>
+            </foreach>
+            END,
+
+            low_price = CASE id
+            <foreach collection="list" item="item">
+                WHEN #{item.id} THEN
+                <choose>
+                    <when test="item.lowPrice != null">#{item.lowPrice}</when>
+                    <otherwise>low_price</otherwise>
+                </choose>
+            </foreach>
+            END
+
+        </set>
+
+        WHERE id IN
+        <foreach collection="list" item="item" open="(" separator="," close=")">
+            #{item.id}
+        </foreach>
+
+    </update>
+
+
+    <delete id="deleteWatchstockById" parameterType="Long">
+        delete
+        from watchstock
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteWatchstockByIds" parameterType="String">
+        delete from watchstock where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <select id="getWatchStockByCode" resultType="com.make.stock.domain.Watchstock">
+        select *
+        from watchstock
+        where code = #{stockCode}
+    </select>
+</mapper>

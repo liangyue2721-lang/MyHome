@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.finance.mapper.InvestmentRecordsMapper">
+    
+    <resultMap type="InvestmentRecords" id="InvestmentRecordsResult">
+        <result property="id" column="id"/>
+        <result property="tradeDate" column="trade_date"/>
+        <result property="tradePrice" column="trade_price"/>
+        <result property="tradeVolume" column="trade_volume"/>
+        <result property="tradeAmount" column="trade_amount"/>
+        <result property="tradeType" column="trade_type"/>
+        <result property="investType" column="invest_type"/>
+        <result property="principalAmount" column="principal_amount"/>
+        <result property="totalAsset" column="total_asset"/>
+        <result property="periodProfit" column="period_profit"/>
+        <result property="totalProfit" column="total_profit"/>
+        <result property="profitRate" column="profit_rate"/>
+        <result property="targetProgress" column="target_progress"/>
+        <result property="remark" column="remark"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="userId" column="user_id"/>
+    </resultMap>
+
+    <sql id="selectInvestmentRecordsVo">
+        select id, trade_date, trade_price, trade_volume, trade_amount, trade_type, invest_type, principal_amount, total_asset, period_profit, total_profit, profit_rate, target_progress, remark, create_time, update_time, user_id from investment_records
+    </sql>
+
+    <select id="selectInvestmentRecordsList" parameterType="InvestmentRecords" resultMap="InvestmentRecordsResult">
+        <include refid="selectInvestmentRecordsVo"/>
+        <where>  
+            <if test="tradeDate != null ">and trade_date = #{tradeDate}</if>
+            <if test="tradePrice != null ">and trade_price = #{tradePrice}</if>
+            <if test="tradeVolume != null ">and trade_volume = #{tradeVolume}</if>
+            <if test="tradeAmount != null ">and trade_amount = #{tradeAmount}</if>
+            <if test="tradeType != null  and tradeType != ''">and trade_type = #{tradeType}</if>
+            <if test="investType != null  and investType != ''">and invest_type = #{investType}</if>
+            <if test="principalAmount != null ">and principal_amount = #{principalAmount}</if>
+            <if test="totalAsset != null ">and total_asset = #{totalAsset}</if>
+            <if test="periodProfit != null ">and period_profit = #{periodProfit}</if>
+            <if test="totalProfit != null ">and total_profit = #{totalProfit}</if>
+            <if test="profitRate != null ">and profit_rate = #{profitRate}</if>
+            <if test="targetProgress != null ">and target_progress = #{targetProgress}</if>
+            <if test="userId != null ">and user_id = #{userId}</if>
+        </where>
+    </select>
+    
+    <select id="selectInvestmentRecordsById" parameterType="Long" resultMap="InvestmentRecordsResult">
+        <include refid="selectInvestmentRecordsVo"/>
+        where id = #{id}
+    </select>
+        
+    <insert id="insertInvestmentRecords" parameterType="InvestmentRecords" useGeneratedKeys="true" keyProperty="id">
+        insert into investment_records
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="tradeDate != null">trade_date,</if>
+            <if test="tradePrice != null">trade_price,</if>
+            <if test="tradeVolume != null">trade_volume,</if>
+            <if test="tradeAmount != null">trade_amount,</if>
+            <if test="tradeType != null and tradeType != ''">trade_type,</if>
+            <if test="investType != null and investType != ''">invest_type,</if>
+            <if test="principalAmount != null">principal_amount,</if>
+            <if test="totalAsset != null">total_asset,</if>
+            <if test="periodProfit != null">period_profit,</if>
+            <if test="totalProfit != null">total_profit,</if>
+            <if test="profitRate != null">profit_rate,</if>
+            <if test="targetProgress != null">target_progress,</if>
+            <if test="remark != null and remark != ''">remark,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="userId != null">user_id,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="tradeDate != null">#{tradeDate},</if>
+            <if test="tradePrice != null">#{tradePrice},</if>
+            <if test="tradeVolume != null">#{tradeVolume},</if>
+            <if test="tradeAmount != null">#{tradeAmount},</if>
+            <if test="tradeType != null and tradeType != ''">#{tradeType},</if>
+            <if test="investType != null and investType != ''">#{investType},</if>
+            <if test="principalAmount != null">#{principalAmount},</if>
+            <if test="totalAsset != null">#{totalAsset},</if>
+            <if test="periodProfit != null">#{periodProfit},</if>
+            <if test="totalProfit != null">#{totalProfit},</if>
+            <if test="profitRate != null">#{profitRate},</if>
+            <if test="targetProgress != null">#{targetProgress},</if>
+            <if test="remark != null and remark != ''">#{remark},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="userId != null">#{userId},</if>
+         </trim>
+    </insert>
+
+    <update id="updateInvestmentRecords" parameterType="InvestmentRecords">
+        update investment_records
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="tradeDate != null">trade_date = #{tradeDate},</if>
+            <if test="tradePrice != null">trade_price = #{tradePrice},</if>
+            <if test="tradeVolume != null">trade_volume = #{tradeVolume},</if>
+            <if test="tradeAmount != null">trade_amount = #{tradeAmount},</if>
+            <if test="tradeType != null and tradeType != ''">trade_type = #{tradeType},</if>
+            <if test="investType != null and investType != ''">invest_type = #{investType},</if>
+            <if test="principalAmount != null">principal_amount = #{principalAmount},</if>
+            <if test="totalAsset != null">total_asset = #{totalAsset},</if>
+            <if test="periodProfit != null">period_profit = #{periodProfit},</if>
+            <if test="totalProfit != null">total_profit = #{totalProfit},</if>
+            <if test="profitRate != null">profit_rate = #{profitRate},</if>
+            <if test="targetProgress != null">target_progress = #{targetProgress},</if>
+            <if test="remark != null and remark != ''">remark = #{remark},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="userId != null">user_id = #{userId},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteInvestmentRecordsById" parameterType="Long">
+        delete from investment_records where id = #{id}
+    </delete>
+
+    <delete id="deleteInvestmentRecordsByIds" parameterType="String">
+        delete from investment_records where id in 
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

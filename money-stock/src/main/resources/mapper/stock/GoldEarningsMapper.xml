@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.stock.mapper.GoldEarningsMapper">
+
+    <resultMap type="GoldEarnings" id="GoldEarningsResult">
+        <result property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="buyWeight" column="buy_weight"/>
+        <result property="buyPricePerGram" column="buy_price_per_gram"/>
+        <result property="benchmarkPrice" column="benchmark_price"/>
+        <result property="recyclePrice" column="recycle_price"/>
+        <result property="institution" column="institution"/>
+        <result property="profitAmount" column="profit_amount"/>
+        <result property="profitDate" column="profit_date"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="selectGoldEarningsVo">
+        select id,
+               user_id,
+               buy_weight,
+               buy_price_per_gram,
+               benchmark_price,
+               recycle_price,
+               institution,
+               profit_amount,
+               profit_date,
+               created_at,
+               updated_at
+        from gold_earnings
+    </sql>
+
+    <select id="selectGoldEarningsList" parameterType="GoldEarnings" resultMap="GoldEarningsResult">
+        <include refid="selectGoldEarningsVo"/>
+        <where>
+            <if test="userId != null ">and user_id = #{userId}</if>
+            <if test="buyWeight != null ">and buy_weight = #{buyWeight}</if>
+            <if test="buyPricePerGram != null ">and buy_price_per_gram = #{buyPricePerGram}</if>
+            <if test="benchmarkPrice != null ">and benchmark_price = #{benchmarkPrice}</if>
+            <if test="recyclePrice != null ">and recycle_price = #{recyclePrice}</if>
+            <if test="institution != null  and institution != ''">and institution = #{institution}</if>
+            <if test="profitAmount != null ">and profit_amount = #{profitAmount}</if>
+            <if test="profitDate != null ">and profit_date = #{profitDate}</if>
+        </where>
+    </select>
+
+    <select id="selectGoldEarningsById" parameterType="Long" resultMap="GoldEarningsResult">
+        <include refid="selectGoldEarningsVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertGoldEarnings" parameterType="GoldEarnings" useGeneratedKeys="true" keyProperty="id">
+        insert into gold_earnings
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="userId != null">user_id,</if>
+            <if test="buyWeight != null">buy_weight,</if>
+            <if test="buyPricePerGram != null">buy_price_per_gram,</if>
+            <if test="benchmarkPrice != null">benchmark_price,</if>
+            <if test="recyclePrice != null">recycle_price,</if>
+            <if test="institution != null and institution != ''">institution,</if>
+            <if test="profitAmount != null">profit_amount,</if>
+            <if test="profitDate != null">profit_date,</if>
+            <if test="createdAt != null">created_at,</if>
+            <if test="updatedAt != null">updated_at,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="userId != null">#{userId},</if>
+            <if test="buyWeight != null">#{buyWeight},</if>
+            <if test="buyPricePerGram != null">#{buyPricePerGram},</if>
+            <if test="benchmarkPrice != null">#{benchmarkPrice},</if>
+            <if test="recyclePrice != null">#{recyclePrice},</if>
+            <if test="institution != null and institution != ''">#{institution},</if>
+            <if test="profitAmount != null">#{profitAmount},</if>
+            <if test="profitDate != null">#{profitDate},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+            <if test="updatedAt != null">#{updatedAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateGoldEarnings" parameterType="GoldEarnings">
+        update gold_earnings
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="userId != null">user_id = #{userId},</if>
+            <if test="buyWeight != null">buy_weight = #{buyWeight},</if>
+            <if test="buyPricePerGram != null">buy_price_per_gram = #{buyPricePerGram},</if>
+            <if test="benchmarkPrice != null">benchmark_price = #{benchmarkPrice},</if>
+            <if test="recyclePrice != null">recycle_price = #{recyclePrice},</if>
+            <if test="institution != null and institution != ''">institution = #{institution},</if>
+            <if test="profitAmount != null">profit_amount = #{profitAmount},</if>
+            <if test="profitDate != null">profit_date = #{profitDate},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteGoldEarningsById" parameterType="Long">
+        delete
+        from gold_earnings
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteGoldEarningsByIds" parameterType="String">
+        delete from gold_earnings where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

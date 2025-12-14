@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.stock.mapper.StockKlineMapper">
+
+    <resultMap type="StockKline" id="StockKlineResult">
+        <result property="id" column="id"/>
+        <result property="stockCode" column="stock_code"/>
+        <result property="market" column="market"/>
+        <result property="tradeDate" column="trade_date"/>
+        <result property="open" column="open"/>
+        <result property="close" column="close"/>
+        <result property="high" column="high"/>
+        <result property="low" column="low"/>
+        <result property="volume" column="volume"/>
+        <result property="amount" column="amount"/>
+        <result property="change" column="change"/>
+        <result property="changePercent" column="change_percent"/>
+        <result property="turnoverRatio" column="turnover_ratio"/>
+        <result property="preClose" column="pre_close"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="startDate" column="start_date"/>
+        <result property="endDate" column="end_date"/>
+    </resultMap>
+
+    <sql id="selectStockKlineVo">
+        select id,
+               stock_code,
+               market,
+               trade_date,
+               `open`,
+               `close`,
+               high,
+               low,
+               volume,
+               amount,
+               `change`,
+               `change_percent`,
+               turnover_ratio,
+               pre_close,
+               create_time,
+               update_time
+        from stock_kline
+    </sql>
+
+    <select id="selectStockKlineList" parameterType="StockKline" resultMap="StockKlineResult">
+        <include refid="selectStockKlineVo"/>
+        <where>
+            <if test="stockCode != null  and stockCode != ''">and stock_code = #{stockCode}</if>
+            <if test="market != null  and market != ''">and market = #{market}</if>
+            <if test="tradeDate != null ">and trade_date = #{tradeDate}</if>
+            <if test="open != null ">and `open` = #{open}</if>
+            <if test="close != null ">and `close` = #{close}</if>
+            <if test="high != null ">and `high` = #{high}</if>
+            <if test="low != null ">and `low` = #{low}</if>
+            <if test="volume != null ">and `volume` = #{volume}</if>
+            <if test="amount != null ">and amount = #{amount}</if>
+            <if test="change != null ">and `change` = #{change}</if>
+            <if test="changePercent != null ">and change_percent = #{changePercent}</if>
+            <if test="turnoverRatio != null ">and turnover_ratio = #{turnoverRatio}</if>
+            <if test="preClose != null ">and pre_close = #{preClose}</if>
+            <if test="startDate != null ">and trade_date &gt;= #{startDate}</if>
+            <if test="endDate != null ">and trade_date &lt;= #{endDate}</if>
+        </where>
+    </select>
+
+    <select id="selectStockKlineById" parameterType="String" resultMap="StockKlineResult">
+        <include refid="selectStockKlineVo"/>
+        where id = #{id}
+    </select>
+    <select id="existsByStockAndDate" resultType="boolean">
+        SELECT EXISTS(SELECT 1 FROM stock_kline WHERE trade_date = #{tradeDate} AND stock_code = #{stockCode})
+    </select>
+    <select id="selectExistsDates" resultType="java.time.LocalDate">
+        SELECT trade_date
+        FROM stock_kline
+        WHERE stock_code = #{stockCode}
+        AND trade_date IN
+        <foreach collection="tradeDateList" item="d" open="(" close=")" separator=",">
+            #{d}
+        </foreach>
+    </select>
+
+
+    <insert id="insertStockKline" parameterType="StockKline" useGeneratedKeys="true" keyProperty="id">
+        insert into stock_kline
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="stockCode != null and stockCode != ''">stock_code,</if>
+            <if test="market != null">market,</if>
+            <if test="tradeDate != null">trade_date,</if>
+            <if test="open != null">`open`,</if>
+            <if test="close != null">`close`,</if>
+            <if test="high != null">high,</if>
+            <if test="low != null">low,</if>
+            <if test="volume != null">volume,</if>
+            <if test="amount != null">amount,</if>
+            <if test="change != null">`change`,</if>
+            <if test="changePercent != null">`change_percent`,</if>
+            <if test="turnoverRatio != null">turnover_ratio,</if>
+            <if test="preClose != null">pre_close,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateTime != null">update_time,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="stockCode != null and stockCode != ''">#{stockCode},</if>
+            <if test="market != null">#{market},</if>
+            <if test="tradeDate != null">#{tradeDate},</if>
+            <if test="open != null">#{open},</if>
+            <if test="close != null">#{close},</if>
+            <if test="high != null">#{high},</if>
+            <if test="low != null">#{low},</if>
+            <if test="volume != null">#{volume},</if>
+            <if test="amount != null">#{amount},</if>
+            <if test="change != null">#{change},</if>
+            <if test="changePercent != null">#{changePercent},</if>
+            <if test="turnoverRatio != null">#{turnoverRatio},</if>
+            <if test="preClose != null">#{preClose},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+        </trim>
+    </insert>
+    <!-- 批量插入或更新 -->
+    <insert id="insertOrUpdateBatch" parameterType="java.util.List">
+        insert into stock_kline
+        (stock_code, market, trade_date, `open`, `close`, high, low, volume, amount, `change`, change_percent,
+        turnover_ratio, pre_close, create_time, update_time)
+        values
+        <foreach collection="list" item="item" separator=",">
+            (#{item.stockCode}, #{item.market}, #{item.tradeDate}, #{item.open}, #{item.close}, #{item.high},
+            #{item.low},
+            #{item.volume}, #{item.amount}, #{item.change}, #{item.changePercent}, #{item.turnoverRatio},
+            #{item.preClose}, #{item.createTime}, #{item.updateTime})
+        </foreach>
+        on duplicate key update
+        open = values(open),
+        `close` = values(close),
+        high = values(high),
+        low = values(low),
+        volume = values(volume),
+        amount = values(amount),
+        `change` = values(`change`),
+        change_percent = values(change_percent),
+        turnover_ratio = values(turnover_ratio),
+        pre_close = values(pre_close),
+        update_time = values(update_time)
+    </insert>
+
+
+    <update id="updateStockKline" parameterType="StockKline">
+        update stock_kline
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="stockCode != null and stockCode != ''">stock_code = #{stockCode},</if>
+            <if test="market != null">market = #{market},</if>
+            <if test="tradeDate != null">trade_date = #{tradeDate},</if>
+            <if test="open != null">`open` = #{open},</if>
+            <if test="close != null">`close` = #{close},</if>
+            <if test="high != null">high = #{high},</if>
+            <if test="low != null">low = #{low},</if>
+            <if test="volume != null">volume = #{volume},</if>
+            <if test="amount != null">amount = #{amount},</if>
+            <if test="change != null">`change` = #{change},</if>
+            <if test="changePercent != null">change_percent = #{changePercent},</if>
+            <if test="turnoverRatio != null">turnover_ratio = #{turnoverRatio},</if>
+            <if test="preClose != null">pre_close = #{preClose},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteStockKlineById" parameterType="String">
+        delete
+        from stock_kline
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteStockKlineByIds" parameterType="String">
+        delete from stock_kline where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <update id="updateByStockCodeAndTradeDate" parameterType="StockKline">
+        update stock_kline
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="stockCode != null and stockCode != ''">stock_code = #{stockCode},</if>
+            <if test="market != null">market = #{market},</if>
+            <if test="tradeDate != null">trade_date = #{tradeDate},</if>
+            <if test="open != null">`open` = #{open},</if>
+            <if test="close != null">`close` = #{close},</if>
+            <if test="high != null">high = #{high},</if>
+            <if test="low != null">low = #{low},</if>
+            <if test="volume != null">volume = #{volume},</if>
+            <if test="amount != null">amount = #{amount},</if>
+            <if test="change != null">`change` = #{change},</if>
+            <if test="changePercent != null">`change_percent` = #{changePercent},</if>
+            <if test="turnoverRatio != null">turnover_ratio = #{turnoverRatio},</if>
+            <if test="preClose != null">pre_close = #{preClose},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+        </trim>
+        where trade_date = #{tradeDate} AND stock_code = #{stockCode}
+    </update>
+
+    <insert id="batchUpsert">
+        INSERT INTO stock_kline (
+        stock_code, trade_date, open, close, high, low, pre_close,
+        volume, amount, `change`, change_percent, turnover_ratio
+        )
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (
+            #{item.stockCode}, #{item.tradeDate}, #{item.open}, #{item.close},
+            #{item.high}, #{item.low}, #{item.preClose}, #{item.volume},
+            #{item.amount}, #{item.change}, #{item.changePercent},
+            #{item.turnoverRatio}
+            )
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+        open = VALUES(open),
+        close = VALUES(close),
+        high = VALUES(high),
+        low = VALUES(low),
+        pre_close = VALUES(pre_close),
+        volume = VALUES(volume),
+        amount = VALUES(amount),
+        `change` = VALUES(`change`),
+        change_percent = VALUES(change_percent),
+        turnover_ratio = VALUES(turnover_ratio),
+        update_time = NOW()
+    </insert>
+
+</mapper>

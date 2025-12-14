@@ -1,0 +1,306 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.finance.mapper.SalaryRecordMapper">
+
+    <resultMap type="SalaryRecord" id="SalaryRecordResult">
+        <result property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="baseSalary" column="base_salary"/>
+        <result property="positionSalary" column="position_salary"/>
+        <result property="performanceSalary" column="performance_salary"/>
+        <result property="allowance" column="allowance"/>
+        <result property="phoneSubsidy" column="phone_subsidy"/>
+        <result property="transportSubsidy" column="transport_subsidy"/>
+        <result property="mealSubsidy" column="meal_subsidy"/>
+        <result property="certificateAllowance" column="certificate_allowance"/>
+        <result property="otherSubsidy" column="other_subsidy"/>
+        <result property="computerSubsidy" column="computer_subsidy"/>
+        <result property="bonus" column="bonus"/>
+        <result property="other" column="other"/>
+        <result property="other1" column="other1"/>
+        <result property="adjustSalary" column="adjust_salary"/>
+        <result property="payableSalary" column="payable_salary"/>
+        <result property="personalLeaveDeduction" column="personal_leave_deduction"/>
+        <result property="sickLeaveDeduction" column="sick_leave_deduction"/>
+        <result property="absenceDeduction" column="absence_deduction"/>
+        <result property="deduction" column="deduction"/>
+        <result property="deduction1" column="deduction1"/>
+        <result property="socialSecurity" column="social_security"/>
+        <result property="socialSecurityBackpay" column="social_security_backpay"/>
+        <result property="housingFund" column="housing_fund"/>
+        <result property="housingFundBackpay" column="housing_fund_backpay"/>
+        <result property="taxRate" column="tax_rate"/>
+        <result property="incomeTax" column="income_tax"/>
+        <result property="totalDeduction" column="total_deduction"/>
+        <result property="unpaid" column="unpaid"/>
+        <result property="totalChildEducation" column="total_child_education"/>
+        <result property="totalElderSupport" column="total_elder_support"/>
+        <result property="totalMortgage" column="total_mortgage"/>
+        <result property="totalEducation" column="total_education"/>
+        <result property="totalRent" column="total_rent"/>
+        <result property="totalBabyCare" column="total_baby_care"/>
+        <result property="totalPersonalPension" column="total_personal_pension"/>
+        <result property="salaryPayOrg" column="salary_pay_org"/>
+        <result property="netSalary" column="net_salary"/>
+        <result property="remark" column="remark"/>
+        <result property="issueDate" column="issue_date"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="selectSalaryRecordVo">
+        select id,
+               user_id,
+               base_salary,
+               position_salary,
+               performance_salary,
+               allowance,
+               phone_subsidy,
+               transport_subsidy,
+               meal_subsidy,
+               certificate_allowance,
+               other_subsidy,
+               computer_subsidy,
+               bonus,
+               other,
+               other1,
+               adjust_salary,
+               payable_salary,
+               personal_leave_deduction,
+               sick_leave_deduction,
+               absence_deduction,
+               deduction,
+               deduction1,
+               social_security,
+               social_security_backpay,
+               housing_fund,
+               housing_fund_backpay,
+               tax_rate,
+               income_tax,
+               total_deduction,
+               unpaid,
+               total_child_education,
+               total_elder_support,
+               total_mortgage,
+               total_education,
+               total_rent,
+               total_baby_care,
+               total_personal_pension,
+               salary_pay_org,
+               net_salary,
+               remark,
+               issue_date,
+               created_at,
+               updated_at
+        from salary_record
+    </sql>
+
+    <select id="selectSalaryRecordList" parameterType="SalaryRecord" resultMap="SalaryRecordResult">
+        <include refid="selectSalaryRecordVo"/>
+        <where>
+            <if test="userId != null ">and user_id = #{userId}</if>
+            <if test="baseSalary != null ">and base_salary = #{baseSalary}</if>
+            <if test="positionSalary != null ">and position_salary = #{positionSalary}</if>
+            <if test="performanceSalary != null ">and performance_salary = #{performanceSalary}</if>
+            <if test="allowance != null ">and allowance = #{allowance}</if>
+            <if test="phoneSubsidy != null ">and phone_subsidy = #{phoneSubsidy}</if>
+            <if test="transportSubsidy != null ">and transport_subsidy = #{transportSubsidy}</if>
+            <if test="mealSubsidy != null ">and meal_subsidy = #{mealSubsidy}</if>
+            <if test="certificateAllowance != null ">and certificate_allowance = #{certificateAllowance}</if>
+            <if test="otherSubsidy != null ">and other_subsidy = #{otherSubsidy}</if>
+            <if test="computerSubsidy != null ">and computer_subsidy = #{computerSubsidy}</if>
+            <if test="bonus != null ">and bonus = #{bonus}</if>
+            <if test="other != null ">and other = #{other}</if>
+            <if test="other1 != null ">and other1 = #{other1}</if>
+            <if test="adjustSalary != null ">and adjust_salary = #{adjustSalary}</if>
+            <if test="payableSalary != null ">and payable_salary = #{payableSalary}</if>
+            <if test="personalLeaveDeduction != null ">and personal_leave_deduction = #{personalLeaveDeduction}</if>
+            <if test="sickLeaveDeduction != null ">and sick_leave_deduction = #{sickLeaveDeduction}</if>
+            <if test="absenceDeduction != null ">and absence_deduction = #{absenceDeduction}</if>
+            <if test="deduction != null ">and deduction = #{deduction}</if>
+            <if test="deduction1 != null ">and deduction1 = #{deduction1}</if>
+            <if test="socialSecurity != null ">and social_security = #{socialSecurity}</if>
+            <if test="socialSecurityBackpay != null ">and social_security_backpay = #{socialSecurityBackpay}</if>
+            <if test="housingFund != null ">and housing_fund = #{housingFund}</if>
+            <if test="housingFundBackpay != null ">and housing_fund_backpay = #{housingFundBackpay}</if>
+            <if test="taxRate != null ">and tax_rate = #{taxRate}</if>
+            <if test="incomeTax != null ">and income_tax = #{incomeTax}</if>
+            <if test="totalDeduction != null ">and total_deduction = #{totalDeduction}</if>
+            <if test="unpaid != null ">and unpaid = #{unpaid}</if>
+            <if test="totalChildEducation != null ">and total_child_education = #{totalChildEducation}</if>
+            <if test="totalElderSupport != null ">and total_elder_support = #{totalElderSupport}</if>
+            <if test="totalMortgage != null ">and total_mortgage = #{totalMortgage}</if>
+            <if test="totalEducation != null ">and total_education = #{totalEducation}</if>
+            <if test="totalRent != null ">and total_rent = #{totalRent}</if>
+            <if test="totalBabyCare != null ">and total_baby_care = #{totalBabyCare}</if>
+            <if test="totalPersonalPension != null ">and total_personal_pension = #{totalPersonalPension}</if>
+            <if test="salaryPayOrg != null  and salaryPayOrg != ''">and salary_pay_org = #{salaryPayOrg}</if>
+            <if test="netSalary != null ">and net_salary = #{netSalary}</if>
+            <if test="issueDate != null ">and issue_date = #{issueDate}</if>
+            <if test="createdAt != null ">and created_at = #{createdAt}</if>
+            <if test="updatedAt != null ">and updated_at = #{updatedAt}</if>
+        </where>
+        order by issue_date desc
+    </select>
+
+    <select id="selectSalaryRecordById" parameterType="Long" resultMap="SalaryRecordResult">
+        <include refid="selectSalaryRecordVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertSalaryRecord" parameterType="SalaryRecord" useGeneratedKeys="true" keyProperty="id">
+        insert into salary_record
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="userId != null">user_id,</if>
+            <if test="baseSalary != null">base_salary,</if>
+            <if test="positionSalary != null">position_salary,</if>
+            <if test="performanceSalary != null">performance_salary,</if>
+            <if test="allowance != null">allowance,</if>
+            <if test="phoneSubsidy != null">phone_subsidy,</if>
+            <if test="transportSubsidy != null">transport_subsidy,</if>
+            <if test="mealSubsidy != null">meal_subsidy,</if>
+            <if test="certificateAllowance != null">certificate_allowance,</if>
+            <if test="otherSubsidy != null">other_subsidy,</if>
+            <if test="computerSubsidy != null">computer_subsidy,</if>
+            <if test="bonus != null">bonus,</if>
+            <if test="other != null">other,</if>
+            <if test="other1 != null">other1,</if>
+            <if test="adjustSalary != null">adjust_salary,</if>
+            <if test="payableSalary != null">payable_salary,</if>
+            <if test="personalLeaveDeduction != null">personal_leave_deduction,</if>
+            <if test="sickLeaveDeduction != null">sick_leave_deduction,</if>
+            <if test="absenceDeduction != null">absence_deduction,</if>
+            <if test="deduction != null">deduction,</if>
+            <if test="deduction1 != null">deduction1,</if>
+            <if test="socialSecurity != null">social_security,</if>
+            <if test="socialSecurityBackpay != null">social_security_backpay,</if>
+            <if test="housingFund != null">housing_fund,</if>
+            <if test="housingFundBackpay != null">housing_fund_backpay,</if>
+            <if test="taxRate != null">tax_rate,</if>
+            <if test="incomeTax != null">income_tax,</if>
+            <if test="totalDeduction != null">total_deduction,</if>
+            <if test="unpaid != null">unpaid,</if>
+            <if test="totalChildEducation != null">total_child_education,</if>
+            <if test="totalElderSupport != null">total_elder_support,</if>
+            <if test="totalMortgage != null">total_mortgage,</if>
+            <if test="totalEducation != null">total_education,</if>
+            <if test="totalRent != null">total_rent,</if>
+            <if test="totalBabyCare != null">total_baby_care,</if>
+            <if test="totalPersonalPension != null">total_personal_pension,</if>
+            <if test="salaryPayOrg != null">salary_pay_org,</if>
+            <if test="netSalary != null">net_salary,</if>
+            <if test="remark != null">remark,</if>
+            <if test="issueDate != null">issue_date,</if>
+            <if test="createdAt != null">created_at,</if>
+            <if test="updatedAt != null">updated_at,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="userId != null">#{userId},</if>
+            <if test="baseSalary != null">#{baseSalary},</if>
+            <if test="positionSalary != null">#{positionSalary},</if>
+            <if test="performanceSalary != null">#{performanceSalary},</if>
+            <if test="allowance != null">#{allowance},</if>
+            <if test="phoneSubsidy != null">#{phoneSubsidy},</if>
+            <if test="transportSubsidy != null">#{transportSubsidy},</if>
+            <if test="mealSubsidy != null">#{mealSubsidy},</if>
+            <if test="certificateAllowance != null">#{certificateAllowance},</if>
+            <if test="otherSubsidy != null">#{otherSubsidy},</if>
+            <if test="computerSubsidy != null">#{computerSubsidy},</if>
+            <if test="bonus != null">#{bonus},</if>
+            <if test="other != null">#{other},</if>
+            <if test="other1 != null">#{other1},</if>
+            <if test="adjustSalary != null">#{adjustSalary},</if>
+            <if test="payableSalary != null">#{payableSalary},</if>
+            <if test="personalLeaveDeduction != null">#{personalLeaveDeduction},</if>
+            <if test="sickLeaveDeduction != null">#{sickLeaveDeduction},</if>
+            <if test="absenceDeduction != null">#{absenceDeduction},</if>
+            <if test="deduction != null">#{deduction},</if>
+            <if test="deduction1 != null">#{deduction1},</if>
+            <if test="socialSecurity != null">#{socialSecurity},</if>
+            <if test="socialSecurityBackpay != null">#{socialSecurityBackpay},</if>
+            <if test="housingFund != null">#{housingFund},</if>
+            <if test="housingFundBackpay != null">#{housingFundBackpay},</if>
+            <if test="taxRate != null">#{taxRate},</if>
+            <if test="incomeTax != null">#{incomeTax},</if>
+            <if test="totalDeduction != null">#{totalDeduction},</if>
+            <if test="unpaid != null">#{unpaid},</if>
+            <if test="totalChildEducation != null">#{totalChildEducation},</if>
+            <if test="totalElderSupport != null">#{totalElderSupport},</if>
+            <if test="totalMortgage != null">#{totalMortgage},</if>
+            <if test="totalEducation != null">#{totalEducation},</if>
+            <if test="totalRent != null">#{totalRent},</if>
+            <if test="totalBabyCare != null">#{totalBabyCare},</if>
+            <if test="totalPersonalPension != null">#{totalPersonalPension},</if>
+            <if test="salaryPayOrg != null">#{salaryPayOrg},</if>
+            <if test="netSalary != null">#{netSalary},</if>
+            <if test="remark != null">#{remark},</if>
+            <if test="issueDate != null">#{issueDate},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+            <if test="updatedAt != null">#{updatedAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateSalaryRecord" parameterType="SalaryRecord">
+        update salary_record
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="userId != null">user_id = #{userId},</if>
+            <if test="baseSalary != null">base_salary = #{baseSalary},</if>
+            <if test="positionSalary != null">position_salary = #{positionSalary},</if>
+            <if test="performanceSalary != null">performance_salary = #{performanceSalary},</if>
+            <if test="allowance != null">allowance = #{allowance},</if>
+            <if test="phoneSubsidy != null">phone_subsidy = #{phoneSubsidy},</if>
+            <if test="transportSubsidy != null">transport_subsidy = #{transportSubsidy},</if>
+            <if test="mealSubsidy != null">meal_subsidy = #{mealSubsidy},</if>
+            <if test="certificateAllowance != null">certificate_allowance = #{certificateAllowance},</if>
+            <if test="otherSubsidy != null">other_subsidy = #{otherSubsidy},</if>
+            <if test="computerSubsidy != null">computer_subsidy = #{computerSubsidy},</if>
+            <if test="bonus != null">bonus = #{bonus},</if>
+            <if test="other != null">other = #{other},</if>
+            <if test="other1 != null">other1 = #{other1},</if>
+            <if test="adjustSalary != null">adjust_salary = #{adjustSalary},</if>
+            <if test="payableSalary != null">payable_salary = #{payableSalary},</if>
+            <if test="personalLeaveDeduction != null">personal_leave_deduction = #{personalLeaveDeduction},</if>
+            <if test="sickLeaveDeduction != null">sick_leave_deduction = #{sickLeaveDeduction},</if>
+            <if test="absenceDeduction != null">absence_deduction = #{absenceDeduction},</if>
+            <if test="deduction != null">deduction = #{deduction},</if>
+            <if test="deduction1 != null">deduction1 = #{deduction1},</if>
+            <if test="socialSecurity != null">social_security = #{socialSecurity},</if>
+            <if test="socialSecurityBackpay != null">social_security_backpay = #{socialSecurityBackpay},</if>
+            <if test="housingFund != null">housing_fund = #{housingFund},</if>
+            <if test="housingFundBackpay != null">housing_fund_backpay = #{housingFundBackpay},</if>
+            <if test="taxRate != null">tax_rate = #{taxRate},</if>
+            <if test="incomeTax != null">income_tax = #{incomeTax},</if>
+            <if test="totalDeduction != null">total_deduction = #{totalDeduction},</if>
+            <if test="unpaid != null">unpaid = #{unpaid},</if>
+            <if test="totalChildEducation != null">total_child_education = #{totalChildEducation},</if>
+            <if test="totalElderSupport != null">total_elder_support = #{totalElderSupport},</if>
+            <if test="totalMortgage != null">total_mortgage = #{totalMortgage},</if>
+            <if test="totalEducation != null">total_education = #{totalEducation},</if>
+            <if test="totalRent != null">total_rent = #{totalRent},</if>
+            <if test="totalBabyCare != null">total_baby_care = #{totalBabyCare},</if>
+            <if test="totalPersonalPension != null">total_personal_pension = #{totalPersonalPension},</if>
+            <if test="salaryPayOrg != null">salary_pay_org = #{salaryPayOrg},</if>
+            <if test="netSalary != null">net_salary = #{netSalary},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="issueDate != null">issue_date = #{issueDate},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteSalaryRecordById" parameterType="Long">
+        delete
+        from salary_record
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteSalaryRecordByIds" parameterType="String">
+        delete from salary_record where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

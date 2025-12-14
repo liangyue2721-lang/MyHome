@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.finance.mapper.BankCardTransactionsMapper">
+
+    <resultMap type="BankCardTransactions" id="BankCardTransactionsResult">
+        <result property="id" column="id"/>
+        <result property="AccountNo" column="AccountNo"/>
+        <result property="SubBranch" column="SubBranch"/>
+        <result property="Date" column="Date"/>
+        <result property="Currency" column="Currency"/>
+        <result property="Transaction" column="Transaction"/>
+        <result property="Amount" column="Amount"/>
+        <result property="bank" column="bank"/>
+        <result property="Balance" column="Balance"/>
+        <result property="TransactionType" column="TransactionType"/>
+        <result property="CounterParty" column="CounterParty"/>
+        <result property="note" column="note"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+        <result property="userId" column="user_id"/>
+    </resultMap>
+
+    <sql id="selectBankCardTransactionsVo">
+        select id,
+               AccountNo,
+               SubBranch, Date, Currency, Transaction, Amount, bank, Balance, TransactionType, CounterParty, note, created_at, updated_at, user_id
+        from bank_card_transactions
+    </sql>
+
+    <select id="selectBankCardTransactionsList" parameterType="BankCardTransactions"
+            resultMap="BankCardTransactionsResult">
+        <include refid="selectBankCardTransactionsVo"/>
+        <where>
+            <if test="AccountNo != null  and AccountNo != ''">and AccountNo = #{AccountNo}</if>
+            <if test="SubBranch != null  and SubBranch != ''">and SubBranch = #{SubBranch}</if>
+            <if test="Date != null ">and Date = #{Date}</if>
+            <if test="Currency != null  and Currency != ''">and Currency = #{Currency}</if>
+            <if test="Transaction != null  and Transaction != ''">and Transaction = #{Transaction}</if>
+            <if test="Amount != null ">and Amount = #{Amount}</if>
+            <if test="bank != null  and bank != ''">and bank = #{bank}</if>
+            <if test="Balance != null ">and Balance = #{Balance}</if>
+            <if test="TransactionType != null  and TransactionType != ''">and TransactionType = #{TransactionType}</if>
+            <if test="CounterParty != null  and CounterParty != ''">and CounterParty = #{CounterParty}</if>
+            <if test="note != null  and note != ''">and note = #{note}</if>
+            <if test="createdAt != null ">and created_at = #{createdAt}</if>
+            <if test="updatedAt != null ">and updated_at = #{updatedAt}</if>
+            <if test="userId != null ">and user_id = #{userId}</if>
+        </where>
+    </select>
+
+    <select id="selectBankCardTransactionsById" parameterType="Long" resultMap="BankCardTransactionsResult">
+        <include refid="selectBankCardTransactionsVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertBankCardTransactions" parameterType="BankCardTransactions" useGeneratedKeys="true"
+            keyProperty="id">
+        insert into bank_card_transactions
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="AccountNo != null">AccountNo,</if>
+            <if test="SubBranch != null">SubBranch,</if>
+            <if test="Date != null">Date,</if>
+            <if test="Currency != null">Currency,</if>
+            <if test="Transaction != null">Transaction,</if>
+            <if test="Amount != null">Amount,</if>
+            <if test="bank != null">bank,</if>
+            <if test="Balance != null">Balance,</if>
+            <if test="TransactionType != null">TransactionType,</if>
+            <if test="CounterParty != null">CounterParty,</if>
+            <if test="note != null">note,</if>
+            <if test="createdAt != null">created_at,</if>
+            <if test="updatedAt != null">updated_at,</if>
+            <if test="userId != null">user_id,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="AccountNo != null">#{AccountNo},</if>
+            <if test="SubBranch != null">#{SubBranch},</if>
+            <if test="Date != null">#{Date},</if>
+            <if test="Currency != null">#{Currency},</if>
+            <if test="Transaction != null">#{Transaction},</if>
+            <if test="Amount != null">#{Amount},</if>
+            <if test="bank != null">#{bank},</if>
+            <if test="Balance != null">#{Balance},</if>
+            <if test="TransactionType != null">#{TransactionType},</if>
+            <if test="CounterParty != null">#{CounterParty},</if>
+            <if test="note != null">#{note},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+            <if test="updatedAt != null">#{updatedAt},</if>
+            <if test="userId != null">#{userId},</if>
+        </trim>
+    </insert>
+
+    <update id="updateBankCardTransactions" parameterType="BankCardTransactions">
+        update bank_card_transactions
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="AccountNo != null">AccountNo = #{AccountNo},</if>
+            <if test="SubBranch != null">SubBranch = #{SubBranch},</if>
+            <if test="Date != null">Date = #{Date},</if>
+            <if test="Currency != null">Currency = #{Currency},</if>
+            <if test="Transaction != null">Transaction = #{Transaction},</if>
+            <if test="Amount != null">Amount = #{Amount},</if>
+            <if test="bank != null">bank = #{bank},</if>
+            <if test="Balance != null">Balance = #{Balance},</if>
+            <if test="TransactionType != null">TransactionType = #{TransactionType},</if>
+            <if test="CounterParty != null">CounterParty = #{CounterParty},</if>
+            <if test="note != null">note = #{note},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
+            <if test="userId != null">user_id = #{userId},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteBankCardTransactionsById" parameterType="Long">
+        delete
+        from bank_card_transactions
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteBankCardTransactionsByIds" parameterType="String">
+        delete from bank_card_transactions where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <select id="selectBankCardTransactionsYearList" resultMap="BankCardTransactionsResult">
+        <include refid="selectBankCardTransactionsVo"/>
+        <where>
+            user_id = #{userId}
+            <if test="startDate != null">
+                and Date &gt;= #{startDate}
+            </if>
+            <if test="endDate != null">
+                and Date &lt;= #{endDate}
+            </if>
+        </where>
+    </select>
+</mapper>

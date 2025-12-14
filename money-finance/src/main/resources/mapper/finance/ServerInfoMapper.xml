@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.finance.mapper.ServerInfoMapper">
+
+    <resultMap type="ServerInfo" id="ServerInfoResult">
+        <result property="id" column="id"/>
+        <result property="serverName" column="server_name"/>
+        <result property="ipAddress" column="ip_address"/>
+        <result property="provider" column="provider"/>
+        <result property="osType" column="os_type"/>
+        <result property="purchaseDate" column="purchase_date"/>
+        <result property="expireDate" column="expire_date"/>
+        <result property="remindDays" column="remind_days"/>
+        <result property="price" column="price"/>
+        <result property="status" column="status"/>
+        <result property="adminUser" column="admin_user"/>
+        <result property="contactEmail" column="contact_email"/>
+        <result property="notifySent" column="notify_sent"/>
+        <result property="remark" column="remark"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <sql id="selectServerInfoVo">
+        select id,
+               server_name,
+               ip_address,
+               provider,
+               os_type,
+               purchase_date,
+               expire_date,
+               remind_days,
+               price,
+               status,
+               admin_user,
+               contact_email,
+               notify_sent,
+               remark,
+               create_time,
+               update_time
+        from server_info
+    </sql>
+
+    <select id="selectServerInfoList" parameterType="ServerInfo" resultMap="ServerInfoResult">
+        <include refid="selectServerInfoVo"/>
+        <where>
+            <if test="serverName != null  and serverName != ''">and server_name like concat('%', #{serverName}, '%')
+            </if>
+            <if test="ipAddress != null  and ipAddress != ''">and ip_address = #{ipAddress}</if>
+            <if test="provider != null  and provider != ''">and provider = #{provider}</if>
+            <if test="purchaseDate != null ">and purchase_date = #{purchaseDate}</if>
+            <if test="expireDate != null ">and expire_date = #{expireDate}</if>
+            <if test="adminUser != null  and adminUser != ''">and admin_user = #{adminUser}</if>
+        </where>
+    </select>
+
+    <select id="selectServerInfoById" parameterType="Long" resultMap="ServerInfoResult">
+        <include refid="selectServerInfoVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertServerInfo" parameterType="ServerInfo" useGeneratedKeys="true" keyProperty="id">
+        insert into server_info
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="serverName != null and serverName != ''">server_name,</if>
+            <if test="ipAddress != null and ipAddress != ''">ip_address,</if>
+            <if test="provider != null">provider,</if>
+            <if test="osType != null">os_type,</if>
+            <if test="purchaseDate != null">purchase_date,</if>
+            <if test="expireDate != null">expire_date,</if>
+            <if test="remindDays != null">remind_days,</if>
+            <if test="price != null">price,</if>
+            <if test="status != null">status,</if>
+            <if test="adminUser != null">admin_user,</if>
+            <if test="contactEmail != null">contact_email,</if>
+            <if test="notifySent != null">notify_sent,</if>
+            <if test="remark != null">remark,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateTime != null">update_time,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="serverName != null and serverName != ''">#{serverName},</if>
+            <if test="ipAddress != null and ipAddress != ''">#{ipAddress},</if>
+            <if test="provider != null">#{provider},</if>
+            <if test="osType != null">#{osType},</if>
+            <if test="purchaseDate != null">#{purchaseDate},</if>
+            <if test="expireDate != null">#{expireDate},</if>
+            <if test="remindDays != null">#{remindDays},</if>
+            <if test="price != null">#{price},</if>
+            <if test="status != null">#{status},</if>
+            <if test="adminUser != null">#{adminUser},</if>
+            <if test="contactEmail != null">#{contactEmail},</if>
+            <if test="notifySent != null">#{notifySent},</if>
+            <if test="remark != null">#{remark},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+        </trim>
+    </insert>
+
+    <update id="updateServerInfo" parameterType="ServerInfo">
+        update server_info
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="serverName != null and serverName != ''">server_name = #{serverName},</if>
+            <if test="ipAddress != null and ipAddress != ''">ip_address = #{ipAddress},</if>
+            <if test="provider != null">provider = #{provider},</if>
+            <if test="osType != null">os_type = #{osType},</if>
+            <if test="purchaseDate != null">purchase_date = #{purchaseDate},</if>
+            <if test="expireDate != null">expire_date = #{expireDate},</if>
+            <if test="remindDays != null">remind_days = #{remindDays},</if>
+            <if test="price != null">price = #{price},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="adminUser != null">admin_user = #{adminUser},</if>
+            <if test="contactEmail != null">contact_email = #{contactEmail},</if>
+            <if test="notifySent != null">notify_sent = #{notifySent},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteServerInfoById" parameterType="Long">
+        delete
+        from server_info
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteServerInfoByIds" parameterType="String">
+        delete from server_info where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

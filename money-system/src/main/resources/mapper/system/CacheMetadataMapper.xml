@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.system.mapper.CacheMetadataMapper">
+
+    <resultMap type="CacheMetadata" id="CacheMetadataResult">
+        <result property="id" column="id"/>
+        <result property="cacheName" column="cache_name"/>
+        <result property="cacheKey" column="cache_key"/>
+        <result property="cacheValue" column="cache_value"/>
+        <result property="remark" column="remark"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="selectCacheMetadataVo">
+        select id, cache_name, cache_key, cache_value, remark, created_at, updated_at
+        from cache_metadata
+    </sql>
+
+    <select id="selectCacheMetadataList" parameterType="CacheMetadata" resultMap="CacheMetadataResult">
+        <include refid="selectCacheMetadataVo"/>
+        <where>
+            <if test="cacheName != null  and cacheName != ''">and cache_name like concat('%', #{cacheName}, '%')</if>
+            <if test="cacheKey != null  and cacheKey != ''">and cache_key like concat('%', #{cacheKey}, '%')</if>
+            <if test="cacheValue != null  and cacheValue != ''">and cache_value = #{cacheValue}</if>
+        </where>
+    </select>
+
+    <select id="selectCacheMetadataById" parameterType="Long" resultMap="CacheMetadataResult">
+        <include refid="selectCacheMetadataVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertCacheMetadata" parameterType="CacheMetadata" useGeneratedKeys="true" keyProperty="id">
+        insert into cache_metadata
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="cacheName != null and cacheName != ''">cache_name,</if>
+            <if test="cacheKey != null and cacheKey != ''">cache_key,</if>
+            <if test="cacheValue != null">cache_value,</if>
+            <if test="remark != null">remark,</if>
+            <if test="createdAt != null">created_at,</if>
+            <if test="updatedAt != null">updated_at,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="cacheName != null and cacheName != ''">#{cacheName},</if>
+            <if test="cacheKey != null and cacheKey != ''">#{cacheKey},</if>
+            <if test="cacheValue != null">#{cacheValue},</if>
+            <if test="remark != null">#{remark},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+            <if test="updatedAt != null">#{updatedAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateCacheMetadata" parameterType="CacheMetadata">
+        update cache_metadata
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="cacheName != null and cacheName != ''">cache_name = #{cacheName},</if>
+            <if test="cacheKey != null and cacheKey != ''">cache_key = #{cacheKey},</if>
+            <if test="cacheValue != null">cache_value = #{cacheValue},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteCacheMetadataById" parameterType="Long">
+        delete
+        from cache_metadata
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteCacheMetadataByIds" parameterType="String">
+        delete from cache_metadata where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

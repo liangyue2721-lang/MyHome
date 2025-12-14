@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.stock.mapper.StockPriceUsMapper">
+
+    <resultMap type="StockPriceUs" id="StockPriceUsResult">
+        <result property="id" column="id"/>
+        <result property="code" column="code"/>
+        <result property="name" column="name"/>
+        <result property="priceNow" column="price_now"/>
+        <result property="priceHighDay" column="price_high_day"/>
+        <result property="priceLowDay" column="price_low_day"/>
+        <result property="priceOpenDay" column="price_open_day"/>
+        <result property="priceCloseYesterday" column="price_close_yesterday"/>
+        <result property="priceLowWeek" column="price_low_week"/>
+        <result property="priceLowYear" column="price_low_year"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <sql id="selectStockPriceUsVo">
+        select id,
+               code,
+               name,
+               price_now,
+               price_high_day,
+               price_low_day,
+               price_open_day,
+               price_close_yesterday,
+               price_low_week,
+               price_low_year,
+               create_time,
+               update_time
+        from stock_price_us
+    </sql>
+
+    <select id="selectStockPriceUsList" parameterType="StockPriceUs" resultMap="StockPriceUsResult">
+        <include refid="selectStockPriceUsVo"/>
+        <where>
+            <if test="code != null  and code != ''">and code like concat('%', #{code}, '%')</if>
+            <if test="name != null  and name != ''">and name like concat('%', #{name}, '%')</if>
+        </where>
+    </select>
+
+    <select id="selectStockPriceUsById" parameterType="Long" resultMap="StockPriceUsResult">
+        <include refid="selectStockPriceUsVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertStockPriceUs" parameterType="StockPriceUs" useGeneratedKeys="true" keyProperty="id">
+        insert into stock_price_us
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="code != null and code != ''">code,</if>
+            <if test="name != null">name,</if>
+            <if test="priceNow != null">price_now,</if>
+            <if test="priceHighDay != null">price_high_day,</if>
+            <if test="priceLowDay != null">price_low_day,</if>
+            <if test="priceOpenDay != null">price_open_day,</if>
+            <if test="priceCloseYesterday != null">price_close_yesterday,</if>
+            <if test="priceLowWeek != null">price_low_week,</if>
+            <if test="priceLowYear != null">price_low_year,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateTime != null">update_time,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="code != null and code != ''">#{code},</if>
+            <if test="name != null">#{name},</if>
+            <if test="priceNow != null">#{priceNow},</if>
+            <if test="priceHighDay != null">#{priceHighDay},</if>
+            <if test="priceLowDay != null">#{priceLowDay},</if>
+            <if test="priceOpenDay != null">#{priceOpenDay},</if>
+            <if test="priceCloseYesterday != null">#{priceCloseYesterday},</if>
+            <if test="priceLowWeek != null">#{priceLowWeek},</if>
+            <if test="priceLowYear != null">#{priceLowYear},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+        </trim>
+    </insert>
+
+    <update id="updateStockPriceUs" parameterType="StockPriceUs">
+        update stock_price_us
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="code != null and code != ''">code = #{code},</if>
+            <if test="name != null">name = #{name},</if>
+            <if test="priceNow != null">price_now = #{priceNow},</if>
+            <if test="priceHighDay != null">price_high_day = #{priceHighDay},</if>
+            <if test="priceLowDay != null">price_low_day = #{priceLowDay},</if>
+            <if test="priceOpenDay != null">price_open_day = #{priceOpenDay},</if>
+            <if test="priceCloseYesterday != null">price_close_yesterday = #{priceCloseYesterday},</if>
+            <if test="priceLowWeek != null">price_low_week = #{priceLowWeek},</if>
+            <if test="priceLowYear != null">price_low_year = #{priceLowYear},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteStockPriceUsById" parameterType="Long">
+        delete
+        from stock_price_us
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteStockPriceUsByIds" parameterType="String">
+        delete from stock_price_us where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

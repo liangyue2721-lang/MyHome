@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.stock.mapper.StockKlineTaskMapper">
+
+    <resultMap type="StockKlineTask" id="StockKlineTaskResult">
+        <result property="id" column="id"/>
+        <result property="stockCode" column="stock_code"/>
+        <result property="market" column="market"/>
+        <result property="taskStatus" column="task_status"/>
+        <result property="executeTime" column="execute_time"/>
+        <result property="nodeId" column="node_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <sql id="selectStockKlineTaskVo">
+        select id,
+               stock_code,
+               market,
+               task_status,
+               execute_time,
+               node_id,
+               create_time,
+               update_time
+        from stock_kline_task
+    </sql>
+
+    <select id="selectStockKlineTaskList" parameterType="StockKlineTask" resultMap="StockKlineTaskResult">
+        <include refid="selectStockKlineTaskVo"/>
+        <where>
+            <if test="stockCode != null  and stockCode != ''">and stock_code = #{stockCode}</if>
+            <if test="market != null  and market != ''">and market = #{market}</if>
+            <if test="taskStatus != null ">and task_status = #{taskStatus}</if>
+            <if test="executeTime != null ">and execute_time = #{executeTime}</if>
+            <if test="nodeId != null ">and node_id = #{nodeId}</if>
+        </where>
+    </select>
+
+    <select id="selectStockKlineTaskById" parameterType="Long" resultMap="StockKlineTaskResult">
+        <include refid="selectStockKlineTaskVo"/>
+        where id = #{id}
+    </select>
+    <select id="getStockAllTask" resultMap="StockKlineTaskResult">
+        <include refid="selectStockKlineTaskVo"/>
+        where task_status IN (0, 3)
+        <if test="nodeId != null ">and node_id = #{nodeId}</if>
+        order by update_time asc
+    </select>
+
+
+    <insert id="insertStockKlineTask" parameterType="StockKlineTask" useGeneratedKeys="true" keyProperty="id">
+        insert into stock_kline_task
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="stockCode != null and stockCode != ''">stock_code,</if>
+            <if test="market != null">market,</if>
+            <if test="taskStatus != null">task_status,</if>
+            <if test="executeTime != null">execute_time,</if>
+            <if test="nodeId != null">node_id,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateTime != null">update_time,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="stockCode != null and stockCode != ''">#{stockCode},</if>
+            <if test="market != null">#{market},</if>
+            <if test="taskStatus != null">#{taskStatus},</if>
+            <if test="executeTime != null">#{executeTime},</if>
+            <if test="nodeId != null">#{nodeId},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+        </trim>
+    </insert>
+
+    <update id="updateStockKlineTask" parameterType="StockKlineTask">
+        update stock_kline_task
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="stockCode != null and stockCode != ''">stock_code = #{stockCode},</if>
+            <if test="market != null">market = #{market},</if>
+            <if test="taskStatus != null">task_status = #{taskStatus},</if>
+            <if test="executeTime != null">execute_time = #{executeTime},</if>
+            <if test="nodeId != null">node_id = #{nodeId},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+        </trim>
+        where id = #{id}
+    </update>
+    <update id="batchFinishTask">
+        update stock_kline_task
+        set task_status = 3,
+        execute_time = now()
+        where id in
+        <foreach collection="list" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <delete id="deleteStockKlineTaskById" parameterType="Long">
+        delete
+        from stock_kline_task
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteStockKlineTaskByIds" parameterType="Long">
+        delete from stock_kline_task where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

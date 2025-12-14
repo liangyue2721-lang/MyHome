@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.finance.mapper.ExpenseMapper">
+
+    <resultMap type="Expense" id="ExpenseResult">
+        <result property="expenseId" column="expense_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="amount" column="amount"/>
+        <result property="merchant" column="merchant"/>
+        <result property="expenseDate" column="expense_date"/>
+        <result property="category" column="category"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="selectExpenseVo">
+        select expense_id,
+               user_id,
+               amount,
+               merchant,
+               expense_date,
+               category,
+               created_at,
+               updated_at
+        from expense
+    </sql>
+
+    <select id="selectExpenseList" parameterType="Expense" resultMap="ExpenseResult">
+        <include refid="selectExpenseVo"/>
+        <where>
+            <if test="userId != null ">and user_id = #{userId}</if>
+            <if test="amount != null ">and amount = #{amount}</if>
+            <if test="merchant != null  and merchant != ''">and merchant = #{merchant}</if>
+            <if test="expenseDate != null ">and expense_date = #{expenseDate}</if>
+            <if test="category != null  and category != ''">and category = #{category}</if>
+            <if test="startDate != null and endDate != null">
+                AND expense_date BETWEEN #{startDate} AND #{endDate}
+            </if>
+        </where>
+        order by expense_date desc
+    </select>
+
+    <select id="selectExpenseByExpenseId" parameterType="Long" resultMap="ExpenseResult">
+        <include refid="selectExpenseVo"/>
+        where expense_id = #{expenseId}
+    </select>
+
+    <insert id="insertExpense" parameterType="Expense" useGeneratedKeys="true" keyProperty="expenseId">
+        insert into expense
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="userId != null">user_id,</if>
+            <if test="amount != null">amount,</if>
+            <if test="merchant != null">merchant,</if>
+            <if test="expenseDate != null">expense_date,</if>
+            <if test="category != null">category,</if>
+            <if test="createdAt != null">created_at,</if>
+            <if test="updatedAt != null">updated_at,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="userId != null">#{userId},</if>
+            <if test="amount != null">#{amount},</if>
+            <if test="merchant != null">#{merchant},</if>
+            <if test="expenseDate != null">#{expenseDate},</if>
+            <if test="category != null">#{category},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+            <if test="updatedAt != null">#{updatedAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateExpense" parameterType="Expense">
+        update expense
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="userId != null">user_id = #{userId},</if>
+            <if test="amount != null">amount = #{amount},</if>
+            <if test="merchant != null">merchant = #{merchant},</if>
+            <if test="expenseDate != null">expense_date = #{expenseDate},</if>
+            <if test="category != null">category = #{category},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
+        </trim>
+        where expense_id = #{expenseId}
+    </update>
+
+    <delete id="deleteExpenseByExpenseId" parameterType="Long">
+        delete
+        from expense
+        where expense_id = #{expenseId}
+    </delete>
+
+    <delete id="deleteExpenseByExpenseIds" parameterType="String">
+        delete from expense where expense_id in
+        <foreach item="expenseId" collection="array" open="(" separator="," close=")">
+            #{expenseId}
+        </foreach>
+    </delete>
+
+    <select id="selectCurrentMonthExpenseTotal" resultType="java.math.BigDecimal">
+        SELECT SUM(amount)
+        FROM expense
+        WHERE expense_date BETWEEN #{startDate} AND #{endDate}
+        AND user_id = #{userId}
+    </select>
+
+    <select id="selectExpenseListByTransactionId" resultMap="ExpenseResult">
+        <include refid="selectExpenseVo"/>
+        where merchant like concat( #{merchant}, '%')
+    </select>
+    <select id="selectExpenseByUserIdAndLoan"  resultMap="ExpenseResult">
+        <include refid="selectExpenseVo"/>
+        where user_id = #{userId}
+        AND merchant = '月供'
+        AND expense_date = #{expenseDate}
+    </select>
+
+</mapper>

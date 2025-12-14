@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.stock.mapper.StockInfoDongfangHisMapper">
+
+    <resultMap type="StockInfoDongfangHis" id="StockInfoDongfangHisResult">
+        <result property="id" column="id"/>
+        <result property="inDate" column="in_date"/>
+        <result property="type" column="type"/>
+        <result property="price" column="price"/>
+        <result property="volume" column="volume"/>
+        <result property="marketValue" column="market_value"/>
+        <result property="totalAssets" column="total_assets"/>
+        <result property="totalShares" column="total_shares"/>
+        <result property="circulationShares" column="circulation_shares"/>
+        <result property="netChange" column="net_change"/>
+        <result property="netChangePercentage" column="net_change_percentage"/>
+        <result property="stockCode" column="stock_code"/>
+        <result property="marketCategory" column="market_category"/>
+        <result property="companyName" column="company_name"/>
+        <result property="highPrice" column="high_price"/>
+        <result property="lowPrice" column="low_price"/>
+        <result property="openPrice" column="open_price"/>
+        <result property="closePrice" column="close_price"/>
+        <result property="tradingVolume" column="trading_volume"/>
+        <result property="additionalInfo" column="additional_info"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <sql id="selectStockInfoDongfangHisVo">
+        select id,
+               in_date,
+               type,
+               price,
+               volume,
+               market_value,
+               total_assets,
+               total_shares,
+               circulation_shares,
+               net_change,
+               net_change_percentage,
+               stock_code,
+               market_category,
+               company_name,
+               high_price,
+               low_price,
+               open_price,
+               close_price,
+               trading_volume,
+               additional_info,
+               create_time,
+               update_time
+        from stock_info_dongfang_his
+    </sql>
+
+    <select id="selectStockInfoDongfangHisList" parameterType="StockInfoDongfangHis"
+            resultMap="StockInfoDongfangHisResult">
+        <include refid="selectStockInfoDongfangHisVo"/>
+        <where>
+            <if test="inDate != null ">and in_date = #{inDate}</if>
+            <if test="type != null ">and type like concat('%', #{type}, '%')</if>
+            <if test="price != null ">and price = #{price}</if>
+            <if test="volume != null ">and volume = #{volume}</if>
+            <if test="marketValue != null ">and market_value = #{marketValue}</if>
+            <if test="totalAssets != null ">and total_assets = #{totalAssets}</if>
+            <if test="totalShares != null ">and total_shares = #{totalShares}</if>
+            <if test="circulationShares != null ">and circulation_shares = #{circulationShares}</if>
+            <if test="netChange != null ">and net_change = #{netChange}</if>
+            <if test="netChangePercentage != null ">and net_change_percentage = #{netChangePercentage}</if>
+            <if test="stockCode != null  and stockCode != ''">and stock_code like concat('%', #{stockCode}, '%')</if>
+            <if test="marketCategory != null ">and market_category = #{marketCategory}</if>
+            <if test="companyName != null  and companyName != ''">and company_name like concat('%', #{companyName},
+                '%')
+            </if>
+            <if test="highPrice != null ">and high_price = #{highPrice}</if>
+            <if test="lowPrice != null ">and low_price = #{lowPrice}</if>
+            <if test="openPrice != null ">and open_price = #{openPrice}</if>
+            <if test="closePrice != null ">and close_price = #{closePrice}</if>
+            <if test="tradingVolume != null ">and trading_volume = #{tradingVolume}</if>
+            <if test="additionalInfo != null ">and additional_info = #{additionalInfo}</if>
+        </where>
+        order by in_date DESC
+    </select>
+
+    <select id="selectStockInfoDongfangHisById" parameterType="Long" resultMap="StockInfoDongfangHisResult">
+        <include refid="selectStockInfoDongfangHisVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertStockInfoDongfangHis" parameterType="StockInfoDongfangHis" useGeneratedKeys="true"
+            keyProperty="id">
+        insert into stock_info_dongfang_his
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="inDate != null">in_date,</if>
+            <if test="type != null">type,</if>
+            <if test="price != null">price,</if>
+            <if test="volume != null">volume,</if>
+            <if test="marketValue != null">market_value,</if>
+            <if test="totalAssets != null">total_assets,</if>
+            <if test="totalShares != null">total_shares,</if>
+            <if test="circulationShares != null">circulation_shares,</if>
+            <if test="netChange != null">net_change,</if>
+            <if test="netChangePercentage != null">net_change_percentage,</if>
+            <if test="stockCode != null">stock_code,</if>
+            <if test="marketCategory != null">market_category,</if>
+            <if test="companyName != null">company_name,</if>
+            <if test="highPrice != null">high_price,</if>
+            <if test="lowPrice != null">low_price,</if>
+            <if test="openPrice != null">open_price,</if>
+            <if test="closePrice != null">close_price,</if>
+            <if test="tradingVolume != null">trading_volume,</if>
+            <if test="additionalInfo != null">additional_info,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateTime != null">update_time,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="inDate != null">#{inDate},</if>
+            <if test="type != null">#{type},</if>
+            <if test="price != null">#{price},</if>
+            <if test="volume != null">#{volume},</if>
+            <if test="marketValue != null">#{marketValue},</if>
+            <if test="totalAssets != null">#{totalAssets},</if>
+            <if test="totalShares != null">#{totalShares},</if>
+            <if test="circulationShares != null">#{circulationShares},</if>
+            <if test="netChange != null">#{netChange},</if>
+            <if test="netChangePercentage != null">#{netChangePercentage},</if>
+            <if test="stockCode != null">#{stockCode},</if>
+            <if test="marketCategory != null">#{marketCategory},</if>
+            <if test="companyName != null">#{companyName},</if>
+            <if test="highPrice != null">#{highPrice},</if>
+            <if test="lowPrice != null">#{lowPrice},</if>
+            <if test="openPrice != null">#{openPrice},</if>
+            <if test="closePrice != null">#{closePrice},</if>
+            <if test="tradingVolume != null">#{tradingVolume},</if>
+            <if test="additionalInfo != null">#{additionalInfo},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+        </trim>
+    </insert>
+
+    <update id="updateStockInfoDongfangHis" parameterType="StockInfoDongfangHis">
+        update stock_info_dongfang_his
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="inDate != null">in_date = #{inDate},</if>
+            <if test="type != null">type = #{type},</if>
+            <if test="price != null">price = #{price},</if>
+            <if test="volume != null">volume = #{volume},</if>
+            <if test="marketValue != null">market_value = #{marketValue},</if>
+            <if test="totalAssets != null">total_assets = #{totalAssets},</if>
+            <if test="totalShares != null">total_shares = #{totalShares},</if>
+            <if test="circulationShares != null">circulation_shares = #{circulationShares},</if>
+            <if test="netChange != null">net_change = #{netChange},</if>
+            <if test="netChangePercentage != null">net_change_percentage = #{netChangePercentage},</if>
+            <if test="stockCode != null">stock_code = #{stockCode},</if>
+            <if test="marketCategory != null">market_category = #{marketCategory},</if>
+            <if test="companyName != null">company_name = #{companyName},</if>
+            <if test="highPrice != null">high_price = #{highPrice},</if>
+            <if test="lowPrice != null">low_price = #{lowPrice},</if>
+            <if test="openPrice != null">open_price = #{openPrice},</if>
+            <if test="closePrice != null">close_price = #{closePrice},</if>
+            <if test="tradingVolume != null">trading_volume = #{tradingVolume},</if>
+            <if test="additionalInfo != null">additional_info = #{additionalInfo},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteStockInfoDongfangHisById" parameterType="Long">
+        delete
+        from stock_info_dongfang_his
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteStockInfoDongfangHisByIds" parameterType="String">
+        delete from stock_info_dongfang_his where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <insert id="batchInsert" parameterType="java.util.List" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO stock_info_dongfang_his (
+        in_date,
+        type,
+        price,
+        volume,
+        market_value,
+        total_assets,
+        total_shares,
+        circulation_shares,
+        net_change,
+        net_change_percentage,
+        stock_code,
+        market_category,
+        company_name,
+        high_price,
+        low_price,
+        open_price,
+        close_price,
+        trading_volume,
+        additional_info
+        )
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.inDate}, #{item.type}, #{item.price}, #{item.volume}, #{item.marketValue},
+            #{item.totalAssets}, #{item.totalShares}, #{item.circulationShares},
+            #{item.netChange}, #{item.netChangePercentage}, #{item.stockCode},
+            #{item.marketCategory}, #{item.companyName}, #{item.highPrice},
+            #{item.lowPrice}, #{item.openPrice}, #{item.closePrice},
+            #{item.tradingVolume}, #{item.additionalInfo})
+        </foreach>
+    </insert>
+
+    <select id="findByCodeAndCreateTime" resultType="com.make.stock.domain.StockInfoDongfangHis">
+        select *
+        from stock_info_dongfang_his
+        where stock_code = #{stockCode}
+          and in_date Like #{createTime}
+    </select>
+</mapper>

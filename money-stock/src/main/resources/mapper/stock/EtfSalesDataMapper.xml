@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.stock.mapper.EtfSalesDataMapper">
+
+    <resultMap type="EtfSalesData" id="EtfSalesDataResult">
+        <result property="id" column="id"/>
+        <result property="recordDate" column="record_date"/>
+        <result property="etfCode" column="etf_code"/>
+        <result property="etfName" column="etf_name"/>
+        <result property="profit" column="profit"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <sql id="selectEtfSalesDataVo">
+        select id, record_date, etf_code, etf_name, profit, create_time, update_time
+        from etf_sales_data
+    </sql>
+
+    <select id="selectEtfSalesDataList" parameterType="EtfSalesData" resultMap="EtfSalesDataResult">
+        <include refid="selectEtfSalesDataVo"/>
+        <where>
+            <if test="recordDate != null ">and record_date = #{recordDate}</if>
+            <if test="etfCode != null  and etfCode != ''">and etf_code = #{etfCode}</if>
+            <if test="etfName != null  and etfName != ''">and etf_name like concat('%', #{etfName}, '%')</if>
+            <if test="profit != null ">and profit = #{profit}</if>
+        </where>
+    </select>
+
+    <select id="selectEtfSalesDataById" parameterType="Long" resultMap="EtfSalesDataResult">
+        <include refid="selectEtfSalesDataVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertEtfSalesData" parameterType="EtfSalesData" useGeneratedKeys="true" keyProperty="id">
+        insert into etf_sales_data
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="recordDate != null">record_date,</if>
+            <if test="etfCode != null and etfCode != ''">etf_code,</if>
+            <if test="etfName != null and etfName != ''">etf_name,</if>
+            <if test="profit != null">profit,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateTime != null">update_time,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="recordDate != null">#{recordDate},</if>
+            <if test="etfCode != null and etfCode != ''">#{etfCode},</if>
+            <if test="etfName != null and etfName != ''">#{etfName},</if>
+            <if test="profit != null">#{profit},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+        </trim>
+    </insert>
+
+    <update id="updateEtfSalesData" parameterType="EtfSalesData">
+        update etf_sales_data
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="recordDate != null">record_date = #{recordDate},</if>
+            <if test="etfCode != null and etfCode != ''">etf_code = #{etfCode},</if>
+            <if test="etfName != null and etfName != ''">etf_name = #{etfName},</if>
+            <if test="profit != null">profit = #{profit},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteEtfSalesDataById" parameterType="Long">
+        delete
+        from etf_sales_data
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteEtfSalesDataByIds" parameterType="String">
+        delete from etf_sales_data where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <select id="selectEtfSalesDataListByName" parameterType="EtfSalesData" resultMap="EtfSalesDataResult">
+        SELECT * FROM etf_sales_data
+        <where>
+            <if test="etfName != null and etfName != ''">
+                AND etf_name = #{etfName}
+            </if>
+            <if test="createTime != null">
+                AND create_time BETWEEN DATE_SUB(#{createTime}, INTERVAL 7 DAY)
+                AND DATE_ADD(#{createTime}, INTERVAL 7 DAY)
+            </if>
+        </where>
+    </select>
+
+    <select id="queryByCodesAndTime"
+            parameterType="java.util.List"
+            resultType="com.make.stock.domain.EtfSalesData">
+        SELECT
+        record_date AS recordDate,
+        etf_code AS etfCode,
+        etf_name AS etfName,
+        profit
+        FROM etf_sales_data
+        WHERE etf_code IN
+        <foreach collection="etfCodes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+        AND create_time >= DATE_SUB(NOW(), INTERVAL 3 DAY)
+        ORDER BY create_time DESC
+    </select>
+
+    <delete id="delTime">
+        DELETE FROM etf_sales_data
+        WHERE create_time  &lt; DATE_SUB(NOW(), INTERVAL 7 DAY)
+    </delete>
+
+</mapper>
