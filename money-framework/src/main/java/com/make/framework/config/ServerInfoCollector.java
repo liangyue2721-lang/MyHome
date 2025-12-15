@@ -203,6 +203,9 @@ public class ServerInfoCollector {
                 logger.warn("Server 对象未初始化");
                 return info;
             }
+
+            // 初始化线程池信息
+            server.getThreadPoolInfo().init();
             
             // 收集服务器信息
             server.copyTo();

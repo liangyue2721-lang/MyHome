@@ -154,35 +154,35 @@ public class ThreadPoolMonitor {
 
     /**
      * 获取集群环境下所有节点的线程池信息（从内存中获取）
-     * 
+     *
      * @return 所有节点的线程池信息
      */
-    public Map<String, Map<String, Object>> getClusterThreadPoolInfo() {
+    public Map<String, List<Map<String, Object>>> getClusterThreadPoolInfo() {
         if (clusterThreadPoolInfo == null) {
             return new HashMap<>();
         }
         // 先更新本节点信息
         updateLocalNodeInfo();
-        
+
         // 返回所有节点信息
         return clusterThreadPoolInfo.getAllNodeThreadPoolInfo();
     }
-    
+
     /**
      * 获取集群环境下所有节点的线程池信息（从Redis中获取）
-     * 
+     *
      * @return 所有节点的线程池信息
      */
-    public Map<String, Map<String, Object>> getClusterThreadPoolInfoFromRedis() {
+    public Map<String, List<Map<String, Object>>> getClusterThreadPoolInfoFromRedis() {
         if (redisClusterThreadPoolService == null) {
             return new HashMap<>();
         }
         return redisClusterThreadPoolService.getAllNodeThreadPoolInfoFromRedis();
     }
-    
+
     /**
      * 获取集群环境下所有节点的线程池聚合统计信息（从Redis中获取）
-     * 
+     *
      * @return 聚合统计信息
      */
     public Map<String, Object> getAggregatedThreadPoolInfoFromRedis() {
@@ -191,7 +191,7 @@ public class ThreadPoolMonitor {
         }
         return redisClusterThreadPoolService.getAggregatedThreadPoolInfoFromRedis();
     }
-    
+
     /**
      * 更新本节点线程池信息到集群信息中
      */
@@ -203,31 +203,18 @@ public class ThreadPoolMonitor {
             // 获取本节点线程池信息
             List<Map<String, Object>> localInfoList = getLocalThreadPoolInfo();
 
-            // 为了兼容旧的Map结构，这里暂时将List转换为Map
-            Map<String, Object> localInfoMap = new HashMap<>();
-            for (Map<String, Object> poolInfo : localInfoList) {
-                String name = (String) poolInfo.get("name");
-                if ("核心业务线程池".equals(name)) {
-                    localInfoMap.put("coreExecutor", poolInfo);
-                } else if ("关注股票专用线程池".equals(name)) {
-                    localInfoMap.put("watchStockExecutor", poolInfo);
-                } else if ("调度线程池".equals(name)) {
-                    localInfoMap.put("scheduler", poolInfo);
-                }
-            }
-            
             // 获取本节点标识（IP地址+应用名称）
             String localNodeId = IpUtils.getHostIp() + ":" + applicationName;
-            
+
             // 更新到集群信息中
-            clusterThreadPoolInfo.addNodeThreadPoolInfo(localNodeId, localInfoMap);
-            
-            logger.debug("🔄 更新本节点线程池信息到集群信息中: 节点={}, 信息={}", localNodeId, localInfoMap);
+            clusterThreadPoolInfo.addNodeThreadPoolInfo(localNodeId, localInfoList);
+
+            logger.debug("🔄 更新本节点线程池信息到集群信息中: 节点={}, 信息={}", localNodeId, localInfoList);
         } catch (Exception e) {
             logger.error("💥 更新本节点线程池信息失败", e);
         }
     }
-    
+
     /**
      * 通过反射获取ThreadPoolExecutor实例
      * @param executorService ExecutorService实例
@@ -237,7 +224,7 @@ public class ThreadPoolMonitor {
         if (executorService instanceof ThreadPoolExecutor) {
             return (ThreadPoolExecutor) executorService;
         }
-        
+
         try {
             // 尝试通过反射获取内部的ThreadPoolExecutor字段
             Field[] fields = executorService.getClass().getDeclaredFields();
@@ -250,7 +237,7 @@ public class ThreadPoolMonitor {
         } catch (Exception e) {
             logger.warn("⚠️ 通过反射获取ThreadPoolExecutor失败", e);
         }
-        
+
         return null;
     }
 }
