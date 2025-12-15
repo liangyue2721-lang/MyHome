@@ -298,18 +298,18 @@
               <el-table-column label="内存使用率">
                  <template slot-scope="scope">
                    <div class="cell">{{ scope.row.mem && scope.row.mem.usage ? scope.row.mem.usage + '%' : '-' }}</div>
-                </template>
-              </el-column>
+                 </template>
+              </el-table-column>
                <el-table-column label="JVM使用率">
                  <template slot-scope="scope">
                    <div class="cell">{{ scope.row.jvm && scope.row.jvm.usage ? scope.row.jvm.usage + '%' : '-' }}</div>
-                </template>
-              </el-column>
+                 </template>
+              </el-table-column>
               <el-table-column label="操作系统">
                  <template slot-scope="scope">
                    <div class="cell">{{ scope.row.sys && scope.row.sys.osName || '-' }}</div>
-                </template>
-              </el-column>
+                 </template>
+              </el-table-column>
               <el-table-column label="磁盘使用率">
                 <template slot-scope="scope">
                   <div class="cell" v-if="scope.row.sysFiles && scope.row.sysFiles.length > 0">
