@@ -13,6 +13,7 @@ import com.make.framework.web.domain.server.ClusterThreadPoolInfo;
 import com.make.framework.config.ThreadPoolMonitor;
 import com.make.framework.config.ServerInfoCollector;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -22,30 +23,28 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/monitor/server")
-public class ServerController
-{
+public class ServerController {
     private static final Logger logger = LoggerFactory.getLogger(ServerController.class);
-    
+
     @Autowired
     private Server server;
-    
+
     @Autowired
     private ClusterThreadPoolInfo clusterThreadPoolInfo;
-    
+
     @Autowired
     private ThreadPoolMonitor threadPoolMonitor;
-    
+
     @Autowired
     private ServerInfoCollector serverInfoCollector;
-    
+
     @PreAuthorize("@ss.hasPermi('monitor:server:list')")
     @GetMapping()
-    public AjaxResult getInfo() throws Exception
-    {
+    public AjaxResult getInfo() throws Exception {
         server.copyTo();
         return AjaxResult.success(server);
     }
-    
+
     /**
      * 获取集群环境下所有节点的线程池信息（从内存中获取）
      */
@@ -53,7 +52,7 @@ public class ServerController
     @GetMapping("/clusterThreadPool")
     public AjaxResult getClusterThreadPoolInfo() {
         try {
-            Map<String, Map<String, Object>> clusterInfo = server.getClusterThreadPoolInfo();
+            Map<String, List<Map<String, Object>>> clusterInfo = server.getClusterThreadPoolInfo();
             logger.info("🌐 获取集群线程池信息（内存模式），节点数量: {}", clusterInfo.size());
             return AjaxResult.success(clusterInfo);
         } catch (Exception e) {
@@ -61,7 +60,7 @@ public class ServerController
             return AjaxResult.error("获取集群线程池信息失败: " + e.getMessage());
         }
     }
-    
+
     /**
      * 获取集群环境下所有节点的线程池信息（从Redis中获取）
      */
@@ -69,7 +68,7 @@ public class ServerController
     @GetMapping("/clusterThreadPoolRedis")
     public AjaxResult getClusterThreadPoolInfoFromRedis() {
         try {
-            Map<String, Map<String, Object>> clusterInfo = threadPoolMonitor.getClusterThreadPoolInfoFromRedis();
+            Map<String, List<Map<String, Object>>> clusterInfo = threadPoolMonitor.getClusterThreadPoolInfoFromRedis();
             logger.info("🌐 获取集群线程池信息（Redis模式），节点数量: {}", clusterInfo.size());
             return AjaxResult.success(clusterInfo);
         } catch (Exception e) {
@@ -77,7 +76,7 @@ public class ServerController
             return AjaxResult.error("获取集群线程池信息失败: " + e.getMessage());
         }
     }
-    
+
     /**
      * 获取集群环境下所有节点的线程池聚合统计信息（从Redis中获取）
      */
@@ -93,7 +92,7 @@ public class ServerController
             return AjaxResult.error("获取集群线程池聚合信息失败: " + e.getMessage());
         }
     }
-    
+
     /**
      * 获取网络流量信息
      */
@@ -103,7 +102,7 @@ public class ServerController
         server.copyTo();
         return AjaxResult.success(server.getNetworkTraffic());
     }
-    
+
     /**
      * 获取集群环境下所有节点的服务器信息（从Redis中获取）
      */
