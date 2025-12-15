@@ -27,6 +27,7 @@ import org.apache.commons.lang3.builder.ToStringStyle;
 @Jacksonized      // 支持Jackson通过Builder反序列化
 @AllArgsConstructor
 @Accessors(chain = true) // 生成链式set方法
+@lombok.EqualsAndHashCode(callSuper = false)
 public class EtfData extends BaseEntity {
 
     private static final long serialVersionUID = 1L;

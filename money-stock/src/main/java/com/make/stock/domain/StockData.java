@@ -44,6 +44,7 @@ import lombok.extern.jackson.Jacksonized;
 @NoArgsConstructor
 @AllArgsConstructor
 @Accessors(chain = true)
+@lombok.EqualsAndHashCode(callSuper = false)
 public class StockData extends BaseEntity {
 
     private static final long serialVersionUID = 1L;

@@ -315,7 +315,7 @@ public class Server
      *
      * @return 所有节点的线程池信息
      */
-    public Map<String, Map<String, Object>> getClusterThreadPoolInfo() {
+    public Map<String, List<Map<String, Object>>> getClusterThreadPoolInfo() {
         return clusterThreadPoolInfo.getAllNodeThreadPoolInfo();
     }
 }
