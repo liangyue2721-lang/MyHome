@@ -1,55 +1,59 @@
 <template>
   <div class="app-container">
-    <el-row :gutter="10">
-      <el-col :span="24" class="card-box">
-        <el-card>
-          <div slot="header">
-            <span><i class="el-icon-monitor"></i> 线程池状态</span>
-          </div>
-          <div class="el-table el-table--enable-row-hover el-table--medium">
-            <table cellspacing="0" style="width: 100%;">
-              <tbody>
-                <tr>
-                  <td class="el-table__cell is-leaf"><div class="cell">核心线程数</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell">{{ poolInfo.corePoolSize }}</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell">最大线程数</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell">{{ poolInfo.maximumPoolSize }}</div></td>
-                </tr>
-                <tr>
-                  <td class="el-table__cell is-leaf"><div class="cell">当前活跃线程数</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell">{{ poolInfo.activeCount }}</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell">当前池大小</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell">{{ poolInfo.poolSize }}</div></td>
-                </tr>
-                <tr>
-                  <td class="el-table__cell is-leaf"><div class="cell">队列大小</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell">{{ poolInfo.queueSize }}</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell">队列剩余容量</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell">{{ poolInfo.queueRemainingCapacity }}</div></td>
-                </tr>
-                <tr>
-                  <td class="el-table__cell is-leaf"><div class="cell">已完成任务数</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell">{{ poolInfo.completedTaskCount }}</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell">总任务数</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell">{{ poolInfo.taskCount }}</div></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </el-card>
-      </el-col>
+    <el-tabs v-model="activeTab" type="border-card" @tab-click="handleTabClick">
+      <el-tab-pane v-for="(pool, index) in poolList" :key="index" :label="pool.name" :name="String(index)">
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-card class="box-card" shadow="hover">
+              <div slot="header" class="clearfix">
+                <span><i class="el-icon-monitor"></i> {{ pool.name }}</span>
+              </div>
+              <div class="el-table el-table--enable-row-hover el-table--medium">
+                <table cellspacing="0" class="custom-table">
+                  <tbody>
+                    <tr>
+                      <td class="cell-label">核心线程数</td>
+                      <td class="cell-value">{{ pool.corePoolSize }}</td>
+                      <td class="cell-label">最大线程数</td>
+                      <td class="cell-value">{{ pool.maximumPoolSize }}</td>
+                    </tr>
+                    <tr>
+                      <td class="cell-label">当前活跃线程数</td>
+                      <td class="cell-value">{{ pool.activeCount }}</td>
+                      <td class="cell-label">当前池大小</td>
+                      <td class="cell-value">{{ pool.poolSize }}</td>
+                    </tr>
+                    <tr>
+                      <td class="cell-label">队列大小</td>
+                      <td class="cell-value">{{ pool.queueSize }}</td>
+                      <td class="cell-label">队列剩余容量</td>
+                      <td class="cell-value">{{ pool.queueRemainingCapacity }}</td>
+                    </tr>
+                    <tr>
+                      <td class="cell-label">已完成任务数</td>
+                      <td class="cell-value">{{ pool.completedTaskCount }}</td>
+                      <td class="cell-label">总任务数</td>
+                      <td class="cell-value">{{ pool.taskCount }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </el-card>
+          </el-col>
 
-      <el-col :span="24" class="card-box">
-        <el-card>
-          <div slot="header">
-            <span><i class="el-icon-data-line"></i> 线程池使用率</span>
-          </div>
-          <div class="el-table el-table--enable-row-hover el-table--medium">
-            <div ref="threadPoolChart" style="height: 420px" />
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+          <el-col :span="12">
+            <el-card class="box-card" shadow="hover">
+              <div slot="header" class="clearfix">
+                <span><i class="el-icon-data-line"></i> {{ pool.name }}使用率</span>
+              </div>
+              <div class="chart-container">
+                <div :ref="'threadPoolChart' + index" style="height: 320px" />
+              </div>
+            </el-card>
+          </el-col>
+        </el-row>
+      </el-tab-pane>
+    </el-tabs>
   </div>
 </template>
 
@@ -61,10 +65,9 @@ export default {
   name: "ThreadPool",
   data() {
     return {
-      // 线程池信息
-      poolInfo: {},
-      // 图表实例
-      threadPoolChart: null
+      poolList: [],
+      activeTab: "0",
+      chartInstances: []
     }
   },
   created() {
@@ -72,57 +75,65 @@ export default {
     this.openLoading()
   },
   methods: {
-    /** 查询线程池信息 */
     getList() {
       getThreadPool().then(response => {
-        this.poolInfo = response.data
+        this.poolList = response.data
         this.$modal.closeLoading()
-        this.initChart()
+        this.initCharts()
       })
     },
-    // 打开加载层
     openLoading() {
       this.$modal.loading("正在加载线程池监控数据，请稍候！")
     },
-    // 初始化图表
-    initChart() {
+    initCharts() {
       this.$nextTick(() => {
-        this.threadPoolChart = echarts.init(this.$refs.threadPoolChart, "macarons")
-        
-        const activeRate = this.poolInfo.corePoolSize ? 
-          Math.round((this.poolInfo.activeCount / this.poolInfo.corePoolSize) * 100) : 0
-        const queueRate = this.poolInfo.queueCapacity ? 
-          Math.round((this.poolInfo.queueSize / (this.poolInfo.queueSize + this.poolInfo.queueRemainingCapacity)) * 100) : 0
-          
-        this.threadPoolChart.setOption({
-          tooltip: {
-            trigger: "item",
-            formatter: "{a} <br/>{b} : {c} ({d}%)"
-          },
-          series: [
-            {
-              name: "线程池使用情况",
-              type: "pie",
-              radius: [15, 95],
-              center: ["50%", "50%"],
-              roseType: "radius",
-              data: [
-                { value: this.poolInfo.activeCount, name: `活跃线程数 (${activeRate}%)` },
-                { value: this.poolInfo.poolSize - this.poolInfo.activeCount, name: "空闲线程数" },
-                { value: this.poolInfo.queueSize, name: `队列任务数 (${queueRate}%)` },
-                { value: this.poolInfo.completedTaskCount, name: "已完成任务数" }
-              ],
-              animationEasing: "cubicInOut",
-              animationDuration: 1000
-            }
-          ]
+        this.poolList.forEach((pool, index) => {
+          const chartRef = this.$refs['threadPoolChart' + index][0]
+          const chart = echarts.init(chartRef, "macarons")
+          this.renderChart(chart, pool)
+          this.chartInstances.push(chart)
         })
-        
-        window.addEventListener("resize", () => {
-          this.threadPoolChart.resize()
-        })
+        window.addEventListener("resize", this.resizeCharts)
+      })
+    },
+    renderChart(chart, poolInfo) {
+      const activeRate = poolInfo.corePoolSize ? Math.round((poolInfo.activeCount / poolInfo.corePoolSize) * 100) : 0
+      const queueRate = poolInfo.queueCapacity ? Math.round((poolInfo.queueSize / poolInfo.queueCapacity) * 100) : 0
+      chart.setOption({
+        tooltip: {
+          trigger: "item",
+          formatter: "{a} <br/>{b} : {c} ({d}%)"
+        },
+        series: [{
+          name: "线程池使用情况",
+          type: "pie",
+          radius: [15, 95],
+          center: ["50%", "50%"],
+          roseType: "radius",
+          data: [
+            { value: poolInfo.activeCount, name: `活跃线程数 (${activeRate}%)` },
+            { value: poolInfo.poolSize - poolInfo.activeCount, name: "空闲线程数" },
+            { value: poolInfo.queueSize, name: `队列任务数 (${queueRate}%)` },
+            { value: poolInfo.completedTaskCount, name: "已完成任务数" }
+          ],
+          animationEasing: "cubicInOut",
+          animationDuration: 1000
+        }]
+      })
+    },
+    handleTabClick() {
+      this.$nextTick(() => {
+        this.resizeCharts()
+      })
+    },
+    resizeCharts() {
+      this.chartInstances.forEach(chart => {
+        chart.resize()
       })
     }
+  },
+  beforeDestroy() {
+    window.removeEventListener("resize", this.resizeCharts)
   }
 }
 </script>
@@ -130,14 +141,39 @@ export default {
 <style scoped>
 .app-container {
   padding: 20px;
+  background-color: #f5f7fa;
 }
-
-.card-box {
+.box-card {
   margin-bottom: 20px;
+  border-radius: 8px;
 }
-
-.cell {
-  padding: 8px;
+.clearfix:before,
+.clearfix:after {
+  display: table;
+  content: "";
+}
+.clearfix:after {
+  clear: both
+}
+.custom-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.cell-label {
+  padding: 12px;
   font-size: 14px;
+  font-weight: bold;
+  background-color: #f8f8f9;
+  border: 1px solid #e8eaec;
+  text-align: left;
+}
+.cell-value {
+  padding: 12px;
+  font-size: 14px;
+  border: 1px solid #e8eaec;
+  text-align: left;
+}
+.chart-container {
+  padding-top: 20px;
 }
 </style>

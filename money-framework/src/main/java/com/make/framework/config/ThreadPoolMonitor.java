@@ -10,7 +10,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -23,33 +25,34 @@ import java.util.concurrent.ThreadPoolExecutor;
  */
 @Component
 public class ThreadPoolMonitor {
-    
+
     private static final Logger logger = LoggerFactory.getLogger(ThreadPoolMonitor.class);
-    
-    @Autowired
+
+    @Autowired(required = false)
     private ClusterThreadPoolInfo clusterThreadPoolInfo;
-    
-    @Autowired
+
+    @Autowired(required = false)
     private RedisClusterThreadPoolService redisClusterThreadPoolService;
-    
+
     // 应用名称，用于区分不同服务
     @Value("${spring.application.name:make-money}")
     private String applicationName;
-    
+
     /**
      * 获取本节点所有线程池状态信息
      *
-     * @return 线程池状态信息Map，包含所有线程池的信息
+     * @return 线程池状态信息列表
      */
-    public Map<String, Object> getLocalThreadPoolInfo() {
-        Map<String, Object> info = new HashMap<>();
-        
+    public List<Map<String, Object>> getLocalThreadPoolInfo() {
+        List<Map<String, Object>> list = new ArrayList<>();
+
         try {
             // 获取核心业务线程池信息
             ExecutorService coreExecutor = ThreadPoolUtil.getCoreExecutor();
             ThreadPoolExecutor coreThreadPoolExecutor = getThreadPoolExecutor(coreExecutor);
             if (coreThreadPoolExecutor != null) {
                 Map<String, Object> coreInfo = new HashMap<>();
+                coreInfo.put("name", "核心业务线程池");
                 coreInfo.put("corePoolSize", coreThreadPoolExecutor.getCorePoolSize());
                 coreInfo.put("maximumPoolSize", coreThreadPoolExecutor.getMaximumPoolSize());
                 coreInfo.put("activeCount", coreThreadPoolExecutor.getActiveCount());
@@ -57,9 +60,10 @@ public class ThreadPoolMonitor {
                 coreInfo.put("completedTaskCount", coreThreadPoolExecutor.getCompletedTaskCount());
                 coreInfo.put("queueSize", coreThreadPoolExecutor.getQueue().size());
                 coreInfo.put("queueRemainingCapacity", coreThreadPoolExecutor.getQueue().remainingCapacity());
+                coreInfo.put("queueCapacity", coreThreadPoolExecutor.getQueue().size() + coreThreadPoolExecutor.getQueue().remainingCapacity());
                 coreInfo.put("taskCount", coreThreadPoolExecutor.getTaskCount());
-                info.put("coreExecutor", coreInfo);
-                
+                list.add(coreInfo);
+
                 logger.info("✅ 核心业务线程池监控信息: 核心线程数={}, 最大线程数={}, 活跃线程数={}, 当前线程数={}, 已完成任务数={}, 队列大小={}, 队列剩余容量={}, 总任务数={}",
                         coreThreadPoolExecutor.getCorePoolSize(),
                         coreThreadPoolExecutor.getMaximumPoolSize(),
@@ -72,12 +76,13 @@ public class ThreadPoolMonitor {
             } else {
                 logger.warn("⚠️ 无法获取核心业务线程池ThreadPoolExecutor");
             }
-            
+
             // 获取关注股票利润数据更新专用线程池信息
             ExecutorService watchStockExecutor = ThreadPoolUtil.getWatchStockExecutor();
             ThreadPoolExecutor watchStockThreadPoolExecutor = getThreadPoolExecutor(watchStockExecutor);
             if (watchStockThreadPoolExecutor != null) {
                 Map<String, Object> watchStockInfo = new HashMap<>();
+                watchStockInfo.put("name", "关注股票专用线程池");
                 watchStockInfo.put("corePoolSize", watchStockThreadPoolExecutor.getCorePoolSize());
                 watchStockInfo.put("maximumPoolSize", watchStockThreadPoolExecutor.getMaximumPoolSize());
                 watchStockInfo.put("activeCount", watchStockThreadPoolExecutor.getActiveCount());
@@ -85,9 +90,10 @@ public class ThreadPoolMonitor {
                 watchStockInfo.put("completedTaskCount", watchStockThreadPoolExecutor.getCompletedTaskCount());
                 watchStockInfo.put("queueSize", watchStockThreadPoolExecutor.getQueue().size());
                 watchStockInfo.put("queueRemainingCapacity", watchStockThreadPoolExecutor.getQueue().remainingCapacity());
+                watchStockInfo.put("queueCapacity", watchStockThreadPoolExecutor.getQueue().size() + watchStockThreadPoolExecutor.getQueue().remainingCapacity());
                 watchStockInfo.put("taskCount", watchStockThreadPoolExecutor.getTaskCount());
-                info.put("watchStockExecutor", watchStockInfo);
-                
+                list.add(watchStockInfo);
+
                 logger.info("✅ 关注股票专用线程池监控信息: 核心线程数={}, 最大线程数={}, 活跃线程数={}, 当前线程数={}, 已完成任务数={}, 队列大小={}, 队列剩余容量={}, 总任务数={}",
                         watchStockThreadPoolExecutor.getCorePoolSize(),
                         watchStockThreadPoolExecutor.getMaximumPoolSize(),
@@ -100,12 +106,13 @@ public class ThreadPoolMonitor {
             } else {
                 logger.warn("⚠️ 无法获取关注股票专用线程池ThreadPoolExecutor");
             }
-            
+
             // 获取调度线程池信息
             ExecutorService scheduler = ThreadPoolUtil.getScheduler();
             if (scheduler instanceof ThreadPoolExecutor) {
                 ThreadPoolExecutor schedulerThreadPoolExecutor = (ThreadPoolExecutor) scheduler;
                 Map<String, Object> schedulerInfo = new HashMap<>();
+                schedulerInfo.put("name", "调度线程池");
                 schedulerInfo.put("corePoolSize", schedulerThreadPoolExecutor.getCorePoolSize());
                 schedulerInfo.put("maximumPoolSize", schedulerThreadPoolExecutor.getMaximumPoolSize());
                 schedulerInfo.put("activeCount", schedulerThreadPoolExecutor.getActiveCount());
@@ -113,9 +120,10 @@ public class ThreadPoolMonitor {
                 schedulerInfo.put("completedTaskCount", schedulerThreadPoolExecutor.getCompletedTaskCount());
                 schedulerInfo.put("queueSize", schedulerThreadPoolExecutor.getQueue().size());
                 schedulerInfo.put("queueRemainingCapacity", schedulerThreadPoolExecutor.getQueue().remainingCapacity());
+                schedulerInfo.put("queueCapacity", schedulerThreadPoolExecutor.getQueue().size() + schedulerThreadPoolExecutor.getQueue().remainingCapacity());
                 schedulerInfo.put("taskCount", schedulerThreadPoolExecutor.getTaskCount());
-                info.put("scheduler", schedulerInfo);
-                
+                list.add(schedulerInfo);
+
                 logger.info("✅ 调度线程池监控信息: 核心线程数={}, 最大线程数={}, 活跃线程数={}, 当前线程数={}, 已完成任务数={}, 队列大小={}, 队列剩余容量={}, 总任务数={}",
                         schedulerThreadPoolExecutor.getCorePoolSize(),
                         schedulerThreadPoolExecutor.getMaximumPoolSize(),
@@ -131,25 +139,28 @@ public class ThreadPoolMonitor {
         } catch (Exception e) {
             logger.error("💥 获取线程池信息失败", e);
         }
-        
-        return info;
+
+        return list;
     }
-    
+
     /**
      * 获取线程池状态信息（用于本节点线程池信息展示）
      *
-     * @return 线程池状态信息Map
+     * @return 线程池状态信息列表
      */
-    public Map<String, Object> getThreadPoolInfo() {
+    public List<Map<String, Object>> getThreadPoolInfo() {
         return getLocalThreadPoolInfo();
     }
-    
+
     /**
      * 获取集群环境下所有节点的线程池信息（从内存中获取）
      * 
      * @return 所有节点的线程池信息
      */
     public Map<String, Map<String, Object>> getClusterThreadPoolInfo() {
+        if (clusterThreadPoolInfo == null) {
+            return new HashMap<>();
+        }
         // 先更新本节点信息
         updateLocalNodeInfo();
         
@@ -163,6 +174,9 @@ public class ThreadPoolMonitor {
      * @return 所有节点的线程池信息
      */
     public Map<String, Map<String, Object>> getClusterThreadPoolInfoFromRedis() {
+        if (redisClusterThreadPoolService == null) {
+            return new HashMap<>();
+        }
         return redisClusterThreadPoolService.getAllNodeThreadPoolInfoFromRedis();
     }
     
@@ -172,6 +186,9 @@ public class ThreadPoolMonitor {
      * @return 聚合统计信息
      */
     public Map<String, Object> getAggregatedThreadPoolInfoFromRedis() {
+        if (redisClusterThreadPoolService == null) {
+            return new HashMap<>();
+        }
         return redisClusterThreadPoolService.getAggregatedThreadPoolInfoFromRedis();
     }
     
@@ -180,16 +197,32 @@ public class ThreadPoolMonitor {
      */
     public void updateLocalNodeInfo() {
         try {
+            if (clusterThreadPoolInfo == null) {
+                return;
+            }
             // 获取本节点线程池信息
-            Map<String, Object> localInfo = getLocalThreadPoolInfo();
+            List<Map<String, Object>> localInfoList = getLocalThreadPoolInfo();
+
+            // 为了兼容旧的Map结构，这里暂时将List转换为Map
+            Map<String, Object> localInfoMap = new HashMap<>();
+            for (Map<String, Object> poolInfo : localInfoList) {
+                String name = (String) poolInfo.get("name");
+                if ("核心业务线程池".equals(name)) {
+                    localInfoMap.put("coreExecutor", poolInfo);
+                } else if ("关注股票专用线程池".equals(name)) {
+                    localInfoMap.put("watchStockExecutor", poolInfo);
+                } else if ("调度线程池".equals(name)) {
+                    localInfoMap.put("scheduler", poolInfo);
+                }
+            }
             
             // 获取本节点标识（IP地址+应用名称）
             String localNodeId = IpUtils.getHostIp() + ":" + applicationName;
             
             // 更新到集群信息中
-            clusterThreadPoolInfo.addNodeThreadPoolInfo(localNodeId, localInfo);
+            clusterThreadPoolInfo.addNodeThreadPoolInfo(localNodeId, localInfoMap);
             
-            logger.debug("🔄 更新本节点线程池信息到集群信息中: 节点={}, 信息={}", localNodeId, localInfo);
+            logger.debug("🔄 更新本节点线程池信息到集群信息中: 节点={}, 信息={}", localNodeId, localInfoMap);
         } catch (Exception e) {
             logger.error("💥 更新本节点线程池信息失败", e);
         }

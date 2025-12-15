@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -31,7 +32,7 @@ public class ThreadPoolController {
     @PreAuthorize("@ss.hasPermi('monitor:threadPool:list')")
     @GetMapping()
     public AjaxResult getInfo() {
-        Map<String, Object> info = threadPoolMonitor.getThreadPoolInfo();
+        List<Map<String, Object>> info = threadPoolMonitor.getThreadPoolInfo();
         return AjaxResult.success(info);
     }
 }
