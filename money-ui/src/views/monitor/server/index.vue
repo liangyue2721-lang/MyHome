@@ -76,56 +76,46 @@
         </el-card>
       </el-col>
 
-      <!-- 内存使用率图表 -->
-      <el-col :span="24" class="card-box">
-        <el-card>
-          <div slot="header">
-            <span>内存使用率</span>
-          </div>
-          <div class="echarts-container">
-            <div ref="memoryChart" class="chart"></div>
-          </div>
-        </el-card>
-      </el-col>
-
       <!-- CPU使用率图表 -->
-      <el-col :span="24" class="card-box">
+      <el-col :span="12" class="card-box">
         <el-card>
           <div slot="header">
             <span>CPU使用率</span>
           </div>
           <div class="echarts-container">
-            <div ref="cpuChart" class="chart"></div>
+            <div ref="cpuChart" style="height: 300px;"></div>
           </div>
         </el-card>
       </el-col>
 
-      <!-- 磁盘信息 -->
+      <!-- 内存使用率图表 -->
+      <el-col :span="12" class="card-box">
+        <el-card>
+          <div slot="header">
+            <span>内存使用率</span>
+          </div>
+          <div class="echarts-container">
+            <div ref="memoryChart" style="height: 300px;"></div>
+          </div>
+        </el-card>
+      </el-col>
+
+      <!-- 服务器信息 -->
       <el-col :span="24" class="card-box">
         <el-card>
           <div slot="header"><span><i class="el-icon-monitor"></i> 服务器信息</span></div>
           <div class="el-table el-table--enable-row-hover el-table--medium">
             <table cellspacing="0" style="width: 100%;">
-              <thead>
-                <tr>
-                  <th class="el-table__cell is-leaf"><div class="cell">属性</div></th>
-                  <th class="el-table__cell is-leaf"><div class="cell">值</div></th>
-                </tr>
-              </thead>
               <tbody>
                 <tr>
-                  <td class="el-table__cell is-leaf"><div class="cell">服务器名称</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.sys">{{ server.sys.computerName }}</div></td>
-                </tr>
-                <tr>
-                  <td class="el-table__cell is-leaf"><div class="cell">操作系统</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.sys">{{ server.sys.osName }}</div></td>
+                  <td class="el-table__cell is-leaf" style="width: 25%"><div class="cell">服务器名称</div></td>
+                  <td class="el-table__cell is-leaf" style="width: 25%"><div class="cell" v-if="server.sys">{{ server.sys.computerName }}</div></td>
+                  <td class="el-table__cell is-leaf" style="width: 25%"><div class="cell">操作系统</div></td>
+                  <td class="el-table__cell is-leaf" style="width: 25%"><div class="cell" v-if="server.sys">{{ server.sys.osName }}</div></td>
                 </tr>
                 <tr>
                   <td class="el-table__cell is-leaf"><div class="cell">服务器IP</div></td>
                   <td class="el-table__cell is-leaf"><div class="cell" v-if="server.sys">{{ server.sys.computerIp }}</div></td>
-                </tr>
-                <tr>
                   <td class="el-table__cell is-leaf"><div class="cell">系统架构</div></td>
                   <td class="el-table__cell is-leaf"><div class="cell" v-if="server.sys">{{ server.sys.osArch }}</div></td>
                 </tr>
@@ -135,7 +125,7 @@
         </el-card>
       </el-col>
 
-      <!-- 磁盘信息 -->
+      <!-- 磁盘状态 -->
       <el-col :span="24" class="card-box">
         <el-card>
           <div slot="header">
@@ -164,7 +154,7 @@
                   <td class="el-table__cell is-leaf"><div class="cell">{{ sysFile.used }}</div></td>
                   <td class="el-table__cell is-leaf">
                     <div class="cell">
-                      <el-progress :percentage="sysFile.usage" :color="sysFile.usage > 80 ? 'red' : sysFile.usage > 60 ? '#E6A23C' : '#67C23A'"></el-progress>
+                      <el-progress :percentage="parseFloat(sysFile.usage)" :color="sysFile.usage > 80 ? 'red' : sysFile.usage > 60 ? '#E6A23C' : '#67C23A'"></el-progress>
                     </div>
                   </td>
                 </tr>
@@ -186,10 +176,10 @@
               <table cellspacing="0" style="width: 100%;">
                 <tbody>
                   <tr>
-                    <td class="el-table__cell is-leaf"><div class="cell">核心线程数</div></td>
-                    <td class="el-table__cell is-leaf"><div class="cell">{{ pool.corePoolSize }}</div></td>
-                    <td class="el-table__cell is-leaf"><div class="cell">最大线程数</div></td>
-                    <td class="el-table__cell is-leaf"><div class="cell">{{ pool.maximumPoolSize }}</div></td>
+                    <td class="el-table__cell is-leaf" style="width: 15%"><div class="cell">核心线程数</div></td>
+                    <td class="el-table__cell is-leaf" style="width: 35%"><div class="cell">{{ pool.corePoolSize }}</div></td>
+                    <td class="el-table__cell is-leaf" style="width: 15%"><div class="cell">最大线程数</div></td>
+                    <td class="el-table__cell is-leaf" style="width: 35%"><div class="cell">{{ pool.maximumPoolSize }}</div></td>
                   </tr>
                   <tr>
                     <td class="el-table__cell is-leaf"><div class="cell">当前活跃线程数</div></td>
@@ -237,46 +227,23 @@
             </el-button>
           </div>
           <div class="el-table el-table--enable-row-hover el-table--medium">
-            <table cellspacing="0" style="width: 100%;">
-              <thead>
-                <tr>
-                  <th class="el-table__cell is-leaf"><div class="cell">节点标识</div></th>
-                  <th class="el-table__cell is-leaf"><div class="cell">线程池名称</div></th>
-                  <th class="el-table__cell is-leaf"><div class="cell">核心线程数</div></th>
-                  <th class="el-table__cell is-leaf"><div class="cell">最大线程数</div></th>
-                  <th class="el-table__cell is-leaf"><div class="cell">当前活跃线程数</div></th>
-                  <th class="el-table__cell is-leaf"><div class="cell">当前池大小</div></th>
-                  <th class="el-table__cell is-leaf"><div class="cell">已完成任务数</div></th>
-                  <th class="el-table__cell is-leaf"><div class="cell">队列大小</div></th>
-                  <th class="el-table__cell is-leaf"><div class="cell">队列剩余容量</div></th>
-                  <th class="el-table__cell is-leaf"><div class="cell">总任务数</div></th>
-                </tr>
-              </thead>
-              <tbody v-if="formattedClusterThreadPoolInfo.length > 0">
-                <tr v-for="(info, index) in formattedClusterThreadPoolInfo" :key="index">
-                  <td class="el-table__cell is-leaf"><div class="cell">{{ info.nodeId }}</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell">{{ info.name }}</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell">{{ info.corePoolSize }}</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell">{{ info.maximumPoolSize }}</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell">{{ info.activeCount }}</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell">{{ info.poolSize }}</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell">{{ info.completedTaskCount }}</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell">{{ info.queueSize }}</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell">{{ info.queueRemainingCapacity }}</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell">{{ info.taskCount }}</div></td>
-                </tr>
-              </tbody>
-              <tbody v-else>
-                <tr>
-                  <td colspan="10" class="el-table__cell is-leaf" style="text-align: center;">暂无数据</td>
-                </tr>
-              </tbody>
-            </table>
+            <el-table :data="formattedClusterThreadPoolInfo" style="width: 100%">
+              <el-table-column prop="nodeId" label="节点标识" />
+              <el-table-column prop="name" label="线程池名称" />
+              <el-table-column prop="corePoolSize" label="核心线程数" />
+              <el-table-column prop="maximumPoolSize" label="最大线程数" />
+              <el-table-column prop="activeCount" label="当前活跃线程数" />
+              <el-table-column prop="poolSize" label="当前池大小" />
+              <el-table-column prop="completedTaskCount" label="已完成任务数" />
+              <el-table-column prop="queueSize" label="队列大小" />
+              <el-table-column prop="queueRemainingCapacity" label="队列剩余容量" />
+              <el-table-column prop="taskCount" label="总任务数" />
+            </el-table>
           </div>
         </el-card>
       </el-col>
 
-      <!-- 集群节点CPU和内存使用图表 -->
+      <!-- 集群节点资源使用情况 -->
       <el-col :span="24" class="card-box">
         <el-card>
           <div slot="header">
@@ -284,16 +251,16 @@
           </div>
           <el-tabs v-model="activeChartTab">
             <el-tab-pane label="CPU使用率" name="cpu">
-              <div ref="clusterCpuChart" class="chart cluster-chart-container" style="height: 400px;"></div>
+              <div ref="clusterCpuChart" style="height: 400px;"></div>
             </el-tab-pane>
             <el-tab-pane label="内存使用率" name="memory">
-              <div ref="clusterMemoryChart" class="chart cluster-chart-container" style="height: 400px;"></div>
+              <div ref="clusterMemoryChart" style="height: 400px;"></div>
             </el-tab-pane>
             <el-tab-pane label="活跃线程数" name="threads">
-              <div ref="clusterThreadChart" class="chart cluster-chart-container" style="height: 400px;"></div>
+              <div ref="clusterThreadChart" style="height: 400px;"></div>
             </el-tab-pane>
             <el-tab-pane label="网络流量" name="network">
-              <div ref="clusterNetworkChart" class="chart cluster-chart-container" style="height: 400px;"></div>
+              <div ref="clusterNetworkChart" style="height: 400px;"></div>
             </el-tab-pane>
           </el-tabs>
         </el-card>
@@ -313,50 +280,45 @@
             </el-button>
           </div>
           <div class="el-table el-table--enable-row-hover el-table--medium">
-            <table cellspacing="0" style="width: 100%;">
-              <thead>
-                <tr>
-                  <th class="el-table__cell is-leaf"><div class="cell">节点标识</div></th>
-                  <th class="el-table__cell is-leaf"><div class="cell">CPU核心数</div></th>
-                  <th class="el-table__cell is-leaf"><div class="cell">CPU使用率</div></th>
-                  <th class="el-table__cell is-leaf"><div class="cell">内存总量</div></th>
-                  <th class="el-table__cell is-leaf"><div class="cell">内存使用率</div></th>
-                  <th class="el-table__cell is-leaf"><div class="cell">JVM使用率</div></th>
-                  <th class="el-table__cell is-leaf"><div class="cell">操作系统</div></th>
-                  <th class="el-table__cell is-leaf"><div class="cell">磁盘使用率</div></th>
-                </tr>
-              </thead>
-              <tbody v-if="clusterServerInfo">
-                <tr v-for="(info, nodeId) in clusterServerInfo" :key="nodeId">
-                  <td class="el-table__cell is-leaf"><div class="cell">{{ nodeId }}</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell">{{ info.cpu && info.cpu.cpuNum || '-' }}</div></td>
-                  <td class="el-table__cell is-leaf">
-                    <div class="cell">{{ info.cpu && info.cpu.used ? info.cpu.used + '%' : '-' }}</div>
-                  </td>
-                  <td class="el-table__cell is-leaf">
-                    <div class="cell">{{ info.mem && info.mem.total ? (info.mem.total / 1024).toFixed(2) + 'G' : '-' }}</div>
-                  </td>
-                  <td class="el-table__cell is-leaf">
-                    <div class="cell">{{ info.mem && info.mem.usage ? info.mem.usage + '%' : '-' }}</div>
-                  </td>
-                  <td class="el-table__cell is-leaf">
-                    <div class="cell">{{ info.jvm && info.jvm.usage ? info.jvm.usage + '%' : '-' }}</div>
-                  </td>
-                  <td class="el-table__cell is-leaf">
-                    <div class="cell">{{ info.sys && info.sys.osName || '-' }}</div>
-                  </td>
-                  <td class="el-table__cell is-leaf">
-                    <div class="cell" v-if="info.sysFiles && info.sysFiles.length > 0">
-                      <!-- 仅显示磁盘使用率最高的分区 -->
-                      <div>
-                        {{ getHighestDiskUsage(info.sysFiles) }}
-                      </div>
-                    </div>
-                    <div class="cell" v-else>-</div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <el-table :data="clusterServerInfoList" style="width: 100%">
+              <el-table-column prop="nodeId" label="节点标识" />
+              <el-table-column label="CPU核心数">
+                <template slot-scope="scope">{{ scope.row.cpu && scope.row.cpu.cpuNum || '-' }}</template>
+              </el-table-column>
+              <el-table-column label="CPU使用率">
+                <template slot-scope="scope">
+                   <div class="cell">{{ scope.row.cpu && scope.row.cpu.used ? scope.row.cpu.used + '%' : '-' }}</div>
+                </template>
+              </el-table-column>
+              <el-table-column label="内存总量">
+                 <template slot-scope="scope">
+                   <div class="cell">{{ scope.row.mem && scope.row.mem.total ? (scope.row.mem.total / 1024).toFixed(2) + 'G' : '-' }}</div>
+                </template>
+              </el-table-column>
+              <el-table-column label="内存使用率">
+                 <template slot-scope="scope">
+                   <div class="cell">{{ scope.row.mem && scope.row.mem.usage ? scope.row.mem.usage + '%' : '-' }}</div>
+                </template>
+              </el-column>
+               <el-table-column label="JVM使用率">
+                 <template slot-scope="scope">
+                   <div class="cell">{{ scope.row.jvm && scope.row.jvm.usage ? scope.row.jvm.usage + '%' : '-' }}</div>
+                </template>
+              </el-column>
+              <el-table-column label="操作系统">
+                 <template slot-scope="scope">
+                   <div class="cell">{{ scope.row.sys && scope.row.sys.osName || '-' }}</div>
+                </template>
+              </el-column>
+              <el-table-column label="磁盘使用率">
+                <template slot-scope="scope">
+                  <div class="cell" v-if="scope.row.sysFiles && scope.row.sysFiles.length > 0">
+                    <div>{{ getHighestDiskUsage(scope.row.sysFiles) }}</div>
+                  </div>
+                  <div class="cell" v-else>-</div>
+                </template>
+              </el-table-column>
+            </el-table>
           </div>
         </el-card>
       </el-col>
@@ -365,7 +327,7 @@
 </template>
 
 <script>
-import { getServer, getNetworkTraffic, getClusterThreadPool, getClusterThreadPoolRedis, getAggregatedThreadPoolRedis, getClusterServerRedis } from "@/api/monitor/server";
+import { getServer, getClusterThreadPool, getClusterThreadPoolRedis, getClusterServerRedis } from "@/api/monitor/server";
 import * as echarts from "echarts";
 
 export default {
@@ -383,32 +345,28 @@ export default {
           threadPools: []
         }
       },
-      // 网络流量信息
-      networkTraffic: {
-        interfaces: []
-      },
       // 集群线程池信息
       clusterThreadPoolInfo: {},
-      // 聚合统计信息
-      aggregatedInfo: {},
       // 集群服务器信息
       clusterServerInfo: {},
       // 定时器
       timer: null,
-      networkTrafficTimer: null,
       clusterInfoTimer: null,
       // 是否使用Redis模式
       useRedis: true,
       // 图表实例
+      cpuChart: null,
+      memoryChart: null,
       clusterCpuChart: null,
       clusterMemoryChart: null,
       clusterThreadChart: null,
       clusterNetworkChart: null,
-      // 单节点图表实例
-      cpuChart: null,
-      memoryChart: null,
       // 当前激活的图表标签
-      activeChartTab: 'cpu'
+      activeChartTab: 'cpu',
+      // 图表历史数据
+      cpuHistory: [],
+      memoryHistory: [],
+      clusterChartHistory: {}
     };
   },
   computed: {
@@ -425,14 +383,24 @@ export default {
         }
       }
       return formatted;
+    },
+    clusterServerInfoList() {
+      const list = [];
+      for (const nodeId in this.clusterServerInfo) {
+        list.push({
+          nodeId,
+          ...this.clusterServerInfo[nodeId]
+        });
+      }
+      return list;
     }
   },
   created() {
-    this.getList();
     this.openLoading();
+    this.getList();
     this.getClusterInfo();
-    this.timer = setInterval(this.getList, 10000);
-    this.clusterInfoTimer = setInterval(this.getClusterInfo, 10000);
+    this.timer = setInterval(this.getList, 5000);
+    this.clusterInfoTimer = setInterval(this.getClusterInfo, 5000);
   },
   mounted() {
     this.initCharts();
@@ -440,12 +408,28 @@ export default {
   beforeDestroy() {
     clearInterval(this.timer);
     clearInterval(this.clusterInfoTimer);
+    if (this.cpuChart) this.cpuChart.dispose();
+    if (this.memoryChart) this.memoryChart.dispose();
+    if (this.clusterCpuChart) this.clusterCpuChart.dispose();
+    if (this.clusterMemoryChart) this.clusterMemoryChart.dispose();
+    if (this.clusterThreadChart) this.clusterThreadChart.dispose();
+    if (this.clusterNetworkChart) this.clusterNetworkChart.dispose();
   },
   methods: {
     getList() {
       getServer().then(response => {
         this.server = response.data;
         this.$modal.closeLoading();
+
+        const now = new Date().toLocaleTimeString().substring(3); // HH:mm:ss -> mm:ss
+        if (this.server.cpu) {
+            this.cpuHistory.push({ time: now, usage: parseFloat(this.server.cpu.used) });
+            if (this.cpuHistory.length > 20) this.cpuHistory.shift();
+        }
+        if (this.server.mem) {
+            this.memoryHistory.push({ time: now, usage: parseFloat(this.server.mem.usage) });
+            if (this.memoryHistory.length > 20) this.memoryHistory.shift();
+        }
         this.updateSingleNodeCharts();
       });
     },
@@ -453,26 +437,132 @@ export default {
       const apiCall = this.useRedis ? getClusterThreadPoolRedis : getClusterThreadPool;
       apiCall().then(response => {
         this.clusterThreadPoolInfo = response.data;
+        this.updateClusterCharts();
       });
       getClusterServerRedis().then(response => {
         this.clusterServerInfo = response.data;
+        this.updateClusterCharts();
       });
     },
     handleModeChange() {
+      this.clusterChartHistory = {}; // Reset history on mode change
       this.getClusterInfo();
     },
     openLoading() {
       this.$modal.loading("正在加载服务监控数据，请稍候！");
     },
     initCharts() {
-      // Chart initialization logic
+      // Single Node Charts
+      this.cpuChart = echarts.init(this.$refs.cpuChart);
+      this.memoryChart = echarts.init(this.$refs.memoryChart);
+
+      const commonOption = {
+        tooltip: { trigger: 'axis' },
+        xAxis: { type: 'category', data: [] },
+        yAxis: { type: 'value', min: 0, max: 100, axisLabel: { formatter: '{value} %' } },
+        series: [{ data: [], type: 'line', smooth: true, areaStyle: {} }],
+        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true }
+      };
+      this.cpuChart.setOption(JSON.parse(JSON.stringify(commonOption)));
+      this.memoryChart.setOption(JSON.parse(JSON.stringify(commonOption)));
+
+      // Cluster Charts
+      this.clusterCpuChart = echarts.init(this.$refs.clusterCpuChart);
+      this.clusterMemoryChart = echarts.init(this.$refs.clusterMemoryChart);
+      this.clusterThreadChart = echarts.init(this.$refs.clusterThreadChart);
+      this.clusterNetworkChart = echarts.init(this.$refs.clusterNetworkChart);
+
+      const clusterCommonOption = {
+          tooltip: { trigger: 'axis' },
+          legend: { data: [], top: 'bottom' },
+          xAxis: { type: 'category', boundaryGap: false, data: [] },
+          yAxis: { type: 'value' },
+          series: [],
+          grid: { left: '3%', right: '4%', bottom: '10%', containLabel: true }
+      };
+      this.clusterCpuChart.setOption(JSON.parse(JSON.stringify(clusterCommonOption)));
+      this.clusterMemoryChart.setOption(JSON.parse(JSON.stringify(clusterCommonOption)));
+      this.clusterThreadChart.setOption(JSON.parse(JSON.stringify(clusterCommonOption)));
+      this.clusterNetworkChart.setOption(JSON.parse(JSON.stringify(clusterCommonOption)));
     },
     updateSingleNodeCharts() {
-      // Chart update logic
+      if (!this.cpuChart || !this.memoryChart) return;
+
+      const times = this.cpuHistory.map(h => h.time);
+
+      this.cpuChart.setOption({
+        xAxis: { data: times },
+        series: [{ data: this.cpuHistory.map(h => h.usage) }]
+      });
+
+      this.memoryChart.setOption({
+        xAxis: { data: times },
+        series: [{ data: this.memoryHistory.map(h => h.usage) }]
+      });
+    },
+    updateClusterCharts() {
+      if (!this.clusterServerInfo || Object.keys(this.clusterServerInfo).length === 0) return;
+
+      const nodeIds = Object.keys(this.clusterServerInfo);
+      const latestTime = new Date().toLocaleTimeString().substring(3);
+
+      nodeIds.forEach(id => {
+          if (!this.clusterChartHistory[id]) {
+               this.$set(this.clusterChartHistory, id, {
+                  time: [], cpu: [], memory: [], threads: [], network: []
+              });
+          }
+          const history = this.clusterChartHistory[id];
+          const server = this.clusterServerInfo[id];
+
+          history.time.push(latestTime);
+          history.cpu.push(server.cpu ? server.cpu.used : 0);
+          history.memory.push(server.mem ? server.mem.usage : 0);
+
+          let totalActiveThreads = 0;
+          if (this.clusterThreadPoolInfo && this.clusterThreadPoolInfo[id]) {
+              totalActiveThreads = this.clusterThreadPoolInfo[id].reduce((sum, pool) => sum + pool.activeCount, 0);
+          }
+          history.threads.push(totalActiveThreads);
+
+          if (history.time.length > 20) {
+              history.time.shift();
+              history.cpu.shift();
+              history.memory.shift();
+              history.threads.shift();
+          }
+      });
+
+      const times = this.clusterChartHistory[nodeIds[0]] ? this.clusterChartHistory[nodeIds[0]].time : [];
+
+      this.clusterCpuChart.setOption({
+          legend: { data: nodeIds },
+          xAxis: { data: times },
+          yAxis: { axisLabel: { formatter: '{value} %' } },
+          series: nodeIds.map(id => ({ name: id, type: 'line', data: this.clusterChartHistory[id].cpu }))
+      });
+
+      this.clusterMemoryChart.setOption({
+          legend: { data: nodeIds },
+          xAxis: { data: times },
+          yAxis: { axisLabel: { formatter: '{value} %' } },
+          series: nodeIds.map(id => ({ name: id, type: 'line', data: this.clusterChartHistory[id].memory }))
+      });
+
+      this.clusterThreadChart.setOption({
+          legend: { data: nodeIds },
+          xAxis: { data: times },
+          yAxis: { name: 'Active Threads' },
+          series: nodeIds.map(id => ({ name: id, type: 'line', data: this.clusterChartHistory[id].threads }))
+      });
+
+      this.clusterNetworkChart.setOption({
+          title: { text: '网络流量数据暂未实现', left: 'center', top: 'center' }
+      });
     },
     getHighestDiskUsage(sysFiles) {
       if (!sysFiles || sysFiles.length === 0) return '-';
-      let highestUsageFile = sysFiles.reduce((max, file) => file.usage > max.usage ? file : max, sysFiles[0]);
+      let highestUsageFile = sysFiles.reduce((max, file) => parseFloat(file.usage) > parseFloat(max.usage) ? file : max, sysFiles[0]);
       return `${highestUsageFile.dirName}: ${highestUsageFile.usage}%`;
     }
   }
