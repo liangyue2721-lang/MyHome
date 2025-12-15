@@ -435,12 +435,9 @@ export default {
     },
     getClusterInfo() {
       const apiCall = this.useRedis ? getClusterThreadPoolRedis : getClusterThreadPool;
-      apiCall().then(response => {
-        this.clusterThreadPoolInfo = response.data;
-        this.updateClusterCharts();
-      });
-      getClusterServerRedis().then(response => {
-        this.clusterServerInfo = response.data;
+      Promise.all([apiCall(), getClusterServerRedis()]).then(([threadPoolResponse, serverResponse]) => {
+        this.clusterThreadPoolInfo = threadPoolResponse.data;
+        this.clusterServerInfo = serverResponse.data;
         this.updateClusterCharts();
       });
     },
@@ -517,7 +514,7 @@ export default {
 
           history.time.push(latestTime);
           history.cpu.push(server.cpu ? server.cpu.used : 0);
-          history.memory.push(server.mem ? server.mem.usage : 0);
+          history.memory.push(server.mem ? parseFloat(server.mem.usage) : 0);
 
           let totalActiveThreads = 0;
           if (this.clusterThreadPoolInfo && this.clusterThreadPoolInfo[id]) {
