@@ -17,6 +17,7 @@ import org.apache.commons.lang3.builder.ToStringStyle;
  * @date 2025-05-28
  */
 @Data
+@lombok.EqualsAndHashCode(callSuper = false)
 public class Expense extends BaseEntity {
     private static final long serialVersionUID = 1L;
 

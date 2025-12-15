@@ -17,6 +17,7 @@ import java.io.Serializable;
  */
 @Data
 @Accessors(chain = true)
+@lombok.EqualsAndHashCode(callSuper = false)
 public class GenTableColumn extends BaseEntity implements Serializable {
 
     private static final long serialVersionUID = 1L;
