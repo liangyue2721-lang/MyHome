@@ -468,6 +468,7 @@ export default {
 </script>
 
 <style scoped>
+@import "@/assets/styles/global.scss";
 .app-container {
   padding: 20px;
 }

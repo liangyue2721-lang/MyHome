@@ -526,6 +526,7 @@ export default {
 }
 </script>
 <style scoped>
+@import "@/assets/styles/global.scss";
 /* 进度条容器 */
 .progress-bars {
   margin-bottom: 24px;

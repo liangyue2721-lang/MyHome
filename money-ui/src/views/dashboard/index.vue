@@ -1,5 +1,22 @@
 <template>
   <div class="app-container home">
+    <!-- Page Header -->
+    <el-card shadow="never" class="page-header">
+      <div class="header-content">
+        <h2 class="page-title">儀表板</h2>
+        <div class="header-controls">
+          <el-select v-model="selectedUserId" placeholder="選擇用戶" @change="handleUserChange" filterable clearable>
+            <el-option
+              v-for="user in userList"
+              :key="user.id"
+              :label="user.name"
+              :value="user.id"
+            />
+          </el-select>
+        </div>
+      </div>
+    </el-card>
+
     <el-row :gutter="20">
       <el-col :span="24">
         <el-card class="chart-card" shadow="hover">
@@ -12,7 +29,7 @@
       </el-col>
     </el-row>
 
-    <el-row :gutter="20" class="mt-20">
+    <el-row :gutter="20">
       <el-col :xs="24" :sm="24" :lg="12">
         <el-card class="chart-card" shadow="hover">
           <div slot="header" class="chart-header">
@@ -31,9 +48,9 @@
       </el-col>
     </el-row>
 
-    <el-row :gutter="20" class="mt-20">
+    <el-row :gutter="20">
       <el-col :xs="24" :lg="12">
-        <el-card class="chart-card mb-20" shadow="hover">
+        <el-card class="chart-card" shadow="hover">
           <div slot="header" class="chart-header">
             <span>📊 交易類型分布 (微信/支付寶)</span>
           </div>
@@ -49,7 +66,7 @@
       </el-col>
 
       <el-col :xs="24" :lg="12">
-        <el-card class="chart-card mb-20" shadow="hover">
+        <el-card class="chart-card" shadow="hover">
           <div slot="header" class="chart-header">
             <span>🏦 貸款償還進度 (本金+利息)</span>
           </div>
@@ -685,62 +702,88 @@ export default {
 };
 </script>
 
-<style scoped>
-.app-container {
-  padding: 20px;
-  background-color: #f0f2f5;
-  min-height: 100vh;
-}
+<style lang="scss" scoped>
+@import "@/assets/styles/global.scss";
 
-.chart-card {
-  border-radius: 8px;
-  border: none;
-  transition: all 0.3s;
-  background: #fff;
-}
+.home {
+  // Page Header styles
+  .page-header {
+    margin-bottom: 20px;
+    border: none;
+    .header-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .page-title {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 600;
+      color: $text-primary;
+    }
+  }
 
-.chart-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-}
+  // Use a consistent margin for rows
+  .el-row + .el-row {
+    margin-top: 20px;
+  }
 
-.chart-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 16px;
-  font-weight: 600;
-  color: #303133;
-  padding-left: 10px;
-  border-left: 4px solid #409EFF;
-}
+  .chart-card {
+    // el-card styles from global.scss are already applied
+    // We just add specific overrides or extensions here
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    &:hover {
+      transform: translateY(-5px);
+    }
 
-.chart-box {
-  width: 100%;
-  height: 350px;
-}
+    // Remove bottom margin for the last card in a column to avoid double spacing
+    &:last-child {
+        margin-bottom: 0;
+    }
+  }
 
-.chart-box-small {
-  width: 100%;
-  height: 250px;
-}
+  // Refined Chart Header
+  ::v-deep .el-card__header {
+    border-bottom: 1px solid #e8eaec;
+    padding: 16px 20px;
+  }
 
-.mt-20 {
-  margin-top: 20px;
-}
+  .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    span {
+      font-size: 16px;
+      font-weight: 600;
+      color: $text-primary;
+    }
+  }
 
-.mb-20 {
-  margin-bottom: 20px;
-}
-
-/* 響應式適配 */
-@media (max-width: 768px) {
   .chart-box {
-    height: 280px;
+    width: 100%;
+    height: 360px; // Slightly increase height for better visuals
   }
 
   .chart-box-small {
-    height: 200px;
+    width: 100%;
+    height: 260px;
+  }
+
+  // Responsive adjustments
+  @media (max-width: 768px) {
+    .header-content {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .page-title {
+      margin-bottom: 10px;
+    }
+    .chart-box {
+      height: 300px;
+    }
+    .chart-box-small {
+      height: 220px;
+    }
   }
 }
 </style>

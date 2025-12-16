@@ -172,6 +172,7 @@ export default {
 </script>
 
 <style rel="stylesheet/scss" lang="scss" scoped>
+@import "@/assets/styles/global.scss";
 /* === 修改點 1：輸入框樣式調整 ===
    為了在透明背景下看清輸入框，這裡將輸入框背景設為半透明白
 */

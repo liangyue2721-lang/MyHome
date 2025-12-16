@@ -576,6 +576,7 @@ export default {
 </script>
 
 <style scoped lang="scss">
+@import "@/assets/styles/global.scss";
 .app-container {
   padding: 20px;
   background-color: #f0f2f5;
