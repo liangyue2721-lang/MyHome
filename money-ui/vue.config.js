@@ -57,7 +57,9 @@ module.exports = {
   css: {
     loaderOptions: {
       sass: {
-        sassOptions: {outputStyle: "expanded"} // 设置 Sass 的输出风格为展开。
+        // 全局Sass变量注入
+        prependData: `@import "@/assets/styles/variables.scss";`,
+        sassOptions: { outputStyle: "expanded" }
       }
     }
   },
