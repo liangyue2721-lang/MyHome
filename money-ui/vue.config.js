@@ -58,7 +58,7 @@ module.exports = {
     loaderOptions: {
       sass: {
         // 全局Sass变量注入
-        prependData: `@import "@/assets/styles/variables.scss";`,
+        additionalData: `@import "@/assets/styles/variables.scss";`,
         sassOptions: { outputStyle: "expanded" }
       }
     }
