@@ -78,7 +78,7 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-@import "@/assets/styles/global.scss";
+@import "~@/assets/styles/global.scss";
 .dashboard-editor-container {
   padding: 32px;
   background-color: rgb(240, 242, 245);

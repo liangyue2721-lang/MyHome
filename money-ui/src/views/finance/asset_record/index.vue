@@ -515,7 +515,7 @@ export default {
 </script>
 
 <style scoped>
-@import "@/assets/styles/global.scss";
+@import "~@/assets/styles/global.scss";
 .app-container {
   font-family: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
   background-color: #f0f2f5;
