@@ -1,5 +1,6 @@
 package com.make.quartz.task;
 
+import com.make.quartz.service.batch.GoldPriceBatchUpdateService;
 import com.make.stock.domain.GoldProductPrice;
 import com.make.stock.service.IGoldProductPriceService;
 import org.jsoup.Jsoup;
@@ -53,6 +54,9 @@ public class GoldViewTask {
 
     @Resource
     private IGoldProductPriceService goldProductPriceService;
+
+    @Resource
+    private GoldPriceBatchUpdateService batchUpdateService;
 
     /**
      * 更新投资金条价格数据
@@ -148,13 +152,13 @@ public class GoldViewTask {
                     .getGoldProductPriceByProductName(goldPrice.getBank());
             if (goldProductPrice != null) {
                 goldProductPrice.setPrice(goldPrice.getPrice());
-                goldProductPriceService.updateGoldProductPrice(goldProductPrice);
+                batchUpdateService.addUpdateTask(goldProductPrice);
             } else {
                 goldProductPrice = new GoldProductPrice();
                 goldProductPrice.setBank(goldPrice.getBank());
                 goldProductPrice.setProduct(goldPrice.getProduct());
                 goldProductPrice.setPrice(goldPrice.getPrice());
-                goldProductPriceService.insertGoldProductPrice(goldProductPrice);
+                batchUpdateService.addInsertTask(goldProductPrice);
             }
         }
     }
