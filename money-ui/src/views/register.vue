@@ -148,7 +148,6 @@ export default {
 </script>
 
 <style rel="stylesheet/scss" lang="scss">
-@import "~@/assets/styles/global.scss";
 .register {
   display: flex;
   justify-content: center;

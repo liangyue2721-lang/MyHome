@@ -604,7 +604,6 @@ export default {
 </script>
 
 <style scoped>
-@import "~@/assets/styles/global.scss";
 .chart-row {
   margin-bottom: 20px;
 }
