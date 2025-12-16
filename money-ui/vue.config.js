@@ -58,7 +58,13 @@ module.exports = {
     loaderOptions: {
       sass: {
         // 全局Sass变量注入
-        additionalData: `@import "@/assets/styles/variables.scss";`,
+        additionalData: (content, loaderContext) => {
+          const { resourcePath } = loaderContext;
+          if (resourcePath.endsWith('variables.scss')) {
+            return content;
+          }
+          return `@import "@/assets/styles/variables.scss";\n${content}`;
+        },
         sassOptions: { outputStyle: "expanded" }
       }
     }
