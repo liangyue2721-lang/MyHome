@@ -37,12 +37,28 @@ public interface GoldProductPriceMapper {
     public int insertGoldProductPrice(GoldProductPrice goldProductPrice);
 
     /**
+     * 批量新增黄金价格
+     *
+     * @param goldProductPriceList 黄金价格列表
+     * @return 结果
+     */
+    public int batchInsertGoldProductPrice(List<GoldProductPrice> goldProductPriceList);
+
+    /**
      * 修改黄金价格
      *
      * @param goldProductPrice 黄金价格
      * @return 结果
      */
     public int updateGoldProductPrice(GoldProductPrice goldProductPrice);
+
+    /**
+     * 批量更新黄金价格
+     *
+     * @param goldProductPriceList 黄金价格列表
+     * @return 结果
+     */
+    public int batchUpdateGoldProductPrice(List<GoldProductPrice> goldProductPriceList);
 
     /**
      * 删除黄金价格

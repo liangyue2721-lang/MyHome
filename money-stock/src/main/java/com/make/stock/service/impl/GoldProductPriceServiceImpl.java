@@ -32,6 +32,18 @@ public class GoldProductPriceServiceImpl implements IGoldProductPriceService {
     }
 
     /**
+     * 批量新增黄金价格
+     *
+     * @param goldProductPriceList 黄金价格列表
+     * @return 结果
+     */
+    @Override
+    public int batchInsertGoldProductPrice(List<GoldProductPrice> goldProductPriceList)
+    {
+        return goldProductPriceMapper.batchInsertGoldProductPrice(goldProductPriceList);
+    }
+
+    /**
      * 查询黄金价格列表
      *
      * @param goldProductPrice 黄金价格
@@ -64,6 +76,18 @@ public class GoldProductPriceServiceImpl implements IGoldProductPriceService {
     public int updateGoldProductPrice(GoldProductPrice goldProductPrice) {
                 goldProductPrice.setUpdateTime(DateUtils.getNowDate());
         return goldProductPriceMapper.updateGoldProductPrice(goldProductPrice);
+    }
+
+    /**
+     * 批量更新黄金价格
+     *
+     * @param goldProductPriceList 黄金价格列表
+     * @return 结果
+     */
+    @Override
+    public int batchUpdateGoldProductPrice(List<GoldProductPrice> goldProductPriceList)
+    {
+        return goldProductPriceMapper.batchUpdateGoldProductPrice(goldProductPriceList);
     }
 
     /**

@@ -79,4 +79,31 @@
         <include refid="selectGoldProductPriceVo"/>
         where `bank` = #{bank}
     </select>
+
+    <insert id="batchInsertGoldProductPrice" parameterType="java.util.List">
+        insert into gold_product_price (bank, product, price, create_time, update_time) values
+        <foreach collection="list" item="item" separator=",">
+            (#{item.bank}, #{item.product}, #{item.price}, now(), now())
+        </foreach>
+    </insert>
+
+    <update id="batchUpdateGoldProductPrice" parameterType="java.util.List">
+        update gold_product_price
+        <trim prefix="set" suffixOverrides=",">
+            <trim prefix="price = case" suffix="end,">
+                <foreach collection="list" item="item">
+                    when id = #{item.id} then #{item.price}
+                </foreach>
+            </trim>
+            <trim prefix="update_time = case" suffix="end,">
+                <foreach collection="list" item="item">
+                    when id = #{item.id} then now()
+                </foreach>
+            </trim>
+        </trim>
+        where id in
+        <foreach collection="list" item="item" open="(" separator="," close=")">
+            #{item.id}
+        </foreach>
+    </update>
 </mapper>
