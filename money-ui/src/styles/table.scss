@@ -1,0 +1,46 @@
+
+/* money-ui/src/styles/table.scss */
+
+// A modern table style for Element UI
+
+.el-table {
+  // Remove the default border
+  border: none;
+
+  // Add a subtle box shadow for depth
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+
+  // Style the table header
+  .el-table__header-wrapper {
+    th {
+      background-color: #f5f7fa;
+      color: #909399;
+      font-weight: 600;
+      border-bottom: 2px solid #ebeef5;
+    }
+  }
+
+  // Style the table body rows
+  .el-table__body-wrapper {
+    .el-table__row {
+      // Add a transition for a smooth hover effect
+      transition: background-color 0.2s;
+
+      &:hover {
+        background-color: #f5f7fa;
+      }
+    }
+  }
+
+  // Remove the bottom border of the last row
+  .el-table__row:last-child {
+    td {
+      border-bottom: none;
+    }
+  }
+
+  // Style the table cell padding
+  .el-table td, .el-table th {
+    padding: 12px 0;
+  }
+}
