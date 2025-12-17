@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
 import com.make.common.utils.spring.SpringUtils;
 import com.make.common.constant.Constants;
 import com.make.common.utils.ip.IpUtils;
-import com.make.common.utils.TraceIdUtil;
+import com.make.common.util.TraceIdUtil;
 
 import javax.annotation.PostConstruct;
 import java.util.Date;
@@ -93,9 +93,17 @@ public class TaskDistributor {
      */
     public void distributeTask(SysJob sysJob) {
         try {
+            // 捕获当前TraceId并设置到sysJob中（如果调用方没有设置）
+            if (StringUtils.isEmpty(sysJob.getTraceId())) {
+                String traceId = TraceIdUtil.getTraceId();
+                if (StringUtils.isNotEmpty(traceId)) {
+                    sysJob.setTraceId(traceId);
+                }
+            }
+
             String json = JSON.toJSONString(sysJob);
             redisTemplate.opsForList().leftPush(GLOBAL_TASK_QUEUE, json);
-            log.info("任务 {} 已推送到全局队列", sysJob.getJobName());
+            log.info("任务 {} 已推送到全局队列, TraceId: {}", sysJob.getJobName(), sysJob.getTraceId());
         } catch (Exception e) {
             log.error("任务分发失败: {}", sysJob.getJobName(), e);
         }
@@ -121,8 +129,6 @@ public class TaskDistributor {
                 // 检查IP黑名单
                 if (ipBlackListManager.isCurrentNodeIpBlacklisted()) {
                      // 如果当前节点被拉黑，将任务放回队列（右边进，保证顺序或者重新调度）
-                     // 为了防止死循环，最好休眠一下或者丢给其他节点
-                     // 这里选择简单放回左侧
                      redisTemplate.opsForList().leftPush(GLOBAL_TASK_QUEUE, json);
                      TimeUnit.SECONDS.sleep(5);
                      continue;
@@ -144,23 +150,23 @@ public class TaskDistributor {
         String lockKey = "quartz:lock:" + jobKey;
         RLock lock = redisQuartzSemaphore.getLock(lockKey);
 
-        // 生成TraceId
-        String traceId = TraceIdUtil.generateTraceId();
+        // 设置TraceId：优先使用sysJob中传递的TraceId，如果没有则生成新的
+        String traceId = sysJob.getTraceId();
+        if (StringUtils.isEmpty(traceId)) {
+            traceId = TraceIdUtil.generateTraceId();
+        }
         TraceIdUtil.putTraceId(traceId);
 
         boolean locked = false;
         try {
-            // 尝试获取锁，如果获取失败说明已经在运行
-            locked = lock.tryLock(0, TimeUnit.SECONDS);
+            // 尝试获取锁，设置5秒等待时间，以解决生产者先推队列后释放锁的竞态条件
+            locked = lock.tryLock(5, TimeUnit.SECONDS);
             if (!locked) {
-                log.info("任务 {} 正在运行中，跳过执行", jobKey);
+                log.info("任务 {} 正在运行中（或无法获取锁），跳过执行", jobKey);
                 return;
             }
 
             log.info("从全局队列获取任务并执行: {}", jobKey);
-
-            // 记录日志
-            recordLog(sysJob, null, null); // Start log if needed, or rely on execution log
 
             long startTime = System.currentTimeMillis();
             try {
@@ -189,7 +195,7 @@ public class TaskDistributor {
             sysJobLog.setJobGroup(sysJob.getJobGroup());
             sysJobLog.setInvokeTarget(sysJob.getInvokeTarget());
             sysJobLog.setHostIp(IpUtils.getHostIp());
-            sysJobLog.setStartTime(new Date());
+            sysJobLog.setStartTime(new Date(System.currentTimeMillis() - runMs));
 
             if (runMs != null) {
                 sysJobLog.setStopTime(new Date());
@@ -200,9 +206,6 @@ public class TaskDistributor {
                 } else {
                     sysJobLog.setStatus(Constants.SUCCESS);
                 }
-            } else {
-                // 开始记录不需要写DB，或者根据需求实现
-                return;
             }
 
             SpringUtils.getBean(ISysJobLogService.class).addJobLog(sysJobLog);

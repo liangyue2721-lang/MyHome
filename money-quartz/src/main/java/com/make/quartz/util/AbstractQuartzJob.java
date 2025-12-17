@@ -114,6 +114,9 @@ public abstract class AbstractQuartzJob implements Job {
             if (!taskDistributor.shouldExecuteLocally(jobKey, 0.8)) {
                 // 负载过高，分发任务
                 log.info("🔄 任务【{}】负载过高，分发到全局队列", jobKey);
+
+                // 设置当前TraceId到SysJob，确保分发后链路不断
+                sysJob.setTraceId(traceId);
                 taskDistributor.distributeTask(sysJob);
 
                 // 必须释放锁，以便消费者能获取锁并执行
