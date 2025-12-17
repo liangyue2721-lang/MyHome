@@ -73,20 +73,32 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table v-loading="loading" :data="noticeList" @selection-change="handleSelectionChange">
+    <el-table v-loading="loading" :data="noticeList" @selection-change="handleSelectionChange" :stripe="true" :border="false">
       <el-table-column type="selection" width="55" align="center"/>
 <!--      <el-table-column label="主键ID" align="center" prop="id"/>-->
-      <el-table-column label="证券代码" align="center" prop="securityCode"/>
-      <el-table-column label="证券名称" align="center" prop="securityName"/>
-      <el-table-column label="发行价格" align="center" prop="issuePrice"/>
+      <el-table-column label="证券代码" align="center" prop="securityCode">
+        <template slot-scope="scope">
+          <el-tag size="mini">{{ scope.row.securityCode }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="证券名称" align="center" prop="securityName" style="font-weight: bold;"/>
+      <el-table-column label="发行价格" align="right" prop="issuePrice">
+        <template slot-scope="scope">
+          <span>{{ scope.row.issuePrice }}</span>
+        </template>
+      </el-table-column>
       <el-table-column label="上市日期" align="center" prop="listingDate" width="180">
         <template slot-scope="scope">
           <span>{{ parseTime(scope.row.listingDate, '{y}-{m}-{d}') }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="当前价格" align="center" prop="currentPrice"/>
-      <el-table-column label="每股净利润" align="center" prop="netProfit"/>
-      <el-table-column label="利润率" align="center" prop="profitMargin"/>
+      <el-table-column label="当前价格" align="right" prop="currentPrice">
+        <template slot-scope="scope">
+          <span style="color: #E6A23C; font-weight: bold;">{{ scope.row.currentPrice }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="每股净利润" align="right" prop="netProfit"/>
+      <el-table-column label="利润率" align="right" prop="profitMargin"/>
       <el-table-column label="已通知次数" align="center" prop="notifyCount"/>
       <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
         <template slot-scope="scope">

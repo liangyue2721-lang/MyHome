@@ -83,28 +83,44 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table v-loading="loading" :data="stock_info_dongfangList" @selection-change="handleSelectionChange">
+    <el-table v-loading="loading" :data="stock_info_dongfangList" @selection-change="handleSelectionChange" :stripe="true" :border="false">
       <el-table-column type="selection" width="55" align="center"/>
-      <el-table-column label="ID" align="center" prop="id"/>
+      <el-table-column label="ID" align="center" prop="id" width="80" />
       <!--      <el-table-column label="股票类型" align="center" prop="type" />-->
       <el-table-column label="板块类型" align="center" prop="ticker">
         <template slot-scope="scope">
-          {{ getChineseName(scope.row.ticker) }}
+          <el-tag size="mini" type="info">{{ getChineseName(scope.row.ticker) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="股票的代码" align="center" prop="stockCode"/>
-      <el-table-column label="股票的公司名称" align="center" prop="companyName"/>
-      <el-table-column label="股票当前价格" align="center" prop="price"/>
+      <el-table-column label="股票代码" align="center" prop="stockCode">
+        <template slot-scope="scope">
+          <b>{{ scope.row.stockCode }}</b>
+        </template>
+      </el-table-column>
+      <el-table-column label="公司名称" align="center" prop="companyName"/>
+      <el-table-column label="当前价格" align="right" prop="price">
+        <template slot-scope="scope">
+          <span :style="{ color: scope.row.netChange > 0 ? '#F56C6C' : (scope.row.netChange < 0 ? '#67C23A' : '') }">
+            {{ scope.row.price }}
+          </span>
+        </template>
+      </el-table-column>
 <!--      <el-table-column label="涨跌幅" align="center" prop="circulationShares"/>-->
-      <el-table-column label="股票的涨跌额" align="center" prop="netChange"/>
-      <el-table-column label="股票的最高价" align="center" prop="highPrice"/>
-      <el-table-column label="股票的最低价" align="center" prop="lowPrice"/>
-      <el-table-column label="股票的开盘价" align="center" prop="openPrice"/>
-      <el-table-column label="股票的收盘价" align="center" prop="closePrice"/>
-      <el-table-column label="股票的交易量" align="center" prop="tradingVolume"/>
+      <el-table-column label="涨跌额" align="right" prop="netChange">
+        <template slot-scope="scope">
+          <span :style="{ color: scope.row.netChange > 0 ? '#F56C6C' : (scope.row.netChange < 0 ? '#67C23A' : '') }">
+            {{ scope.row.netChange }}
+          </span>
+        </template>
+      </el-table-column>
+      <el-table-column label="最高价" align="right" prop="highPrice"/>
+      <el-table-column label="最低价" align="right" prop="lowPrice"/>
+      <el-table-column label="开盘价" align="right" prop="openPrice"/>
+      <el-table-column label="收盘价" align="right" prop="closePrice"/>
+      <el-table-column label="交易量" align="right" prop="tradingVolume"/>
       <!--      <el-table-column label="股票的市值" align="center" prop="marketValue" />-->
       <!--      <el-table-column label="股票的总资产" align="center" prop="totalAssets" />-->
-      <el-table-column label="股票的总股数" align="center" prop="totalShares"/>
+      <el-table-column label="总股数" align="right" prop="totalShares"/>
       <!--      <el-table-column label="股票的流通股数" align="center" prop="circulationShares" />-->
       <!--      <el-table-column label="股票所属市场类别" align="center" prop="marketCategory" />-->
       <!--      <el-table-column label="股票的交易量" align="center" prop="tradingVolume" />-->

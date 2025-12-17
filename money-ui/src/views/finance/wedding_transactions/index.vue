@@ -134,11 +134,17 @@
     <el-row :gutter="20" class="chart-row">
       <el-col :span="12">
         <el-card shadow="hover">
+          <div slot="header" class="clearfix">
+            <span>支出占比</span>
+          </div>
           <div ref="expenseChart" class="chart-box"></div>
         </el-card>
       </el-col>
       <el-col :span="12">
         <el-card shadow="hover">
+          <div slot="header" class="clearfix">
+            <span>收入占比</span>
+          </div>
           <div ref="incomeChart" class="chart-box"></div>
         </el-card>
       </el-col>
@@ -149,10 +155,12 @@
       v-loading="loading"
       :data="wedding_transactionsList"
       @selection-change="handleSelectionChange"
+      :stripe="true"
+      :border="false"
       style="width:100%; margin-top:20px;"
     >
       <el-table-column type="selection" width="55" align="center"/>
-      <el-table-column prop="transactionDate" label="交易日期" width="140"/>
+      <el-table-column prop="transactionDate" label="交易日期" width="140" align="center"/>
       <el-table-column label="交易类型" align="center" prop="transactionType">
         <template slot-scope="scope">
           <dict-tag :options="dict.type.type_of_expenditure" :value="scope.row.transactionType"/>
@@ -168,15 +176,21 @@
           <dict-tag :options="dict.type.marriage_expenses" :value="scope.row.itemName"/>
         </template>
       </el-table-column>
-      <el-table-column label="交易金额" align="center" prop="amount"/>
+      <el-table-column label="交易金额" align="right" prop="amount">
+        <template slot-scope="scope">
+          <span :style="{ color: scope.row.transactionType === '1' ? '#F56C6C' : '#67C23A', fontWeight: 'bold' }">
+            {{ scope.row.amount }}
+          </span>
+        </template>
+      </el-table-column>
       <el-table-column label="支付方式" align="center" prop="paymentMethod">
         <template slot-scope="scope">
           <dict-tag :options="dict.type.payment_method" :value="scope.row.paymentMethod"/>
         </template>
       </el-table-column>
-      <el-table-column prop="participant" label="参与人" width="100"/>
-      <el-table-column prop="notes" label="备注"/>
-      <el-table-column prop="updatedAt" label="更新时间" width="140"/>
+      <el-table-column prop="participant" label="参与人" width="100" align="center"/>
+      <el-table-column prop="notes" label="备注" align="center"/>
+      <el-table-column prop="updatedAt" label="更新时间" width="140" align="center"/>
     </el-table>
 
     <!-- 分页 -->

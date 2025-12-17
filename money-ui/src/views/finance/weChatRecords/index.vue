@@ -131,26 +131,40 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table v-loading="loading" :data="weChatRecordsList" @selection-change="handleSelectionChange">
+    <el-table v-loading="loading" :data="weChatRecordsList" @selection-change="handleSelectionChange" :stripe="true" :border="false">
       <el-table-column type="selection" width="55" align="center"/>
-      <el-table-column label="ID" align="center" prop="id"/>
+      <el-table-column label="ID" align="center" prop="id" width="80"/>
       <el-table-column label="交易时间" align="center" prop="transactionTime" width="180">
         <template slot-scope="scope">
           <span>{{ parseTime(scope.row.transactionTime, '{y}-{m}-{d}') }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="交易类型" align="center" prop="transactionType"/>
+      <el-table-column label="交易类型" align="center" prop="transactionType">
+        <template slot-scope="scope">
+          <el-tag size="mini" type="info">{{ scope.row.transactionType }}</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="交易对方" align="center" prop="counterparty"/>
-      <el-table-column label="商品" align="center" prop="product"/>
-      <el-table-column label="商品类型" align="center" prop="productType"/>
+      <el-table-column label="商品" align="center" prop="product" show-overflow-tooltip/>
+      <el-table-column label="商品类型" align="center" prop="productType">
+        <template slot-scope="scope">
+          <el-tag size="mini" effect="plain">{{ scope.row.productType }}</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="流水来源" align="center" prop="source"/>
       <el-table-column label="收入/支出" align="center" prop="inOut"/>
-      <el-table-column label="金额(元)" align="center" prop="amount"/>
+      <el-table-column label="金额(元)" align="right" prop="amount">
+        <template slot-scope="scope">
+          <span :style="{ color: scope.row.inOut === '收入' ? '#67C23A' : '#F56C6C', fontWeight: 'bold' }">
+            {{ scope.row.amount }}
+          </span>
+        </template>
+      </el-table-column>
       <el-table-column label="支付方式" align="center" prop="paymentMethod"/>
       <el-table-column label="当前状态" align="center" prop="transactionStatus"/>
-      <el-table-column label="交易单号" align="center" prop="transactionId"/>
-      <el-table-column label="商户单号" align="center" prop="merchantId"/>
-      <el-table-column label="备注" align="center" prop="note"/>
+      <el-table-column label="交易单号" align="center" prop="transactionId" show-overflow-tooltip/>
+      <el-table-column label="商户单号" align="center" prop="merchantId" show-overflow-tooltip/>
+      <el-table-column label="备注" align="center" prop="note" show-overflow-tooltip/>
       <el-table-column label="创建时间" align="center" prop="createdAt" width="180">
         <template slot-scope="scope">
           <span>{{ parseTime(scope.row.createdAt, '{y}-{m}-{d}') }}</span>

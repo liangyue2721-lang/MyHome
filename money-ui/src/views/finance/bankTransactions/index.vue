@@ -98,10 +98,14 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table v-loading="loading" :data="transactionsList" @selection-change="handleSelectionChange">
+    <el-table v-loading="loading" :data="transactionsList" @selection-change="handleSelectionChange" :stripe="true" :border="false">
       <el-table-column type="selection" width="55" align="center"/>
 <!--      <el-table-column label="主键" align="center" prop="id"/>-->
-      <el-table-column label="账户号码" align="center" prop="accountNo"/>
+      <el-table-column label="账户号码" align="center" prop="accountNo">
+        <template slot-scope="scope">
+          <el-tag size="mini" type="info">{{ scope.row.accountNo }}</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="归属银行" align="center" prop="bank"/>
       <el-table-column label="分行" align="center" prop="subBranch"/>
       <el-table-column label="交易日期" align="center" prop="Date" width="180">
@@ -110,12 +114,22 @@
         </template>
       </el-table-column>
       <el-table-column label="货币类型" align="center" prop="currency"/>
-      <el-table-column label="交易类型" align="center" prop="transactionType"/>
-      <el-table-column label="交易金额" align="center" prop="amount"/>
-      <el-table-column label="账户余额" align="center" prop="balance"/>
+      <el-table-column label="交易类型" align="center" prop="transactionType">
+        <template slot-scope="scope">
+          <el-tag size="mini" effect="plain">{{ scope.row.transactionType }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="交易金额" align="right" prop="amount">
+        <template slot-scope="scope">
+          <span :style="{ color: scope.row.amount >= 0 ? '#F56C6C' : '#67C23A', fontWeight: 'bold' }">
+            {{ scope.row.amount }}
+          </span>
+        </template>
+      </el-table-column>
+      <el-table-column label="账户余额" align="right" prop="balance"/>
       <el-table-column label="交易对方" align="center" prop="counterParty"/>
-      <el-table-column label="交易详情" align="center" prop="transaction"/>
-      <el-table-column label="备注" align="center" prop="note"/>
+      <el-table-column label="交易详情" align="left" prop="transaction" show-overflow-tooltip/>
+      <el-table-column label="备注" align="center" prop="note" show-overflow-tooltip/>
       <!--      <el-table-column label="创建时间" align="center" prop="createdAt" width="180">-->
       <!--        <template slot-scope="scope">-->
       <!--          <span>{{ parseTime(scope.row.createdAt, '{y}-{m}-{d}') }}</span>-->

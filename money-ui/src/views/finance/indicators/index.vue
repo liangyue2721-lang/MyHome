@@ -576,124 +576,39 @@ export default {
   background: #e0e3e8;
 }
 
-/* 扩展彩色渐变逻辑 - 20种颜色循环 */
-.progress-block.filled:nth-child(20n+1) {
-  --block-color: #4CAF50;
-}
-
-/* 绿色系 */
-.progress-block.filled:nth-child(20n+2) {
-  --block-color: #66BB6A;
-}
-
-.progress-block.filled:nth-child(20n+3) {
-  --block-color: #81C784;
-}
-
-.progress-block.filled:nth-child(20n+4) {
-  --block-color: #A5D6A7;
-}
-
-.progress-block.filled:nth-child(20n+5) {
-  --block-color: #C8E6C9;
-}
-
-.progress-block.filled:nth-child(20n+6) {
-  --block-color: #FFF59D;
-}
-
-/* 黄色系 */
-.progress-block.filled:nth-child(20n+7) {
-  --block-color: #FFEE58;
-}
-
-.progress-block.filled:nth-child(20n+8) {
-  --block-color: #FFD54F;
-}
-
-.progress-block.filled:nth-child(20n+9) {
-  --block-color: #FFB300;
-}
-
-.progress-block.filled:nth-child(20n+10) {
-  --block-color: #FF8F00;
-}
-
-.progress-block.filled:nth-child(20n+11) {
-  --block-color: #FF6F00;
-}
-
-/* 橙色/红色系 */
-.progress-block.filled:nth-child(20n+12) {
-  --block-color: #E64A19;
-}
-
-.progress-block.filled:nth-child(20n+13) {
-  --block-color: #D32F2F;
-}
-
-.progress-block.filled:nth-child(20n+14) {
-  --block-color: #C2185B;
-}
-
-.progress-block.filled:nth-child(20n+15) {
-  --block-color: #7B1FA2;
-}
-
-/* 紫色系 */
-.progress-block.filled:nth-child(20n+16) {
-  --block-color: #512DA8;
-}
-
-.progress-block.filled:nth-child(20n+17) {
-  --block-color: #303F9F;
-}
-
-.progress-block.filled:nth-child(20n+18) {
-  --block-color: #1976D2;
-}
-
-/* 蓝色系 */
-.progress-block.filled:nth-child(20n+19) {
-  --block-color: #0288D1;
-}
-
-.progress-block.filled:nth-child(20n+20) {
-  --block-color: #0097A7;
-}
-
-/* 动态渐变调整 */
+/* 扩展彩色渐变逻辑 - 更加专业、克制的颜色 */
 .progress-block.filled {
-  background: linear-gradient(
-    135deg,
-    var(--block-color),
-    color-mix(in srgb, var(--block-color) 80%, white),
-    color-mix(in srgb, var(--block-color) 90%, rgba(255, 255, 255, 0.3))
-  );
+  --block-color: #409EFF; /* Default Blue */
 }
 
-/* 新增光泽效果 */
-.progress-block.filled::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(
-    120deg,
-    rgba(255, 255, 255, 0.3) 10%,
-    transparent 30%,
-    rgba(0, 0, 0, 0.05) 90%
-  );
-  border-radius: 4px;
+/* 基于索引的微调，保持同色系但有层次感，或者使用更专业的语义色 */
+/* 前段 - 蓝色系 (Start) */
+.progress-block.filled:nth-child(-n+5) {
+  --block-color: #a0cfff;
 }
 
-/* 悬停动画 */
+/* 中段 - 蓝色系 (Processing) */
+.progress-block.filled:nth-child(n+6):nth-child(-n+15) {
+  --block-color: #409EFF;
+}
+
+/* 后段 - 蓝色/深蓝 (Completion) */
+.progress-block.filled:nth-child(n+16) {
+  --block-color: #337ecc;
+}
+
+/* 动态渐变调整 - 更平滑 */
+.progress-block.filled {
+  background-color: var(--block-color);
+  opacity: 0.9;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+/* 悬停动画 - 克制 */
 .progress-block.filled:hover {
-  transform: scale(1.08);
-  z-index: 1;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  opacity: 1;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
 }
 
 /* 百分比显示 */

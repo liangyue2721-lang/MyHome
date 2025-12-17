@@ -93,8 +93,8 @@
         v-loading="loading"
         :data="investment_recordsList"
         @selection-change="handleSelectionChange"
-        border
-        stripe
+        :border="false"
+        :stripe="true"
         style="width: 100%"
         :header-cell-style="{background:'#f8f8f9', color:'#515a6e', textAlign: 'center'}"
         :cell-style="{textAlign: 'center'}"
@@ -107,24 +107,28 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="投资标的" align="center" prop="investType" min-width="140" show-overflow-tooltip/>
+        <el-table-column label="投资标的" align="center" prop="investType" min-width="140" show-overflow-tooltip>
+          <template slot-scope="scope">
+            <span style="font-weight: 500;">{{ scope.row.investType }}</span>
+          </template>
+        </el-table-column>
 
         <el-table-column label="成交类型" align="center" prop="tradeType" min-width="90">
           <template slot-scope="scope">
-            <el-tag :type="scope.row.tradeType == '0' ? 'danger' : 'success'" effect="light">
+            <el-tag :type="scope.row.tradeType == '0' ? 'danger' : 'success'" effect="dark" size="small">
               <dict-tag :options="dict.type.position_status" :value="scope.row.tradeType"/>
             </el-tag>
           </template>
         </el-table-column>
 
         <el-table-column label="成交详情" align="center">
-          <el-table-column label="成交价" align="center" prop="tradePrice" min-width="110">
+          <el-table-column label="成交价" align="right" prop="tradePrice" min-width="110">
             <template slot-scope="scope">¥{{ Number(scope.row.tradePrice).toFixed(3) }}</template>
           </el-table-column>
-          <el-table-column label="成交量" align="center" prop="tradeVolume" min-width="120">
-            <template slot-scope="scope">{{ Number(scope.row.tradeVolume) }} 股/份</template>
+          <el-table-column label="成交量" align="right" prop="tradeVolume" min-width="120">
+            <template slot-scope="scope">{{ Number(scope.row.tradeVolume) }}</template>
           </el-table-column>
-          <el-table-column label="成交总额" align="center" prop="tradeAmount" min-width="130">
+          <el-table-column label="成交总额" align="right" prop="tradeAmount" min-width="130">
             <template slot-scope="scope">
                     <span :class="scope.row.tradeType == '0' ? 'text-primary-bold' : 'text-success-bold'">
                         ¥{{ formatMoney(scope.row.tradeAmount) }}

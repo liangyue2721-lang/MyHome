@@ -73,7 +73,7 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table v-loading="loading" :data="sell_price_alertsList" @selection-change="handleSelectionChange">
+    <el-table v-loading="loading" :data="sell_price_alertsList" @selection-change="handleSelectionChange" :stripe="true" :border="false">
       <el-table-column type="selection" width="55" align="center"/>
 <!--      <el-table-column label="主键ID" align="center" prop="id"/>-->
       <!--      <el-table-column label="提醒日期" align="center" prop="alertDate" width="180">-->
@@ -81,10 +81,22 @@
       <!--          <span>{{ parseTime(scope.row.alertDate, '{y}-{m}-{d}') }}</span>-->
       <!--        </template>-->
       <!--      </el-table-column>-->
-      <el-table-column label="股票代码" align="center" prop="stockCode"/>
-      <el-table-column label="股票名称" align="center" prop="stockName"/>
-      <el-table-column label="最新价格" align="center" prop="latestPrice"/>
-      <el-table-column label="阈值价格" align="center" prop="thresholdPrice"/>
+      <el-table-column label="股票代码" align="center" prop="stockCode">
+        <template slot-scope="scope">
+          <el-tag size="mini">{{ scope.row.stockCode }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="股票名称" align="center" prop="stockName" style="font-weight: bold;"/>
+      <el-table-column label="最新价格" align="right" prop="latestPrice">
+        <template slot-scope="scope">
+          <span>{{ scope.row.latestPrice ? Number(scope.row.latestPrice).toFixed(2) : '--' }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="阈值价格" align="right" prop="thresholdPrice">
+         <template slot-scope="scope">
+          <span>{{ scope.row.thresholdPrice ? Number(scope.row.thresholdPrice).toFixed(2) : '--' }}</span>
+        </template>
+      </el-table-column>
       <el-table-column label="通知次数" align="center" prop="indexCount"/>
       <el-table-column label="是否持仓" align="center" prop="isEnabled">
         <template slot-scope="scope">

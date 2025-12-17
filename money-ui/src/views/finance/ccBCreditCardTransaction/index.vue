@@ -94,7 +94,7 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table v-loading="loading" :data="ccBCreditCardTransactionList" @selection-change="handleSelectionChange">
+    <el-table v-loading="loading" :data="ccBCreditCardTransactionList" @selection-change="handleSelectionChange" :stripe="true" :border="false">
       <el-table-column type="selection" width="55" align="center"/>
       <!--      <el-table-column label="主键，自增" align="center" prop="id"/>-->
       <el-table-column label="交易发生日期" align="center" prop="tradeDate" width="180">
@@ -107,11 +107,15 @@
           <span>{{ parseTime(scope.row.postDate, '{y}-{m}-{d}') }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="信用卡尾号后四位" align="center" prop="cardLast4"/>
-      <el-table-column label="交易描述信息" align="center" prop="description"/>
-      <el-table-column label="交易原始金额" align="center" prop="transAmount"/>
-      <el-table-column label="结算金额" align="center" prop="settleAmount"/>
-      <el-table-column label="备注" align="center" prop="remark"/>
+      <el-table-column label="信用卡尾号" align="center" prop="cardLast4">
+        <template slot-scope="scope">
+          <el-tag size="mini" type="info">{{ scope.row.cardLast4 }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="交易描述信息" align="left" prop="description" show-overflow-tooltip/>
+      <el-table-column label="交易原始金额" align="right" prop="transAmount"/>
+      <el-table-column label="结算金额" align="right" prop="settleAmount"/>
+      <el-table-column label="备注" align="center" prop="remark" show-overflow-tooltip/>
       <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
         <template slot-scope="scope">
           <el-button

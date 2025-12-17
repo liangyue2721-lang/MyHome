@@ -80,15 +80,15 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table v-loading="loading" :data="user_accountsList" @selection-change="handleSelectionChange">
+    <el-table v-loading="loading" :data="user_accountsList" @selection-change="handleSelectionChange" :stripe="true" :border="false">
       <el-table-column type="selection" width="55" align="center"/>
       <!--      <el-table-column label="主键ID" align="center" prop="id"/>-->
       <el-table-column label="用户姓名" align="center">
         <template slot-scope="scope">
-          {{ getUserName(scope.row.userId) }}
+          <el-tag size="mini" type="info">{{ getUserName(scope.row.userId) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="银行卡号" align="center" prop="bankCardNumber"/>
+      <el-table-column label="银行卡号" align="center" prop="bankCardNumber" style="font-family: monospace;"/>
       <el-table-column label="银行卡状态" align="center" prop="bankCardStatus">
         <template slot-scope="scope">
           <dict-tag :options="dict.type.sys_normal_disable" :value="scope.row.bankCardStatus"/>

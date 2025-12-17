@@ -105,64 +105,67 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table v-loading="loading" :data="stock_issue_infoList" @selection-change="handleSelectionChange">
+    <el-table v-loading="loading" :data="stock_issue_infoList" @selection-change="handleSelectionChange" :stripe="true" :border="false">
       <el-table-column type="selection" width="55" align="center"/>
-      <el-table-column label="板块类型" align="center" prop="ticker">
+      <el-table-column label="板块类型" align="center" prop="ticker" width="100">
         <template slot-scope="scope">
-          {{ getChineseName(String(scope.row.securityCode).substr(0, 3)) }}
+          <el-tag size="mini">{{ getChineseName(String(scope.row.securityCode).substr(0, 3)) }}</el-tag>
         </template>
       </el-table-column>
 <!--      <el-table-column label="申购代码" align="center" prop="applyCode"/>-->
 <!--      <el-table-column label="信息编号" align="center" prop="infoCode"/>-->
-      <el-table-column label="证券代码" align="center" prop="securityCode"/>
-      <el-table-column label="证券名称" align="center" prop="securityName"/>
-<!--      <el-table-column label="交易市场代码" align="center" prop="tradeMarketCode"/>-->
-      <el-table-column label="交易市场" align="center" prop="tradeMarket"/>
-<!--      <el-table-column label="市场类型" align="center" prop="marketType"/>-->
-<!--      <el-table-column label="机构类型" align="center" prop="orgType"/>-->
-      <el-table-column label="主营业务" align="center">
-        <template #default="{ row }">
-          <div class="content-wrapper">
-          <span v-show="hoverRow === row.infoCode" class="full-content">
-            {{ row.mainBusiness }}
-          </span>
-            <span v-show="hoverRow !== row.infoCode" class="truncated-content">
-            {{ truncateText(row.mainBusiness) }}
-          </span>
-          </div>
+      <el-table-column label="证券代码" align="center" prop="securityCode" width="100">
+        <template slot-scope="scope">
+          <b>{{ scope.row.securityCode }}</b>
         </template>
       </el-table-column>
-      <el-table-column label="发行数量(万股)" align="center" prop="issueNum"/>
+      <el-table-column label="证券名称" align="center" prop="securityName" width="120"/>
+<!--      <el-table-column label="交易市场代码" align="center" prop="tradeMarketCode"/>-->
+      <el-table-column label="交易市场" align="center" prop="tradeMarket" width="100"/>
+<!--      <el-table-column label="市场类型" align="center" prop="marketType"/>-->
+<!--      <el-table-column label="机构类型" align="center" prop="orgType"/>-->
+      <el-table-column label="主营业务" align="center" min-width="200">
+        <template #default="{ row }">
+          <el-tooltip class="item" effect="dark" :content="row.mainBusiness" placement="top-start" :open-delay="500">
+            <div class="truncated-content">{{ truncateText(row.mainBusiness) }}</div>
+          </el-tooltip>
+        </template>
+      </el-table-column>
+      <el-table-column label="发行数量(万股)" align="right" prop="issueNum"/>
 <!--      <el-table-column label="网上发行数量" align="center" prop="onlineIssueNum"/>-->
 <!--      <el-table-column label="网下配售数量" align="center" prop="offlinePlacingNum"/>-->
-      <el-table-column label="发行价格" align="center" prop="issuePrice"/>
-      <el-table-column label="发行后市盈率" align="center" prop="afterIssuePe"/>
+      <el-table-column label="发行价格" align="right" prop="issuePrice">
+        <template slot-scope="scope">
+          <span style="color: #E6A23C; font-weight: bold;">{{ scope.row.issuePrice }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="发行后市盈率" align="right" prop="afterIssuePe"/>
 <!--      <el-table-column label="初始倍数" align="center" prop="initialMultiple"/>-->
-      <el-table-column label="最新价格" align="center" prop="latelyPrice"/>
-      <el-table-column label="收盘价格" align="center" prop="closePrice"/>
-      <el-table-column label="涨停价格" align="center" prop="limitUpPrice"/>
-      <el-table-column label="最新价格" align="center" prop="newestPrice"/>
-      <el-table-column label="申购日期" align="center" prop="applyDate" width="180">
+      <el-table-column label="最新价格" align="right" prop="latelyPrice"/>
+      <el-table-column label="收盘价格" align="right" prop="closePrice"/>
+      <el-table-column label="涨停价格" align="right" prop="limitUpPrice"/>
+      <el-table-column label="最新价格" align="right" prop="newestPrice"/>
+      <el-table-column label="申购日期" align="center" prop="applyDate" width="120">
         <template slot-scope="scope">
           <span>{{ parseTime(scope.row.applyDate, '{y}-{m}-{d}') }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="中签号公布日" align="center" prop="ballotNumDate" width="180">
+      <el-table-column label="中签号公布日" align="center" prop="ballotNumDate" width="120">
         <template slot-scope="scope">
           <span>{{ parseTime(scope.row.ballotNumDate, '{y}-{m}-{d}') }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="中签缴款日" align="center" prop="ballotPayDate" width="180">
+      <el-table-column label="中签缴款日" align="center" prop="ballotPayDate" width="120">
         <template slot-scope="scope">
           <span>{{ parseTime(scope.row.ballotPayDate, '{y}-{m}-{d}') }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="上市日期" align="center" prop="listingDate" width="180">
+      <el-table-column label="上市日期" align="center" prop="listingDate" width="120">
         <template slot-scope="scope">
           <span>{{ parseTime(scope.row.listingDate, '{y}-{m}-{d}') }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="开盘价格" align="center" prop="openPrice"/>
+      <el-table-column label="开盘价格" align="right" prop="openPrice"/>
 <!--      <el-table-column label="最新开盘溢价率(%)" align="center" prop="ldOpenPremium"/>-->
 <!--      <el-table-column label="最新收盘涨幅(%)" align="center" prop="ldCloseChange"/>-->
 <!--      <el-table-column label="换手率(%)" align="center" prop="turnoverrate"/>-->
@@ -183,15 +186,15 @@
 <!--        </template>-->
 <!--      </el-table-column>-->
 <!--      <el-table-column label="总变化量" align="center" prop="totalChange"/>-->
-      <el-table-column label="利润" align="center" prop="profit"/>
-      <el-table-column label="网上发行中签率" align="center" prop="onlineIssueLwr"/>
-      <el-table-column label="预测顶格申购需配市值" align="center" prop="topApplyMarketcap"/>
+      <el-table-column label="利润" align="right" prop="profit"/>
+      <el-table-column label="网上发行中签率" align="right" prop="onlineIssueLwr"/>
+      <el-table-column label="预测顶格申购需配市值" align="right" prop="topApplyMarketcap"/>
 <!--      <el-table-column label="网上申购上限" align="center" prop="onlineApplyUpper"/>-->
 <!--      <el-table-column label="预测申购上限" align="center" prop="predictOnapplyUpper"/>-->
-      <el-table-column label="行业新市盈率" align="center" prop="industryPeNew"/>
+      <el-table-column label="行业新市盈率" align="right" prop="industryPeNew"/>
 <!--      <el-table-column label="网下发行对象" align="center" prop="offlineEpObject"/>-->
 <!--      <el-table-column label="连续一字涨停天数" align="center" prop="continuous1wordNum"/>-->
-      <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
+      <el-table-column label="操作" align="center" class-name="small-padding fixed-width" width="140">
         <template slot-scope="scope">
           <el-button
             size="mini"

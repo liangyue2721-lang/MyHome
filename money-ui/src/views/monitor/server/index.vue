@@ -454,14 +454,56 @@ export default {
       this.memoryChart = echarts.init(this.$refs.memoryChart);
 
       const commonOption = {
-        tooltip: { trigger: 'axis' },
-        xAxis: { type: 'category', data: [] },
-        yAxis: { type: 'value', min: 0, max: 100, axisLabel: { formatter: '{value} %' } },
-        series: [{ data: [], type: 'line', smooth: true, areaStyle: {} }],
+        tooltip: {
+            trigger: 'axis',
+            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+            borderColor: '#ccc',
+            borderWidth: 1,
+            textStyle: { color: '#333' }
+        },
+        xAxis: {
+            type: 'category',
+            data: [],
+            axisLine: { lineStyle: { color: '#E4E7ED' } },
+            axisLabel: { color: '#606266' }
+        },
+        yAxis: {
+            type: 'value',
+            min: 0,
+            max: 100,
+            axisLabel: { formatter: '{value} %', color: '#606266' },
+            splitLine: { lineStyle: { type: 'dashed', color: '#E4E7ED' } }
+        },
+        series: [{
+            data: [],
+            type: 'line',
+            smooth: true,
+            symbol: 'none',
+            lineStyle: { width: 3 },
+            areaStyle: { opacity: 0.2 }
+        }],
         grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true }
       };
-      this.cpuChart.setOption(JSON.parse(JSON.stringify(commonOption)));
-      this.memoryChart.setOption(JSON.parse(JSON.stringify(commonOption)));
+
+      // CPU Chart specific
+      const cpuOption = JSON.parse(JSON.stringify(commonOption));
+      cpuOption.series[0].itemStyle = { color: '#409EFF' };
+      cpuOption.series[0].areaStyle.color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [{
+          offset: 0, color: 'rgba(64, 158, 255, 0.5)'
+      }, {
+          offset: 1, color: 'rgba(64, 158, 255, 0.05)'
+      }]);
+      this.cpuChart.setOption(cpuOption);
+
+      // Memory Chart specific
+      const memOption = JSON.parse(JSON.stringify(commonOption));
+      memOption.series[0].itemStyle = { color: '#67C23A' };
+      memOption.series[0].areaStyle.color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [{
+          offset: 0, color: 'rgba(103, 194, 58, 0.5)'
+      }, {
+          offset: 1, color: 'rgba(103, 194, 58, 0.05)'
+      }]);
+      this.memoryChart.setOption(memOption);
 
       // Cluster Charts
       this.clusterCpuChart = echarts.init(this.$refs.clusterCpuChart);

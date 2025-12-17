@@ -374,20 +374,42 @@ export default {
           label: {
             formatter: () => `${name}\n¥${value.toFixed(2)}\n${totalAll ? ((value / totalAll) * 100).toFixed(1) + '%' : '0%'}`,
             fontSize: 16,
-            color: '#333'
+            color: '#333',
+            insideColor: '#fff',
+            fontWeight: 'bold'
           },
-          itemStyle: {color, opacity: 0.8},
-          backgroundStyle: {color: '#f8f9fa'},
-          outline: {show: false}
+          itemStyle: {
+            color: color,
+            opacity: 0.9,
+            shadowBlur: 10,
+            shadowColor: 'rgba(0, 0, 0, 0.2)'
+          },
+          backgroundStyle: {
+            color: '#fff',
+            borderColor: '#e1e1e1',
+            borderWidth: 1,
+            shadowBlur: 5,
+            shadowColor: 'rgba(0, 0, 0, 0.1)'
+          },
+          outline: {
+            show: true,
+            borderDistance: 0,
+            itemStyle: {
+              borderWidth: 2,
+              borderColor: color,
+              shadowBlur: 10,
+              shadowColor: 'rgba(0, 0, 0, 0.1)'
+            }
+          }
         }]
       });
 
       // 如果不足两个用户，需处理空指针
       if (topUsers.length > 0) {
-        this.user1Chart.setOption(makeOption(this.getUserName(topUsers[0]), userTotals[topUsers[0]], '#4ECDC4'));
+        this.user1Chart.setOption(makeOption(this.getUserName(topUsers[0]), userTotals[topUsers[0]], '#409EFF')); // Element Blue
       }
       if (topUsers.length > 1) {
-        this.user2Chart.setOption(makeOption(this.getUserName(topUsers[1]), userTotals[topUsers[1]], '#FF6B6B'));
+        this.user2Chart.setOption(makeOption(this.getUserName(topUsers[1]), userTotals[topUsers[1]], '#F56C6C')); // Element Red
       }
     },
 
@@ -441,7 +463,11 @@ export default {
       const option = {
         tooltip: {
           trigger: 'axis',
-          axisPointer: {type: 'shadow'}
+          axisPointer: {type: 'shadow'},
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          borderColor: '#ccc',
+          borderWidth: 1,
+          textStyle: { color: '#333' }
         },
         grid: {
           left: '3%',
@@ -454,13 +480,24 @@ export default {
             type: 'category',
             data: xData,
             axisTick: {alignWithLabel: true},
-            axisLabel: {interval: 0} // 强制显示所有标签
+            axisLabel: {
+                interval: 0,
+                color: '#606266'
+            },
+            axisLine: {
+                lineStyle: { color: '#DCDFE6' }
+            }
           }
         ],
         yAxis: [
           {
             type: 'value',
-            name: '金额 (元)'
+            name: '金额 (元)',
+            splitLine: {
+                lineStyle: { type: 'dashed', color: '#E4E7ED' }
+            },
+             axisLine: { show: false },
+             axisTick: { show: false }
           }
         ],
         series: [
@@ -471,14 +508,16 @@ export default {
             data: yData,
             itemStyle: {
               color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                {offset: 0, color: '#83bff6'},
-                {offset: 0.5, color: '#188df0'},
-                {offset: 1, color: '#188df0'}
-              ])
+                {offset: 0, color: '#409EFF'},
+                {offset: 1, color: '#79bbff'}
+              ]),
+              borderRadius: [4, 4, 0, 0]
             },
             label: {
               show: true,
-              position: 'top'
+              position: 'top',
+              color: '#409EFF',
+              fontWeight: 'bold'
             }
           }
         ]

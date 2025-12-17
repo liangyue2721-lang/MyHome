@@ -81,12 +81,20 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table v-loading="loading" :data="gold_product_priceList" @selection-change="handleSelectionChange">
+    <el-table v-loading="loading" :data="gold_product_priceList" @selection-change="handleSelectionChange" :stripe="true" :border="false">
       <el-table-column type="selection" width="55" align="center"/>
 <!--      <el-table-column label="主键" align="center" prop="id"/>-->
-      <el-table-column label="银行名称" align="center" prop="bank"/>
+      <el-table-column label="银行名称" align="center" prop="bank">
+        <template slot-scope="scope">
+          <el-tag size="mini" type="info">{{ scope.row.bank }}</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="产品名称" align="center" prop="product"/>
-      <el-table-column label="产品价格" align="center" prop="price"/>
+      <el-table-column label="产品价格" align="right" prop="price">
+        <template slot-scope="scope">
+          <span style="color: #E6A23C; font-weight: bold;">{{ scope.row.price }}</span>
+        </template>
+      </el-table-column>
       <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
         <template slot-scope="scope">
           <el-button

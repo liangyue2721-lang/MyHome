@@ -84,22 +84,30 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table v-loading="loading" :data="expenseList" @selection-change="handleSelectionChange">
+    <el-table v-loading="loading" :data="expenseList" @selection-change="handleSelectionChange" :stripe="true" :border="false">
       <el-table-column type="selection" width="55" align="center"/>
-      <el-table-column label="消费ID" align="center" prop="expenseId"/>
+      <el-table-column label="消费ID" align="center" prop="expenseId" width="80" />
       <el-table-column label="用户姓名" align="center">
         <template slot-scope="scope">
-          {{ getUserName(scope.row.userId) }}
+          <el-tag size="mini" type="info">{{ getUserName(scope.row.userId) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="消费金额" align="center" prop="amount"/>
+      <el-table-column label="消费金额" align="right" prop="amount">
+        <template slot-scope="scope">
+          <span style="color: #F56C6C; font-weight: bold;">-{{ scope.row.amount }}</span>
+        </template>
+      </el-table-column>
       <el-table-column label="商户名称" align="center" prop="merchant"/>
       <el-table-column label="消费日期" align="center" prop="expenseDate" width="180">
         <template slot-scope="scope">
           <span>{{ parseTime(scope.row.expenseDate, '{y}-{m}-{d}') }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="消费分类" align="center" prop="category"/>
+      <el-table-column label="消费分类" align="center" prop="category">
+        <template slot-scope="scope">
+          <el-tag size="mini" effect="plain">{{ scope.row.category }}</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="记录时间" align="center" prop="updatedAt" width="180">
         <template slot-scope="scope">
           <span>{{ parseTime(scope.row.updatedAt, '{y}-{m}-{d}') }}</span>

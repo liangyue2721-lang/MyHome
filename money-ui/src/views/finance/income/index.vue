@@ -67,15 +67,19 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table v-loading="loading" :data="incomeList" @selection-change="handleSelectionChange">
+    <el-table v-loading="loading" :data="incomeList" @selection-change="handleSelectionChange" :stripe="true" :border="false">
       <el-table-column type="selection" width="55" align="center"/>
-      <el-table-column label="收入ID" align="center" prop="incomeId"/>
+      <el-table-column label="收入ID" align="center" prop="incomeId" width="80" />
       <el-table-column label="用户姓名" align="center">
         <template slot-scope="scope">
-          {{ getUserName(scope.row.userId) }}
+          <el-tag size="mini" type="info">{{ getUserName(scope.row.userId) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="金额" align="center" prop="amount"/>
+      <el-table-column label="金额" align="right" prop="amount">
+        <template slot-scope="scope">
+           <span style="color: #67C23A; font-weight: bold;">+{{ scope.row.amount }}</span>
+        </template>
+      </el-table-column>
       <el-table-column label="收入来源" align="center" prop="source">
         <template slot-scope="scope">
           <dict-tag :options="dict.type.salary_income" :value="scope.row.source"/>

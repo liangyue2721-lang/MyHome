@@ -77,20 +77,30 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table v-loading="loading" :data="gold_earningsList" @selection-change="handleSelectionChange">
+    <el-table v-loading="loading" :data="gold_earningsList" @selection-change="handleSelectionChange" :stripe="true" :border="false">
       <el-table-column type="selection" width="55" align="center"/>
 <!--      <el-table-column label="主键ID" align="center" prop="id"/>-->
       <el-table-column label="用户姓名" align="center">
         <template slot-scope="scope">
-          {{ getUserName(scope.row.userId) }}
+          <el-tag size="mini" type="info">{{ getUserName(scope.row.userId) }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column label="买入克数" align="center" prop="buyWeight"/>
-      <el-table-column label="买入价格" align="center" prop="buyPricePerGram"/>
-      <el-table-column label="实时基准价" align="center" prop="benchmarkPrice"/>
-      <el-table-column label="回收价" align="center" prop="recyclePrice"/>
-      <el-table-column label="所属机构" align="center" prop="institution"/>
-      <el-table-column label="收益金额" align="center" prop="profitAmount"/>
+      <el-table-column label="买入价格" align="right" prop="buyPricePerGram"/>
+      <el-table-column label="实时基准价" align="right" prop="benchmarkPrice"/>
+      <el-table-column label="回收价" align="right" prop="recyclePrice"/>
+      <el-table-column label="所属机构" align="center" prop="institution">
+        <template slot-scope="scope">
+          <dict-tag :options="dict.type.gold_institutions" :value="scope.row.institution"/>
+        </template>
+      </el-table-column>
+      <el-table-column label="收益金额" align="right" prop="profitAmount">
+        <template slot-scope="scope">
+          <span :style="{ color: scope.row.profitAmount >= 0 ? '#F56C6C' : '#67C23A', fontWeight: 'bold' }">
+            {{ scope.row.profitAmount }}
+          </span>
+        </template>
+      </el-table-column>
       <el-table-column label="收益日期" align="center" prop="profitDate" width="180">
         <template slot-scope="scope">
           <span>{{ parseTime(scope.row.profitDate, '{y}-{m}-{d}') }}</span>
