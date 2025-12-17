@@ -23,16 +23,16 @@
     <!-- Search Form -->
     <el-card shadow="never" class="mb20">
       <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch" label-width="68px">
-        <el-form-item label="用户" prop="userId">
-          <el-select v-model="queryParams.userId" placeholder="请选择用户" clearable filterable style="width: 200px">
-            <el-option
-              v-for="u in users"
-              :key="u.userId"
-              :label="u.nickName"
-              :value="u.userId"
-            />
-          </el-select>
-        </el-form-item>
+<!--        <el-form-item label="用户" prop="userId">-->
+<!--          <el-select v-model="queryParams.userId" placeholder="请选择用户" clearable filterable style="width: 200px">-->
+<!--            <el-option-->
+<!--              v-for="u in users"-->
+<!--              :key="u.userId"-->
+<!--              :label="u.nickName"-->
+<!--              :value="u.userId"-->
+<!--            />-->
+<!--          </el-select>-->
+<!--        </el-form-item>-->
         <el-form-item label="婚礼名称" prop="weddingName">
           <el-input
             v-model="queryParams.weddingName"
