@@ -42,8 +42,8 @@ public class ThreadPoolUtil {
      * 2. 股票利润更新线程池（独立，不影响核心业务线程）
      * ========================================================================= */
     private static final ExecutorService WATCH_STOCK_EXECUTOR = new ThreadPoolExecutor(
-            4,                         // 核心线程数
-            6,                         // 最大线程数
+            5,                         // 核心线程数
+            10,                         // 最大线程数
             120L, TimeUnit.SECONDS,    // 空闲线程存活时间更长
             new LinkedBlockingQueue<>(1000),         // 队列容量
             createNamedThreadFactory("watch-stock-pool"),
