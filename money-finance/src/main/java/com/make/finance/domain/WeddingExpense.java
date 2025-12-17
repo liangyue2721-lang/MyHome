@@ -80,6 +80,12 @@ public class WeddingExpense extends BaseEntity {
     private String payee;
 
     /**
+     * 付款人
+     */
+    @Excel(name = "付款人")
+    private String payer;
+
+    /**
      * 备注说明
      */
     @Excel(name = "备注说明")
@@ -182,6 +188,14 @@ public class WeddingExpense extends BaseEntity {
         return payee;
     }
 
+    public void setPayer(String payer) {
+        this.payer = payer;
+    }
+
+    public String getPayer() {
+        return payer;
+    }
+
     public void setNotes(String notes) {
         this.notes = notes;
     }
@@ -227,6 +241,7 @@ public class WeddingExpense extends BaseEntity {
                 .append("amount", getAmount())
                 .append("paymentDate", getPaymentDate())
                 .append("payee", getPayee())
+                .append("payer", getPayer())
                 .append("notes", getNotes())
                 .append("createdAt", getCreatedAt())
                 .append("updatedAt", getUpdatedAt())
