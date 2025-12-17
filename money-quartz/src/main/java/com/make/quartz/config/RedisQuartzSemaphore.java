@@ -1,12 +1,10 @@
 package com.make.quartz.config;
 
-import com.make.quartz.service.impl.IRealTimeStockServiceImpl;
 import org.quartz.impl.jdbcjobstore.Semaphore;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.sql.Connection;
@@ -40,11 +38,6 @@ public class RedisQuartzSemaphore implements Semaphore {
      * 日志记录器，用于记录服务执行过程中的日志信息
      */
     private static final Logger log = LoggerFactory.getLogger(RedisQuartzSemaphore.class);
-
-    /**
-     * Redisson 客户端，用于操作 Redis 分布式锁
-     */
-    private static RedissonClient redissonClient;
 
     /**
      * 无参构造函数，供Quartz通过反射创建实例时使用
@@ -93,7 +86,7 @@ public class RedisQuartzSemaphore implements Semaphore {
         while (retryCount <= maxRetries) {
             try {
                 // 使用 Redisson 的 watchdog 自动续期机制
-                // 等待最多 5 秒去获取锁
+                // 不指定 leaseTime，启用 Watchdog
                 boolean acquired = lock.tryLock(5, TimeUnit.SECONDS);
                 
                 if (acquired) {
