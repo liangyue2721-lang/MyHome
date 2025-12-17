@@ -19,6 +19,7 @@ import com.make.common.utils.ip.IpUtils;
 import com.make.common.util.TraceIdUtil;
 
 import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
 import java.util.Date;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -57,6 +58,23 @@ public class TaskDistributor {
         // Start the consumer thread
         consumerExecutor = Executors.newSingleThreadExecutor(r -> new Thread(r, "GlobalTaskConsumer"));
         consumerExecutor.submit(this::consumeTasks);
+    }
+
+    @PreDestroy
+    public void destroy() {
+        running = false;
+        if (consumerExecutor != null) {
+            consumerExecutor.shutdown();
+            try {
+                if (!consumerExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                    consumerExecutor.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                consumerExecutor.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
+        log.info("TaskDistributor stopped");
     }
 
     /**
