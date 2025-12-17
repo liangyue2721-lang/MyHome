@@ -32,30 +32,36 @@ public abstract class AbstractQuartzJob implements Job {
     private static ThreadLocal<Date> threadLocal = new ThreadLocal<>();
 
     /**
+     * 用于跟踪正在执行的任务
+     * key: taskId, value: 开始执行时间
+     */
+    private static final ConcurrentHashMap<String, Long> executingJobs = new ConcurrentHashMap<>();
+
+    /**
      * Redis 分布式锁工具，需要在 Spring 容器中注册
      */
     private final RedisQuartzSemaphore redisQuartzSemaphore;
-    
+
     /**
      * 调度管理器
      */
     private final SchedulerManager schedulerManager;
-    
+
     /**
      * 任务分发器
      */
     private final TaskDistributor taskDistributor;
-    
+
     /**
      * IP黑名单管理器
      */
     private final IpBlackListManager ipBlackListManager;
-    
+
     /**
      * 任务监控服务
      */
     private final TaskMonitoringService taskMonitoringService;
-    
+
     public AbstractQuartzJob() {
         // 通过 SpringUtils 获取已注册的 Bean
         this.redisQuartzSemaphore = SpringUtils.getBean(RedisQuartzSemaphore.class);
@@ -70,7 +76,7 @@ public abstract class AbstractQuartzJob implements Job {
         // 生成链路追踪ID并放入MDC
         String traceId = TraceIdUtil.generateTraceId();
         TraceIdUtil.putTraceId(traceId);
-        
+
         SysJob sysJob = new SysJob();
         BeanUtils.copyBeanProp(sysJob, context.getMergedJobDataMap().get(ScheduleConstants.TASK_PROPERTIES));
 
@@ -81,10 +87,10 @@ public abstract class AbstractQuartzJob implements Job {
 
         try {
             before(context, sysJob);
-            
+
             // 检查当前节点IP是否在黑名单中
             if (ipBlackListManager.isCurrentNodeIpBlacklisted()) {
-                log.info("⏭️ 当前节点IP {} 在黑名单中，跳过任务【{}】执行", 
+                log.info("⏭️ 当前节点IP {} 在黑名单中，跳过任务【{}】执行",
                         ipBlackListManager.getCurrentNodeIp(), jobKey);
                 return;
             }
@@ -94,7 +100,7 @@ public abstract class AbstractQuartzJob implements Job {
             if (sysJob.getJobId() != null) {
                 isMasterNode = schedulerManager.getJobIsMasterNode(sysJob.getJobId());
             }
-            
+
             if ("1".equals(isMasterNode)) {
                 if (!schedulerManager.isMasterNode()) {
                     log.info("⏭️ 任务【{}】需要主节点执行，当前节点不是主节点", jobKey);
@@ -140,16 +146,16 @@ public abstract class AbstractQuartzJob implements Job {
             if (locked && lock.isHeldByCurrentThread()) {
                 lock.unlock();
             }
-            
+
             if (locked) { // 只有真正执行完成才记录结束（分发的任务由消费者记录）
                 taskMonitoringService.recordTaskComplete(jobKey);
             }
-            
+
             // 清除链路追踪ID
             TraceIdUtil.clearTraceId();
         }
     }
-    
+
     /**
      * 记录已分发的任务到监控系统
      */
@@ -164,7 +170,7 @@ public abstract class AbstractQuartzJob implements Job {
             sysJobLog.setHostIp(IpUtils.getHostIp());
             sysJobLog.setStatus(Constants.SUCCESS);
             sysJobLog.setJobMessage("任务已分发到全局队列");
-            
+
             SpringUtils.getBean(ISysJobLogService.class).addJobLog(sysJobLog);
         } catch (Exception e) {
             log.error("记录分发的任务失败: {}", sysJob.getJobName(), e);
@@ -215,8 +221,8 @@ public abstract class AbstractQuartzJob implements Job {
     /**
      * 线程池执行器
      *
-     * @param context  工作执行上下文对象
-     * @param sysJob 系统计划任务
+     * @param context 工作执行上下文对象
+     * @param sysJob  系统计划任务
      * @throws Exception 执行过程中的异常
      */
     protected abstract void doExecute(JobExecutionContext context, SysJob sysJob) throws Exception;
