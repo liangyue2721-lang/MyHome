@@ -49,34 +49,10 @@
             @keyup.enter.native="handleQuery"
           />
         </el-form-item>
-        <el-form-item label="婚礼日期" prop="weddingDate">
-          <el-date-picker clearable
-                          v-model="queryParams.weddingDate"
-                          type="date"
-                          value-format="yyyy-MM-dd"
-                          placeholder="请选择婚礼日期">
-          </el-date-picker>
-        </el-form-item>
-        <el-form-item label="举办城市" prop="weddingCity">
-          <el-input
-            v-model="queryParams.weddingCity"
-            placeholder="请输入婚礼举办城市"
-            clearable
-            @keyup.enter.native="handleQuery"
-          />
-        </el-form-item>
         <el-form-item label="支出分类" prop="expenseCategory">
           <el-input
             v-model="queryParams.expenseCategory"
             placeholder="请输入支出分类"
-            clearable
-            @keyup.enter.native="handleQuery"
-          />
-        </el-form-item>
-        <el-form-item label="收款方" prop="payee">
-          <el-input
-            v-model="queryParams.payee"
-            placeholder="请输入收款方"
             clearable
             @keyup.enter.native="handleQuery"
           />
