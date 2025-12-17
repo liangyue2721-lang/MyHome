@@ -121,7 +121,8 @@ public class TaskDistributor {
 
             String json = JSON.toJSONString(sysJob);
             redisTemplate.opsForList().leftPush(GLOBAL_TASK_QUEUE, json);
-            log.info("任务 {} 已推送到全局队列, TraceId: {}", sysJob.getJobName(), sysJob.getTraceId());
+            log.info("任务 {} ({}) 已推送到全局队列, TraceId: {}, Target: {}",
+                    sysJob.getJobName(), sysJob.getJobGroup(), sysJob.getTraceId(), sysJob.getInvokeTarget());
         } catch (Exception e) {
             log.error("任务分发失败: {}", sysJob.getJobName(), e);
         }
@@ -144,8 +145,11 @@ public class TaskDistributor {
                     continue;
                 }
 
+                log.info("收到全局任务: {} ({})", sysJob.getJobName(), sysJob.getJobGroup());
+
                 // 检查IP黑名单
                 if (ipBlackListManager.isCurrentNodeIpBlacklisted()) {
+                     log.warn("当前节点IP在黑名单中，任务 {} 将被放回队列", sysJob.getJobName());
                      // 如果当前节点被拉黑，将任务放回队列（右边进，保证顺序或者重新调度）
                      redisTemplate.opsForList().leftPush(GLOBAL_TASK_QUEUE, json);
                      TimeUnit.SECONDS.sleep(5);
@@ -190,9 +194,11 @@ public class TaskDistributor {
             try {
                 JobInvokeUtil.invokeMethod(sysJob);
                 long runMs = System.currentTimeMillis() - startTime;
+                log.info("任务 {} 执行完成, 耗时: {}ms", jobKey, runMs);
                 recordLog(sysJob, null, runMs);
             } catch (Exception e) {
                 long runMs = System.currentTimeMillis() - startTime;
+                log.error("任务 {} 执行失败, 耗时: {}ms", jobKey, runMs, e);
                 recordLog(sysJob, e, runMs);
             }
 
