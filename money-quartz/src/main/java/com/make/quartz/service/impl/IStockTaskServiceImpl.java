@@ -8,10 +8,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * 股票K线任务入口服务实现类
@@ -70,26 +68,53 @@ public class IStockTaskServiceImpl implements IStockTaskService {
     @Override
     public void runStockKlineTask(int nodeId) {
         long start = System.currentTimeMillis();
+        String traceId = UUID.randomUUID().toString().replace("-", "");
 
-        log.info("=====【股票K线任务开始】NodeId={} =====", nodeId);
+        log.info("=====【股票K线任务开始】NodeId={} TraceId={} =====", nodeId, traceId);
 
-        log.info("[WatchProcessor-Start], 当前线程={}", Thread.currentThread().getName());
-        stockWatchProcessor.processTask();
-        stockETFrocessor.processTask();
-        log.info("[WatchProcessor-End]");
+        // 并行执行三个子任务
+        // 1. 自选股实时数据更新
+        CompletableFuture<Void> watchTask = CompletableFuture.runAsync(() -> {
+            try {
+                log.info("[WatchProcessor-Start] TraceId={}", traceId);
+                stockWatchProcessor.processTask(traceId);
+                log.info("[WatchProcessor-End] TraceId={}", traceId);
+            } catch (Exception e) {
+                log.error("[WatchProcessor-Error] TraceId={} err={}", traceId, e.getMessage(), e);
+            }
+        }, ThreadPoolUtil.getWatchStockExecutor());
 
-        //3️⃣ 执行历史K线更新任务（同步执行）
+        // 2. ETF 实时数据更新
+        CompletableFuture<Void> etfTask = CompletableFuture.runAsync(() -> {
+            try {
+                log.info("[ETFProcessor-Start] TraceId={}", traceId);
+                stockETFrocessor.processTask(traceId);
+                log.info("[ETFProcessor-End] TraceId={}", traceId);
+            } catch (Exception e) {
+                log.error("[ETFProcessor-Error] TraceId={} err={}", traceId, e.getMessage(), e);
+            }
+        }, ThreadPoolUtil.getWatchStockExecutor());
+
+        // 3. 历史K线更新任务
+        CompletableFuture<Void> klineTask = CompletableFuture.runAsync(() -> {
+            try {
+                log.info("[TaskExecutor-Start] NodeId={} TraceId={}", nodeId, traceId);
+                taskExecutor.executeAll(nodeId, traceId);
+                log.info("[TaskExecutor-End] NodeId={} TraceId={}", nodeId, traceId);
+            } catch (Exception e) {
+                log.error("[TaskExecutor-Error] NodeId={} TraceId={} err={}", nodeId, traceId, e.getMessage(), e);
+            }
+        }, ThreadPoolUtil.getWatchStockExecutor());
+
+        // 等待所有任务完成
         try {
-            log.info("[TaskExecutor-Start]  NodeId={}", nodeId);
-            taskExecutor.executeAll(nodeId);
-            log.info("[TaskExecutor-End] NodeId={}", nodeId);
-        } catch (
-                Exception e) {
-            log.error("[TaskExecutor-Error] NodeId={} , err={}", nodeId, e.getMessage(), e);
+            CompletableFuture.allOf(watchTask, etfTask, klineTask).join();
+        } catch (Exception e) {
+            log.error("=====【股票K线任务执行异常】 NodeId={} TraceId={} err={}", nodeId, traceId, e.getMessage(), e);
         }
 
         long cost = System.currentTimeMillis() - start;
-        log.info("=====【股票K线任务结束】 NodeId={} , 总耗时={} ms =====",
-                nodeId, cost);
+        log.info("=====【股票K线任务结束】 NodeId={} TraceId={} , 总耗时={} ms =====",
+                nodeId, traceId, cost);
     }
 }

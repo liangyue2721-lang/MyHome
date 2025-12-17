@@ -1,5 +1,6 @@
 package com.make.quartz.service.impl;
 
+import com.google.common.collect.Lists;
 import com.make.common.utils.ThreadPoolUtil;
 import com.make.stock.domain.StockKline;
 import com.make.stock.domain.StockKlineTask;
@@ -33,77 +34,72 @@ public class StockKlineTaskExecutor {
 
     private static final DateTimeFormatter DF = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
-    public void executeAll(int nodeId) {
+    public void executeAll(int nodeId, String traceId) {
         long globalStart = System.currentTimeMillis();
 
         List<StockKlineTask> taskList = stockKlineTaskService.getStockAllTask(nodeId);
         if (taskList == null || taskList.isEmpty()) {
-            log.info("❌ 没有任务（nodeId={})", nodeId);
+            log.info("❌ [Kline] 没有任务 TraceId={} NodeId={}", traceId, nodeId);
             return;
         }
 
+        log.info("🏁 [Kline] 任务开始 TraceId={} NodeId={} 任务数={}", traceId, nodeId, taskList.size());
+
+        // 分批处理，每批 20 个
+        List<List<StockKlineTask>> partitions = Lists.partition(taskList, 20);
         ExecutorService executor = ThreadPoolUtil.getWatchStockExecutor();
-        List<Future<ProcessResult>> futures = new ArrayList<>();
 
-        for (StockKlineTask task : taskList) {
-            futures.add(executor.submit(() -> stockKlineProcessor.processTaskData(task, DF)));
-        }
+        int successCount = 0;
+        int failCount = 0;
 
-        // 聚合
-        List<StockKline> globalInsert = new ArrayList<>();
-        List<StockKline> globalUpdate = new ArrayList<>();
-        List<Long> successTasks = new ArrayList<>();
-        int failedTasks = 0;
+        for (List<StockKlineTask> batch : partitions) {
+            List<Future<ProcessResult>> futures = new ArrayList<>();
+            // 提交批次任务
+            for (StockKlineTask task : batch) {
+                futures.add(executor.submit(() -> stockKlineProcessor.processTaskData(task, DF)));
+            }
 
-        for (int i = 0; i < futures.size(); i++) {
-            Future<ProcessResult> f = futures.get(i);
-            StockKlineTask task = taskList.get(i);
+            // 收集批次结果
+            List<StockKline> batchInsert = new ArrayList<>();
+            List<StockKline> batchUpdate = new ArrayList<>();
+            List<Long> batchSuccessIds = new ArrayList<>();
 
-            try {
-                ProcessResult r = f.get(30, TimeUnit.MINUTES);
-
-                if (r.success) {
-                    globalInsert.addAll(r.insertList);
-                    globalUpdate.addAll(r.updateList);
-                    successTasks.add(task.getId());
-                } else {
-                    failedTasks++;
+            for (int i = 0; i < futures.size(); i++) {
+                try {
+                    ProcessResult r = futures.get(i).get(5, TimeUnit.MINUTES); // 单个任务超时
+                    if (r.success) {
+                        batchInsert.addAll(r.insertList);
+                        batchUpdate.addAll(r.updateList);
+                        batchSuccessIds.add(batch.get(i).getId());
+                        successCount++;
+                    } else {
+                        failCount++;
+                    }
+                } catch (Exception e) {
+                    failCount++;
+                    log.error("❌ [Kline] 单任务异常 TraceId={} Code={} err={}",
+                            traceId, batch.get(i).getStockCode(), e.getMessage());
                 }
+            }
 
-            } catch (Exception e) {
-                failedTasks++;
-                log.error("❌ 单任务执行异常 {}", task.getStockCode(), e);
+            // 批次落库
+            if (!batchInsert.isEmpty()) {
+                repositoryService.insertOrUpdateBatch(batchInsert);
+            }
+            if (!batchUpdate.isEmpty()) {
+                repositoryService.batchUpdateByStockCodeAndTradeDate(batchUpdate);
+                // 更新 WatchStock
+                for (StockKline k : batchUpdate) {
+                    watchStockUpdater.processWatchStock(k);
+                }
+            }
+            if (!batchSuccessIds.isEmpty()) {
+                stockKlineTaskService.batchFinishTask(batchSuccessIds);
             }
         }
 
-        // ---------------------
-        // 一次性落库（insert + update）
-        // ---------------------
-
-        if (!globalInsert.isEmpty())
-            repositoryService.insertOrUpdateBatch(globalInsert);
-
-        if (!globalUpdate.isEmpty())
-            repositoryService.batchUpdateByStockCodeAndTradeDate(globalUpdate);
-
-        // ---------------------
-        // watchStock（只针对更新记录）
-        // ---------------------
-
-        for (StockKline k : globalUpdate) {
-            watchStockUpdater.processWatchStock(k);
-        }
-
-        // ---------------------
-        // 批量更新任务状态
-        // ---------------------
-
-        if (!successTasks.isEmpty()) {
-            stockKlineTaskService.batchFinishTask(successTasks);
-        }
-
         long cost = System.currentTimeMillis() - globalStart;
-        log.info("🏁【节点完成】任务={} 成功={} 失败={} 耗时={} ms",
-                taskList.size(), successTasks.size(), failedTasks, cost);
+        log.info("🏁 [Kline] 任务结束 TraceId={} NodeId={} 成功={} 失败={} 耗时={} ms",
+                traceId, nodeId, successCount, failCount, cost);
     }
 }
