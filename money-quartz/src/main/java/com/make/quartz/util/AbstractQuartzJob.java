@@ -33,7 +33,8 @@ public abstract class AbstractQuartzJob implements Job {
 
     /**
      * 用于跟踪正在执行的任务
-     * key: taskId, value: 开始执行时间
+     * key: jobKey, value: 执行开始时间
+     * 恢复此Map以保持isJobExecuting的JVM本地语义，解决编译错误
      */
     private static final ConcurrentHashMap<String, Long> executingJobs = new ConcurrentHashMap<>();
 
@@ -116,6 +117,9 @@ public abstract class AbstractQuartzJob implements Job {
                 return;
             }
 
+            // 记录到本地执行Map，恢复本地执行状态跟踪
+            executingJobs.put(jobKey, System.currentTimeMillis());
+
             // 获取锁成功，检查是否应该在本地执行
             if (!taskDistributor.shouldExecuteLocally(jobKey, 0.8)) {
                 // 负载过高，分发任务
@@ -128,6 +132,8 @@ public abstract class AbstractQuartzJob implements Job {
                 // 必须释放锁，以便消费者能获取锁并执行
                 lock.unlock();
                 locked = false;
+                // 分发后也视为本地执行结束
+                executingJobs.remove(jobKey);
 
                 recordDispatchedTask(sysJob);
                 return;
@@ -142,6 +148,9 @@ public abstract class AbstractQuartzJob implements Job {
             log.error("❌ 任务执行异常 - {}", jobKey, e);
             after(context, sysJob, e);
         } finally {
+            // 从执行中任务列表中移除
+            executingJobs.remove(jobKey);
+
             // 释放分布式锁
             if (locked && lock.isHeldByCurrentThread()) {
                 lock.unlock();
@@ -154,6 +163,16 @@ public abstract class AbstractQuartzJob implements Job {
             // 清除链路追踪ID
             TraceIdUtil.clearTraceId();
         }
+    }
+
+    /**
+     * 检查任务是否正在执行（JVM本地检查）
+     * 恢复此方法以解决RedisMessageQueue的编译依赖
+     * @param jobKey 任务键
+     * @return true-正在执行，false-未在执行
+     */
+    public static boolean isJobExecuting(String jobKey) {
+        return executingJobs.containsKey(jobKey);
     }
 
     /**
@@ -221,8 +240,8 @@ public abstract class AbstractQuartzJob implements Job {
     /**
      * 线程池执行器
      *
-     * @param context 工作执行上下文对象
-     * @param sysJob  系统计划任务
+     * @param context  工作执行上下文对象
+     * @param sysJob 系统计划任务
      * @throws Exception 执行过程中的异常
      */
     protected abstract void doExecute(JobExecutionContext context, SysJob sysJob) throws Exception;

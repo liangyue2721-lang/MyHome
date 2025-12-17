@@ -121,9 +121,9 @@ public abstract class AbstractScheduledTask implements Job {
                 return;
             }
             
-            // 尝试获取锁：等待 0 秒，锁定 60 秒，超过 60s 自动释放
+            // 尝试获取锁：开启看门狗（不设置leaseTime），等待0秒（立即返回）
             log.info("🔐 尝试获取任务分布式锁: {}", lockKey);
-            locked = lock.tryLock(0, 60, TimeUnit.SECONDS);
+            locked = lock.tryLock(0, TimeUnit.SECONDS);
             if (!locked) {
                 log.warn("⏭️ 跳过任务【{}】，未获取到分布式锁，可能其他节点正在执行该任务", jobKey);
                 // 记录到监控系统，标记为跳过执行
@@ -140,14 +140,6 @@ public abstract class AbstractScheduledTask implements Job {
                 return;
             }
             
-            // 检查任务是否已分发但尚未完成
-            if (taskDistributor.isTaskDistributed(jobKey)) {
-                log.warn("⏭️ 任务【{}】已分发但尚未完成，跳过重复执行", jobKey);
-                // 记录到监控系统，标记为跳过执行
-                recordSkippedTask(sysJob, "任务已分发但尚未完成");
-                return;
-            }
-            
             // 标记任务为正在执行
             executingJobs.put(jobKey, System.currentTimeMillis());
             log.info("🔖 任务【{}】标记为正在执行", jobKey);
@@ -157,8 +149,13 @@ public abstract class AbstractScheduledTask implements Job {
             log.info("⚖️ 检查任务 {} 是否应在当前节点执行", jobKey);
             if (!taskDistributor.shouldExecuteLocally(jobKey, 0.8)) {
                 log.info("🔄 任务【{}】将分发到其他节点执行，当前节点跳过", jobKey);
+                // 分发任务
+                taskDistributor.distributeTask(sysJob);
+
                 // 记录到监控系统，标记为已分发
                 recordDispatchedTask(sysJob);
+
+                // 分发后不再执行后续逻辑，finally块会处理锁释放
                 return;
             }
             log.info("✅ 任务【{}】将在当前节点执行", jobKey);
@@ -184,9 +181,6 @@ public abstract class AbstractScheduledTask implements Job {
                 lock.unlock();
                 log.info("🔓 释放Quartz分布式锁: {}", lockKey);
             }
-            // 释放任务锁
-            taskDistributor.releaseTaskLock(jobKey);
-            log.info("🧹 清理任务锁: {}", lockKey);
             
             // 记录任务执行完成
             taskMonitoringService.recordTaskComplete(jobKey);

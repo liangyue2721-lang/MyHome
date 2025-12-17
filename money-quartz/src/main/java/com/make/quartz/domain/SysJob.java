@@ -58,9 +58,6 @@ public class SysJob extends BaseEntity
     @Excel(name = "主节点执行", readConverterExp = "0=否,1=是")
     private String isMasterNode = "0"; // 默认值
 
-    /** 链路追踪ID */
-    private String traceId; // 默认值
-
     public Long getJobId()
     {
         return jobId;
@@ -125,14 +122,6 @@ public class SysJob extends BaseEntity
             return CronUtils.getNextExecution(cronExpression);
         }
         return null;
-    }
-
-    public String getTraceId() {
-        return traceId;
-    }
-
-    public void setTraceId(String traceId) {
-        this.traceId = traceId;
     }
 
     public String getMisfirePolicy()
