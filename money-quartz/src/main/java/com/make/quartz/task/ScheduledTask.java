@@ -71,32 +71,35 @@ public class ScheduledTask {
 
     /**
      * 定时任务：每 5 秒执行一次 实时股票价格更新
+     * <p>
+     * 注释原因：任务逻辑已迁移至 IStockTaskServiceImpl.runStockKlineTask，避免重复执行。
+     * 注释时间：2023-12-17
      */
-    @Scheduled(cron = "*/5 * * * * ?")
-    public void updateStockPriceTaskRunning() {
-        String traceId = TraceIdUtil.generateTraceId();
-        TraceIdUtil.putTraceId(traceId);
-
-        try {
-            log.info("[{}] 开始执行 实时股票价格 更新任务 nodeId={}", traceId, nodeId);
-
-            if (!stockPriceUpdateRunning.compareAndSet(false, true)) {
-                log.warn("[{}] 上一次股票价格更新未结束，跳过执行", traceId);
-                return;
-            }
-
-            long start = System.currentTimeMillis();
-            realTimeService.updateStockPriceTaskRunning(nodeId);
-            long end = System.currentTimeMillis();
-
-            log.info("[{}] 实时股票价格 更新完成, 耗时 {} ms", traceId, (end - start));
-        } catch (Exception e) {
-            log.error("[{}] 实时股票价格 更新任务异常", traceId, e);
-        } finally {
-            stockPriceUpdateRunning.set(false);
-            TraceIdUtil.clearTraceId();
-        }
-    }
+//    @Scheduled(cron = "*/5 * * * * ?")
+//    public void updateStockPriceTaskRunning() {
+//        String traceId = TraceIdUtil.generateTraceId();
+//        TraceIdUtil.putTraceId(traceId);
+//
+//        try {
+//            log.info("[{}] 开始执行 实时股票价格 更新任务 nodeId={}", traceId, nodeId);
+//
+//            if (!stockPriceUpdateRunning.compareAndSet(false, true)) {
+//                log.warn("[{}] 上一次股票价格更新未结束，跳过执行", traceId);
+//                return;
+//            }
+//
+//            long start = System.currentTimeMillis();
+//            realTimeService.updateStockPriceTaskRunning(nodeId);
+//            long end = System.currentTimeMillis();
+//
+//            log.info("[{}] 实时股票价格 更新完成, 耗时 {} ms", traceId, (end - start));
+//        } catch (Exception e) {
+//            log.error("[{}] 实时股票价格 更新任务异常", traceId, e);
+//        } finally {
+//            stockPriceUpdateRunning.set(false);
+//            TraceIdUtil.clearTraceId();
+//        }
+//    }
 
     /**
      * 定时任务：每 10 分钟记录线程池状态
