@@ -223,8 +223,15 @@
         </el-row>
         <el-row>
           <el-col :span="12">
-             <el-form-item label="付款人" prop="payer">
-              <el-input v-model="form.payer" placeholder="请输入付款人"/>
+            <el-form-item label="付款人" prop="payer">
+              <el-select v-model="form.payer" placeholder="请选择付款人" filterable style="width: 100%">
+                <el-option
+                  v-for="u in users"
+                  :key="u.userId"
+                  :label="u.nickName"
+                  :value="u.nickName"
+                />
+              </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12">
