@@ -23,6 +23,16 @@
     <!-- Search Form -->
     <el-card shadow="never" class="mb20">
       <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch" label-width="68px">
+        <el-form-item label="用户" prop="userId">
+          <el-select v-model="queryParams.userId" placeholder="请选择用户" clearable filterable style="width: 200px">
+            <el-option
+              v-for="u in users"
+              :key="u.userId"
+              :label="u.nickName"
+              :value="u.userId"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="婚礼名称" prop="weddingName">
           <el-input
             v-model="queryParams.weddingName"
@@ -298,6 +308,8 @@ export default {
       total: 0,
       // 婚礼支出记录表格数据
       weddingExpenseList: [],
+      // 用户列表
+      users: [],
       // 弹出层标题
       title: "",
       // 是否显示弹出层
@@ -359,19 +371,17 @@ export default {
       try {
         const response = await listUser({pageSize: 1000});
         const payload = response.data || response;
-        const rawUsers = Array.isArray(payload.rows) ? payload.rows : Array.isArray(payload) ? payload : [];
-        const userList = rawUsers.map(u => ({
-          id: u.userId,
-          name: u.userName || u.nickName || `用户${u.userId}`
-        }));
+        this.users = Array.isArray(payload.rows) ? payload.rows : Array.isArray(payload) ? payload : [];
 
-        if (userList.length) {
-          const savedUsername = this.$cookies.get('username');
-          const matchedUser = userList.find(u => u.name === savedUsername);
-          if (matchedUser) {
-            this.queryParams.userId = matchedUser.id;
-            this.form.userId = matchedUser.id;
-          }
+        // 尝试匹配当前登录用户
+        const savedUsername = this.$cookies.get('username');
+        if (savedUsername && this.users.length > 0) {
+           // 注意：users里的结构通常是 { userId, userName, nickName }
+           // 这里我们尝试匹配 userName 或 nickName
+           const matchedUser = this.users.find(u => u.userName === savedUsername || u.nickName === savedUsername);
+           if (matchedUser) {
+             this.queryParams.userId = matchedUser.userId;
+           }
         }
       } catch (err) {
         console.error('用户列表加载失败:', err);
