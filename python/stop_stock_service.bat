@@ -1,22 +1,22 @@
 @echo off
+chcp 65001 >nul
 setlocal
 
-REM ==========================================================
-REM  Stock Service 停止脚本
-REM  通过窗口标题终止后台 uvicorn 进程
-REM ==========================================================
+set PORT=8000
+set FOUND=0
 
-echo [INFO] Stopping Stock Service...
+echo [INFO] Stopping Stock Service on port %PORT% ...
 
-REM 终止标题为 stock_service 的 python 进程
-taskkill /F ^
-    /FI "IMAGENAME eq python.exe" ^
-    /FI "WINDOWTITLE eq stock_service"
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr :%PORT% ^| findstr LISTENING') do (
+    echo [INFO] Found process PID=%%p
+    taskkill /F /PID %%p
+    set FOUND=1
+)
 
-if %ERRORLEVEL% EQU 0 (
-    echo [INFO] Stock Service stopped successfully.
+if "%FOUND%"=="0" (
+    echo [WARN] No process found listening on port %PORT%.
 ) else (
-    echo [WARN] No running Stock Service found.
+    echo [INFO] Stock Service stopped successfully.
 )
 
 endlocal
