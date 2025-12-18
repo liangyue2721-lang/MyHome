@@ -10,12 +10,14 @@ Every execution attempt generates a `fireInstanceId`. You can use this ID to tra
 
 **Example Lifecycle:**
 ```text
-[TASK_MONITOR] [TRIGGER] Job triggered. Key: DEFAULT.MyJob, InstanceId: 12345
+[TASK_MONITOR] [TRIGGER] Job triggered. Key: DEFAULT.MyJob, InstanceId: 12345, InvokeTarget: supperTask.refreshStockPrice()
 [TASK_MONITOR] [LOCK_ACQUIRED] Key: DEFAULT.MyJob, InstanceId: 12345, Node: 192.168.1.10
-[TASK_MONITOR] [EXECUTE_START] Starting local execution...
+[TASK_MONITOR] [EXECUTE_START] Starting local execution... InvokeTarget: supperTask.refreshStockPrice()
 [TASK_MONITOR] [EXECUTE_END] Local execution finished... Duration: 500ms
 [TASK_MONITOR] [LOCK_RELEASED] Key: DEFAULT.MyJob...
 ```
+
+**Tip:** You can now grep for the method name (e.g., `runStockKlineTask` or `refreshStockPrice`) to find the relevant job execution, even if you don't know the exact Job Key.
 
 ## 2. Diagnose "Lock Skipped" (Why didn't it run?)
 

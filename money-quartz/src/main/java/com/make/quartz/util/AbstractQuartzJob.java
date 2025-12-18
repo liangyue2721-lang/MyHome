@@ -89,8 +89,8 @@ public abstract class AbstractQuartzJob implements Job {
 
         String jobKey = sysJob.getJobGroup() + "." + sysJob.getJobName();
 
-        log.info("[TASK_MONITOR] [TRIGGER] Job triggered. Key: {}, TraceId: {}, InstanceId: {}",
-                jobKey, traceId, fireInstanceId);
+        log.info("[TASK_MONITOR] [TRIGGER] Job triggered. Key: {}, TraceId: {}, InstanceId: {}, InvokeTarget: {}",
+                jobKey, traceId, fireInstanceId, sysJob.getInvokeTarget());
 
         String lockKey = "quartz:lock:" + jobKey;
         RLock lock = redisQuartzSemaphore.getLock(lockKey);
@@ -166,7 +166,8 @@ public abstract class AbstractQuartzJob implements Job {
             }
 
             // 真正执行子类逻辑
-            log.info("[TASK_MONITOR] [EXECUTE_START] Starting local execution. Key: {}, InstanceId: {}", jobKey, fireInstanceId);
+            log.info("[TASK_MONITOR] [EXECUTE_START] Starting local execution. Key: {}, InstanceId: {}, InvokeTarget: {}",
+                    jobKey, fireInstanceId, sysJob.getInvokeTarget());
             taskMonitoringService.recordTaskStart(jobKey);
 
             long start = System.currentTimeMillis();
