@@ -8,7 +8,12 @@ import com.make.stock.domain.dto.StockRealtimeInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestTemplate;
 
 import javax.annotation.PostConstruct;
 import java.io.BufferedReader;
@@ -19,7 +24,9 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -55,9 +62,17 @@ public class KlineDataFetcher {
     private String pythonScriptPathConfig;
 
     /**
+     * Python 服务 URL
+     */
+    @Value("${python.service.url:http://localhost:8000}")
+    private String pythonServiceUrlConfig;
+
+    /**
      * 静态变量，用于静态方法访问配置路径
      */
     private static String pythonScriptPath;
+    private static String pythonServiceUrl;
+    private static RestTemplate restTemplate;
 
     /**
      * 日期格式化器（yyyyMMdd）
@@ -70,7 +85,10 @@ public class KlineDataFetcher {
     @PostConstruct
     public void init() {
         pythonScriptPath = pythonScriptPathConfig;
+        pythonServiceUrl = pythonServiceUrlConfig;
+        restTemplate = new RestTemplate();
         logger.info("KlineDataFetcher initialized with python script path: {}", pythonScriptPath);
+        logger.info("Python Service URL: {}", pythonServiceUrl);
     }
 
     // ========================== 主方法接口 ==========================
@@ -161,16 +179,46 @@ public class KlineDataFetcher {
     }
 
     /**
-     * 获取沪深股市 K 线数据（使用 trends2_playwright_logger.py 脚本）
+     * 获取沪深股市 K 线数据（使用 HTTP 调用 Python Service）
      *
      * @param secid  证券代码（如：601138）
      * @param market 市场代码（1 表示沪市，0 表示深市）
      * @return K 线数据列表
      */
     public static List<KlineData> fetchKlineDataFiveDay(String secid, String market) {
-        String script = buildScriptPath("trends2_playwright_logger.py");
-        logger.info("Fetching K-line data for stock: {}, market: {}, from: {} to: {}", secid, market);
-        return runPythonScript(script, market + "." + secid, "5");
+        String fullSecid = market + "." + secid;
+        logger.info("Fetching K-line data via Service for stock: {}", fullSecid);
+
+        try {
+            if (restTemplate == null) {
+                // Fallback if init didn't run (e.g. static context test)
+                restTemplate = new RestTemplate();
+                pythonServiceUrl = "http://localhost:8000";
+            }
+
+            String url = pythonServiceUrl + "/stock/kline";
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("secid", fullSecid);
+            requestBody.put("ndays", 5);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+
+            ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
+
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return JSON.parseObject(response.getBody(), new TypeReference<List<KlineData>>() {});
+            } else {
+                logger.error("Service returned status: {}", response.getStatusCode());
+                return new ArrayList<>();
+            }
+        } catch (Exception e) {
+            logger.error("Failed to fetch kline data via service, falling back to script: {}", e.getMessage());
+            // Fallback to script if service fails
+            String script = buildScriptPath("trends2_playwright_logger.py");
+            return runPythonScript(script, market + "." + secid, "5");
+        }
     }
 
     /**
@@ -395,30 +443,13 @@ public class KlineDataFetcher {
 
     public static void main(String[] args) {
         try {
-            List<KlineData> data = fetchTodayUSKlineData("NVDA", "105");
-            List<KlineData> data2 = fetchUSKlineData("NVDA", "105", "20251101", "20251105");
-            List<KlineData> klineData = fetchTodayKlineData("600519", "1");
-            List<KlineData> klineData2 = fetchKlineData("601138", "1", "20251101", "20251105");
+            // Test Service calls
+            EtfRealtimeInfo etfInfo = fetchEtfRealtimeInfo("https://push2.eastmoney.com/api/qt/stock/get?ut=fa5fd1943c7b386f172d6893dbfba10b&fltt=2&invt=2&fields=f57,f58,f43,f60,f46,f44,f45,f47,f48,f52,f20,f152&secid=1.510050");
+            System.out.println("Service Test - ETF: " + (etfInfo != null ? etfInfo.getCompanyName() : "null"));
+
             List<KlineData> klineData3 = fetchKlineDataFiveDay("601138", "1");
+            System.out.println("Service Test - Kline: " + (klineData3 != null ? klineData3.size() : "null"));
 
-            if (data != null) {
-                System.out.println("获取到美股今日数据：" + data);
-            } else {
-                System.out.println("未获取到美股今日数据。");
-            }
-
-            // 检查其他数据获取结果
-            if (data2 != null && !data2.isEmpty()) {
-                System.out.println("获取到美股历史数据，数量：" + data2.size());
-            }
-
-            if (klineData != null && !klineData.isEmpty()) {
-                System.out.println("获取到A股今日数据，数量：" + klineData.size());
-            }
-
-            if (klineData2 != null && !klineData2.isEmpty()) {
-                System.out.println("获取到A股历史数据，数量：" + klineData2.size());
-            }
 
         } catch (Exception e) {
             System.err.println("数据获取过程中发生异常：" + e.getMessage());
@@ -492,108 +523,64 @@ public class KlineDataFetcher {
     }
 
     /**
-     * 获取 ETF 实时行情信息
-     *
-     * <p>该方法通过调用 Python 脚本 <code>etf_realtime_fetcher.py</code> 从东方财富网获取 ETF 的实时行情数据。</p>
-     *
-     * <p>使用的是东方财富 push2 接口（例如：
-     * <pre>
-     * https://push2.eastmoney.com/api/qt/stock/get?ut=fa5fd1943c7b386f172d6893dbfba10b
-     *     &invt=2&fltt=1&fields=f57,f58,f43,f60,f46,f44,f45,f47,f48,f52,f20,f152
-     *     &secid=1.510050
-     * </pre>
-     * 其中 <code>secid</code> 表示市场标识和证券代码组合（1 = 沪市, 0 = 深市）。</p>
-     *
-     * <h3>返回字段映射说明</h3>
-     * <ul>
-     *   <li>{@code f57} → ETF 代码</li>
-     *   <li>{@code f58} → ETF 名称</li>
-     *   <li>{@code f43} → 最新价格（东方财富以整数形式返回，需要 /100 得到真实价格）</li>
-     *   <li>{@code f60} → 昨日收盘价（*100 需 /100）</li>
-     *   <li>{@code f46} → 今日开盘价（*100 需 /100）</li>
-     *   <li>{@code f44} → 今日最高价（*100 需 /100）</li>
-     *   <li>{@code f45} → 今日最低价（*100 需 /100）</li>
-     *   <li>{@code f47} → 成交量（单位：手）</li>
-     *   <li>{@code f48} → 成交额（单位：元）</li>
-     *   <li>{@code f52} → 量比</li>
-     *   <li>{@code f20} → 委比</li>
-     *   <li>{@code f152} → 主力资金净流入</li>
-     * </ul>
-     *
-     * <p>以上字段来源于东方财富 push2 接口返回的 JSON 数据中的 <code>data</code> 节点，
-     * 解析并标准化后构建成 {@link EtfRealtimeInfo} 对象。</p>
-     *
-     * <h3>执行流程</h3>
-     * <ol>
-     *   <li>构造 Python 脚本完整路径：使用 {@code buildScriptPath("etf_realtime_fetcher.py")}</li>
-     *   <li>组装执行命令：python 可执行文件 + 脚本路径 + ETF 实时行情 API URL</li>
-     *   <li>设置环境变量 <code>PYTHONIOENCODING=utf-8</code> 以确保中文字符正确处理</li>
-     *   <li>启动 Python 进程执行脚本</li>
-     *   <li>并发收集标准输出和标准错误输出</li>
-     *   <li>等待脚本执行完成并获取退出码</li>
-     *   <li>若退出码非 0 或输出为空，则记录错误/警告并返回 null</li>
-     *   <li>否则将标准输出（JSON 字符串）反序列化为 {@code EtfRealtimeInfo} 对象</li>
-     * </ol>
-     *
-     * <h3>返回值说明</h3>
-     * <ul>
-     *   <li>成功：返回填充了行情信息的 {@code EtfRealtimeInfo} 对象</li>
-     *   <li>失败：返回 null，可能原因包括脚本执行失败、数据解析失败或 API 返回无效数据</li>
-     * </ul>
-     *
-     * <h3>错误处理</h3>
-     * <p>捕获脚本执行中所有可能的异常，并记录错误日志。当出现错误时返回 null，
-     * 保证调用方不会因为 Python 运行异常导致应用崩溃。</p>
-     *
-     * <h3>使用示例</h3>
-     * <pre>
-     *   String apiUrl = "https://push2.eastmoney.com/api/qt/stock/get"
-     *         + "?ut=fa5fd1943c7b386f172d6893dbfba10b&fltt=2&invt=2"
-     *         + "&fields=f57,f58,f43,f60,f46,f44,f45,f47,f48,f52,f20,f152"
-     *         + "&secid=1.510050";
-     *
-     *   EtfRealtimeInfo etfInfo = KlineDataFetcher.fetchEtfRealtimeInfo(apiUrl);
-     *   if (etfInfo != null) {
-     *       System.out.println("ETF 名称: " + etfInfo.getCompanyName());
-     *       System.out.println("ETF 代码: " + etfInfo.getStockCode());
-     *       System.out.println("最新价格: " + etfInfo.getPrice());
-     *   } else {
-     *       System.out.println("未获取到 ETF 实时行情。");
-     *   }
-     * </pre>
-     *
-     * @param apiUrl 东方财富网 ETF 实时行情 API 接口完整地址
-     * @return {@code EtfRealtimeInfo} ETF 实时行情信息对象；若获取失败则返回 null
+     * 获取 ETF 实时行情信息 (Refactored to use Python Service)
      */
     public static EtfRealtimeInfo fetchEtfRealtimeInfo(String apiUrl) {
-        String script = buildScriptPath("etf_realtime_fetcher.py");
-        List<String> cmd = new ArrayList<>();
-        cmd.add(getPythonExecutable());
-        cmd.add(script);
-        cmd.add(apiUrl);
-
-        ProcessBuilder pb = new ProcessBuilder(cmd);
-        pb.environment().put("PYTHONIOENCODING", "utf-8");
-
+        logger.info("Fetching ETF realtime info via Service: {}", apiUrl);
         try {
-            Process p = pb.start();
-            StreamCollector out = new StreamCollector(p.getInputStream(), "OUT");
-            StreamCollector err = new StreamCollector(p.getErrorStream(), "ERR");
-            out.start();
-            err.start();
-            int code = p.waitFor();
-            out.join();
-            err.join();
-            if (code != 0) {
-                logger.error("ETF 实时行情脚本失败: {}", err.getContent());
+             if (restTemplate == null) {
+                restTemplate = new RestTemplate();
+                pythonServiceUrl = "http://localhost:8000";
+            }
+
+            String url = pythonServiceUrl + "/etf/realtime";
+            Map<String, String> requestBody = new HashMap<>();
+            requestBody.put("url", apiUrl);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, String>> entity = new HttpEntity<>(requestBody, headers);
+
+            ResponseEntity<EtfRealtimeInfo> response = restTemplate.postForEntity(url, entity, EtfRealtimeInfo.class);
+
+            if (response.getStatusCode().is2xxSuccessful()) {
+                return response.getBody();
+            } else {
+                logger.error("Service returned status: {}", response.getStatusCode());
                 return null;
             }
-            String s = out.getContent().replace("\uFEFF", "").trim();
-            if (s.isEmpty()) return null;
-            return JSON.parseObject(s, EtfRealtimeInfo.class);
         } catch (Exception e) {
-            logger.error("ETF 实时行情异常", e);
-            return null;
+            logger.error("Failed to fetch ETF data via service, falling back to script. Error: {}", e.getMessage());
+            // Fallback Logic
+            String script = buildScriptPath("etf_realtime_fetcher.py");
+            List<String> cmd = new ArrayList<>();
+            cmd.add(getPythonExecutable());
+            cmd.add(script);
+            cmd.add(apiUrl);
+
+            ProcessBuilder pb = new ProcessBuilder(cmd);
+            pb.environment().put("PYTHONIOENCODING", "utf-8");
+
+            try {
+                Process p = pb.start();
+                StreamCollector out = new StreamCollector(p.getInputStream(), "OUT");
+                StreamCollector err = new StreamCollector(p.getErrorStream(), "ERR");
+                out.start();
+                err.start();
+                int code = p.waitFor();
+                out.join();
+                err.join();
+                if (code != 0) {
+                    logger.error("ETF 实时行情脚本失败: {}", err.getContent());
+                    return null;
+                }
+                String s = out.getContent().replace("\uFEFF", "").trim();
+                if (s.isEmpty()) return null;
+                return JSON.parseObject(s, EtfRealtimeInfo.class);
+            } catch (Exception ex) {
+                logger.error("ETF 实时行情异常", ex);
+                return null;
+            }
         }
     }
 
