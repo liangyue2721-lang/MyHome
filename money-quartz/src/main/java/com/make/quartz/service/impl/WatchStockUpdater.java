@@ -3,6 +3,7 @@ package com.make.quartz.service.impl;
 import com.make.common.utils.DateUtils;
 import com.make.stock.domain.StockKline;
 import com.make.stock.domain.Watchstock;
+import com.make.stock.service.IStockKlineService;
 import com.make.stock.service.IWatchstockService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,8 +13,11 @@ import javax.annotation.Resource;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.SimpleDateFormat;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.temporal.TemporalAdjusters;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
@@ -34,6 +38,12 @@ public class WatchStockUpdater {
      */
     @Resource
     private IWatchstockService watchstockService;
+
+    /**
+     * 股票K线服务接口，用于执行具体的数据库操作
+     */
+    @Resource
+    private IStockKlineService stockKlineService;
 
     /**
      * 处理自选股更新
@@ -145,29 +155,90 @@ public class WatchStockUpdater {
      * @param stock 自选股对象
      */
     public void updateWeekHighLowIfNeeded(Watchstock stock) {
-        // 标记是否发生了更新操作
-        boolean updated = false;
-        // 获取当日最高价和最低价
-        BigDecimal highPrice = stock.getHighPrice();
-        BigDecimal lowPrice = stock.getLowPrice();
 
-        // 检查并更新周度最低价
-        if (stock.getWeekLow() == null || (lowPrice != null && lowPrice.compareTo(stock.getWeekLow()) < 0)) {
-            // 如果周度最低价为null或者当日最低价低于周度最低价，则更新
-            stock.setWeekLow(lowPrice);
-            updated = true;
-            log.info("股票 [{}] 周度低价已更新为 {}", stock.getCode(), lowPrice);
+        // =========================
+        // 1. 股票代码（直接取 Watchstock）
+        // =========================
+        String stockCode = stock.getCode();
+
+        // =========================
+        // 2. 生成本周 周一～周五 的交易日期列表
+        // =========================
+        LocalDate today = LocalDate.now();
+
+        // 计算本周周一（ISO 标准：周一为第一天）
+        LocalDate monday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+
+        List<LocalDate> tradeDateList = new ArrayList<>(5);
+        for (int i = 0; i < 5; i++) {
+            tradeDateList.add(monday.plusDays(i));
         }
 
-        // 检查并更新周度最高价
-        if (stock.getWeekHigh() == null || (highPrice != null && highPrice.compareTo(stock.getWeekHigh()) > 0)) {
-            // 如果周度最高价为null或者当日最高价高于周度最高价，则更新
-            stock.setWeekHigh(highPrice);
-            updated = true;
-            log.info("股票 [{}] 周度高价已更新为 {}", stock.getCode(), highPrice);
+        // =========================
+        // 3. 查询本周所有 K 线数据
+        // =========================
+        List<StockKline> stockKlineList =
+                stockKlineService.queryWeekAllStockKline(stockCode, tradeDateList);
+
+        if (stockKlineList == null || stockKlineList.isEmpty()) {
+            log.warn("股票 [{}] 本周无K线数据，跳过周高/周低计算", stockCode);
+            return;
         }
 
-        // 注意：WatchStock 的持久化在外层调用完成后统一执行
+        // =========================
+        // 4. 计算周最高 / 周最低（来自 K 线）
+        // =========================
+        BigDecimal weekHigh = null;
+        BigDecimal weekLow = null;
+
+        for (StockKline kline : stockKlineList) {
+            if (kline.getHigh() != null) {
+                weekHigh = (weekHigh == null)
+                        ? kline.getHigh()
+                        : weekHigh.max(kline.getHigh());
+            }
+
+            if (kline.getLow() != null) {
+                weekLow = (weekLow == null)
+                        ? kline.getLow()
+                        : weekLow.min(kline.getLow());
+            }
+        }
+
+        // =========================
+        // 5. 与当日行情兜底对比
+        // =========================
+        BigDecimal todayHigh = stock.getHighPrice();
+        BigDecimal todayLow = stock.getLowPrice();
+
+        if (todayHigh != null) {
+            weekHigh = (weekHigh == null)
+                    ? todayHigh
+                    : weekHigh.max(todayHigh);
+        }
+
+        if (todayLow != null) {
+            weekLow = (weekLow == null)
+                    ? todayLow
+                    : weekLow.min(todayLow);
+        }
+
+        // =========================
+        // 6. 更新 Watchstock 周高 / 周低
+        // =========================
+        if (weekLow != null &&
+                (stock.getWeekLow() == null || weekLow.compareTo(stock.getWeekLow()) < 0)) {
+
+            stock.setWeekLow(weekLow);
+            log.info("股票 [{}] 周最低价更新为 {}", stockCode, weekLow);
+        }
+
+        if (weekHigh != null &&
+                (stock.getWeekHigh() == null || weekHigh.compareTo(stock.getWeekHigh()) > 0)) {
+
+            stock.setWeekHigh(weekHigh);
+            log.info("股票 [{}] 周最高价更新为 {}", stockCode, weekHigh);
+        }
     }
 
     public void batchUpdateWatchStock(List<Watchstock> watchstocks) {

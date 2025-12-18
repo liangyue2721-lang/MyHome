@@ -90,4 +90,6 @@ public interface IStockKlineService {
     void batchUpdateByStockCodeAndTradeDate(List<StockKline> updateList);
 
     List<LocalDate> selectExistsDates(String stockCode, List<LocalDate> tradeDateList);
+
+    List<StockKline> queryWeekAllStockKline(String stockCode, List<LocalDate> tradeDateList);
 }

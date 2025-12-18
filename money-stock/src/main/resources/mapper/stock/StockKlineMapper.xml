@@ -82,6 +82,14 @@
             #{d}
         </foreach>
     </select>
+    <select id="queryWeekAllStockKline" resultType="com.make.stock.domain.StockKline">
+        <include refid="selectStockKlineVo"/>
+        WHERE stock_code = #{stockCode}
+        AND trade_date IN
+        <foreach collection="tradeDateList" item="d" open="(" close=")" separator=",">
+            #{d}
+        </foreach>
+    </select>
 
 
     <insert id="insertStockKline" parameterType="StockKline" useGeneratedKeys="true" keyProperty="id">

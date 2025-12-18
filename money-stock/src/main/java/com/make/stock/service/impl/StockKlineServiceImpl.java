@@ -137,4 +137,9 @@ public class StockKlineServiceImpl implements IStockKlineService {
     public List<LocalDate> selectExistsDates(String stockCode, List<LocalDate> tradeDateList) {
         return stockKlineMapper.selectExistsDates(stockCode, tradeDateList);
     }
+
+    @Override
+    public List<StockKline> queryWeekAllStockKline(String stockCode, List<LocalDate> tradeDateList) {
+        return stockKlineMapper.queryWeekAllStockKline(stockCode, tradeDateList);
+    }
 }

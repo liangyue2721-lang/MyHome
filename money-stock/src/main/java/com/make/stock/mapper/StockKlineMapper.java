@@ -89,4 +89,6 @@ public interface StockKlineMapper {
     public int insertOrUpdateBatch(@Param("list") List<StockKline> klines);
 
     List<LocalDate> selectExistsDates(@Param("stockCode") String stockCode, @Param("tradeDateList") List<LocalDate> tradeDateList);
+
+    List<StockKline> queryWeekAllStockKline(@Param("stockCode") String stockCode, @Param("tradeDateList") List<LocalDate> tradeDateList);
 }
