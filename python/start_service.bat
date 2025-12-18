@@ -1,94 +1,95 @@
 @echo off
-chcp 65001 >nul
+chcp 65001
 setlocal enabledelayedexpansion
 
-REM ==========================================================
-REM Stock Service startup script (Windows)
-REM Features:
-REM 1. Bind to a specific Python interpreter
-REM 2. Check uvicorn / fastapi availability
-REM 3. Auto-install missing dependencies
-REM 4. Start uvicorn in background
-REM ==========================================================
+echo =========================================
+echo Stock Service - FOREGROUND MODE (Windows)
+echo =========================================
 
-REM ---------- Python interpreter (DO NOT rely on PATH) ----------
-set "PYTHON_EXE=C:\Program Files\Python311\python.exe"
+REM ==========================================================
+REM 1. Detect Python automatically from PATH
+REM ==========================================================
+set "PYTHON_EXE="
 
-REM ---------- App config ----------
+for /f "delims=" %%i in ('where python 2^>nul') do (
+    set "PYTHON_EXE=%%i"
+    goto :python_found
+)
+
+echo [ERROR] Python not found in PATH
+echo [HINT ] Please install Python 3.9+ and ensure it is added to PATH
+pause
+exit /b 1
+
+:python_found
+echo [INFO] Using Python: %PYTHON_EXE%
+
+REM ==========================================================
+REM 2. Basic config
+REM ==========================================================
 set "APP_MODULE=stock_service:app"
 set "HOST=0.0.0.0"
 set "PORT=8000"
 
-REM ---------- Paths ----------
 set "BASE_DIR=%~dp0"
-set "LOG_DIR=%BASE_DIR%logs"
-set "LOG_FILE=%LOG_DIR%\service.log"
+cd /d "%BASE_DIR%"
 
-if not exist "%LOG_DIR%" (
-    mkdir "%LOG_DIR%"
-)
-
-echo [INFO] Using Python: %PYTHON_EXE%
+echo [INFO] Base directory : %BASE_DIR%
+echo [INFO] App module     : %APP_MODULE%
+echo.
 
 REM ==========================================================
-REM 1. Check Python exists
+REM 3. Check Python is runnable
 REM ==========================================================
-if not exist %PYTHON_EXE% (
-    echo [ERROR] Python not found: %PYTHON_EXE%
+"%PYTHON_EXE%" -V >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] Python executable is not runnable
+    pause
     exit /b 1
 )
 
 REM ==========================================================
-REM 2. Ensure pip is available
+REM 4. Check uvicorn
 REM ==========================================================
-%PYTHON_EXE% -m pip --version >nul 2>&1
+echo [INFO] Checking uvicorn...
+"%PYTHON_EXE%" -c "import uvicorn; print('uvicorn OK')" 2>nul
 if errorlevel 1 (
-    echo [ERROR] pip is not available in this Python environment
+    echo [ERROR] uvicorn is not installed
+    echo [HINT ] Run the following command manually:
+    echo         "%PYTHON_EXE%" -m pip install uvicorn fastapi
+    pause
     exit /b 1
 )
 
 REM ==========================================================
-REM 3. Check & install uvicorn
+REM 5. Check port availability
 REM ==========================================================
-%PYTHON_EXE% - <<EOF >nul 2>&1
-import importlib.util, sys
-sys.exit(0 if importlib.util.find_spec("uvicorn") else 1)
-EOF
-
-if errorlevel 1 (
-    echo [INFO] uvicorn not found, installing...
-    %PYTHON_EXE% -m pip install --upgrade pip
-    %PYTHON_EXE% -m pip install uvicorn fastapi
-    if errorlevel 1 (
-        echo [ERROR] Failed to install uvicorn / fastapi
-        exit /b 1
-    )
-) else (
-    echo [INFO] uvicorn already installed
+netstat -ano | findstr LISTENING | findstr :%PORT% >nul
+if not errorlevel 1 (
+    echo [ERROR] Port %PORT% is already in use
+    echo [HINT ] Stop the existing service or change the port
+    pause
+    exit /b 1
 )
 
 REM ==========================================================
-REM 4. Prevent duplicate start (port check)
+REM 6. Start service (FOREGROUND)
 REM ==========================================================
-netstat -ano | findstr LISTENING | findstr :%PORT% >nul && (
-    echo [WARN] Port %PORT% already in use. Service may already be running.
-    exit /b 0
-)
+echo.
+echo =========================================
+echo Starting uvicorn in FOREGROUND mode
+echo URL: http://127.0.0.1:%PORT%
+echo Press Ctrl+C to stop
+echo =========================================
+echo.
 
-REM ==========================================================
-REM 5. Start service in background
-REM ==========================================================
-echo [INFO] Starting Stock Service...
-echo [INFO] Logs -> %LOG_FILE%
-
-start "stock_service" /B ^
-    %PYTHON_EXE% -m uvicorn %APP_MODULE% ^
+"%PYTHON_EXE%" -m uvicorn %APP_MODULE% ^
     --host %HOST% ^
     --port %PORT% ^
-    --log-level info ^
-    > "%LOG_FILE%" 2>&1
+    --log-level info
 
-echo [INFO] Stock Service start command issued.
-echo [INFO] Service should now be running in background.
-
-endlocal
+echo.
+echo =========================================
+echo Service stopped
+echo =========================================
+pause
