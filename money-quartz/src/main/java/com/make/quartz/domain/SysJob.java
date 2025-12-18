@@ -61,6 +61,12 @@ public class SysJob extends BaseEntity
     /** 链路追踪ID */
     private String traceId; // 默认值
 
+    /** 任务入队时间（毫秒）- 用于计算队列等待时间 */
+    private Long enqueueTime;
+
+    /** Quartz触发实例ID - 用于唯一标识一次调度 */
+    private String fireInstanceId;
+
     public Long getJobId()
     {
         return jobId;
@@ -133,6 +139,22 @@ public class SysJob extends BaseEntity
 
     public void setTraceId(String traceId) {
         this.traceId = traceId;
+    }
+
+    public Long getEnqueueTime() {
+        return enqueueTime;
+    }
+
+    public void setEnqueueTime(Long enqueueTime) {
+        this.enqueueTime = enqueueTime;
+    }
+
+    public String getFireInstanceId() {
+        return fireInstanceId;
+    }
+
+    public void setFireInstanceId(String fireInstanceId) {
+        this.fireInstanceId = fireInstanceId;
     }
 
     public String getMisfirePolicy()

@@ -78,10 +78,20 @@ public abstract class AbstractQuartzJob implements Job {
         String traceId = TraceIdUtil.generateTraceId();
         TraceIdUtil.putTraceId(traceId);
 
+        // 获取Quartz触发实例ID
+        String fireInstanceId = context.getFireInstanceId();
+        org.slf4j.MDC.put("taskInstanceId", fireInstanceId);
+
         SysJob sysJob = new SysJob();
         BeanUtils.copyBeanProp(sysJob, context.getMergedJobDataMap().get(ScheduleConstants.TASK_PROPERTIES));
+        // 设置fireInstanceId到SysJob，以便分发时携带
+        sysJob.setFireInstanceId(fireInstanceId);
 
         String jobKey = sysJob.getJobGroup() + "." + sysJob.getJobName();
+
+        log.info("[TASK_MONITOR] [TRIGGER] Job triggered. Key: {}, TraceId: {}, InstanceId: {}",
+                jobKey, traceId, fireInstanceId);
+
         String lockKey = "quartz:lock:" + jobKey;
         RLock lock = redisQuartzSemaphore.getLock(lockKey);
         boolean locked = false;
@@ -91,7 +101,7 @@ public abstract class AbstractQuartzJob implements Job {
 
             // 检查当前节点IP是否在黑名单中
             if (ipBlackListManager.isCurrentNodeIpBlacklisted()) {
-                log.info("⏭️ 当前节点IP {} 在黑名单中，跳过任务【{}】执行",
+                log.info("[TASK_MONITOR] [SKIP] 当前节点IP {} 在黑名单中，跳过任务【{}】执行",
                         ipBlackListManager.getCurrentNodeIp(), jobKey);
                 return;
             }
@@ -114,6 +124,9 @@ public abstract class AbstractQuartzJob implements Job {
             locked = lock.tryLock(0, TimeUnit.SECONDS);
             if (!locked) {
                 // 记录日志或指标：跳过执行
+                String currentNodeId = IpUtils.getHostIp(); // 简单使用IP作为节点标识
+                log.info("[TASK_MONITOR] [LOCK_SKIPPED] Failed to acquire lock. Key: {}, InstanceId: {}, Node: {}, LockName: {}",
+                        jobKey, fireInstanceId, currentNodeId, lockKey);
                 return;
             }
 
@@ -121,12 +134,22 @@ public abstract class AbstractQuartzJob implements Job {
             executingJobs.put(jobKey, System.currentTimeMillis());
 
             // 获取锁成功，检查是否应该在本地执行
-            if (!taskDistributor.shouldExecuteLocally(jobKey, 0.8)) {
+            boolean executeLocally = taskDistributor.shouldExecuteLocally(jobKey, 0.8);
+            if (executeLocally) {
+                log.info("[TASK_MONITOR] [DECISION] Executing Locally. Key: {}, InstanceId: {}", jobKey, fireInstanceId);
+            } else {
+                log.info("[TASK_MONITOR] [DECISION] Distributing. Key: {}, InstanceId: {}", jobKey, fireInstanceId);
+            }
+
+            if (!executeLocally) {
                 // 负载过高，分发任务
                 log.info("🔄 任务【{}】负载过高，分发到全局队列", jobKey);
 
                 // 设置当前TraceId到SysJob，确保分发后链路不断
                 sysJob.setTraceId(traceId);
+                // 设置入队时间
+                sysJob.setEnqueueTime(System.currentTimeMillis());
+
                 taskDistributor.distributeTask(sysJob);
 
                 // 必须释放锁，以便消费者能获取锁并执行
@@ -140,6 +163,7 @@ public abstract class AbstractQuartzJob implements Job {
             }
 
             // 真正执行子类逻辑
+            log.info("[TASK_MONITOR] [EXECUTE] Starting local execution. Key: {}, InstanceId: {}", jobKey, fireInstanceId);
             taskMonitoringService.recordTaskStart(jobKey);
             doExecute(context, sysJob);
 
@@ -162,6 +186,7 @@ public abstract class AbstractQuartzJob implements Job {
 
             // 清除链路追踪ID
             TraceIdUtil.clearTraceId();
+            org.slf4j.MDC.remove("taskInstanceId");
         }
     }
 

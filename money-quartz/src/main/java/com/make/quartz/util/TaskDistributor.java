@@ -119,10 +119,19 @@ public class TaskDistributor {
                 }
             }
 
+            // 确保设置了入队时间
+            if (sysJob.getEnqueueTime() == null) {
+                sysJob.setEnqueueTime(System.currentTimeMillis());
+            }
+
             String json = JSON.toJSONString(sysJob);
+            // 获取当前队列大小以便监控
+            Long queueSize = redisTemplate.opsForList().size(GLOBAL_TASK_QUEUE);
             redisTemplate.opsForList().leftPush(GLOBAL_TASK_QUEUE, json);
-            log.info("任务 {} ({}) 已推送到全局队列, TraceId: {}, Target: {}",
-                    sysJob.getJobName(), sysJob.getJobGroup(), sysJob.getTraceId(), sysJob.getInvokeTarget());
+
+            String jobKey = sysJob.getJobGroup() + "." + sysJob.getJobName();
+            log.info("[TASK_MONITOR] [DISTRIBUTE] Dispatching to global queue. Key: {}, InstanceId: {}, TraceId: {}, QueueSize: {}",
+                    jobKey, sysJob.getFireInstanceId(), sysJob.getTraceId(), queueSize);
         } catch (Exception e) {
             log.error("任务分发失败: {}", sysJob.getJobName(), e);
         }
@@ -145,7 +154,14 @@ public class TaskDistributor {
                     continue;
                 }
 
-                log.info("收到全局任务: {} ({})", sysJob.getJobName(), sysJob.getJobGroup());
+                String jobKey = sysJob.getJobGroup() + "." + sysJob.getJobName();
+                long waitDuration = -1;
+                if (sysJob.getEnqueueTime() != null) {
+                    waitDuration = System.currentTimeMillis() - sysJob.getEnqueueTime();
+                }
+
+                log.info("[TASK_MONITOR] [DEQUEUE] Task received. Key: {}, InstanceId: {}, WaitDuration: {}ms",
+                         jobKey, sysJob.getFireInstanceId(), waitDuration);
 
                 // 检查IP黑名单
                 if (ipBlackListManager.isCurrentNodeIpBlacklisted()) {
@@ -179,22 +195,30 @@ public class TaskDistributor {
         }
         TraceIdUtil.putTraceId(traceId);
 
+        // 设置TaskInstanceId到MDC
+        if (sysJob.getFireInstanceId() != null) {
+            org.slf4j.MDC.put("taskInstanceId", sysJob.getFireInstanceId());
+        }
+
         boolean locked = false;
         try {
             // 尝试获取锁，设置5秒等待时间，以解决生产者先推队列后释放锁的竞态条件
             locked = lock.tryLock(5, TimeUnit.SECONDS);
             if (!locked) {
-                log.info("任务 {} 正在运行中（或无法获取锁），跳过执行", jobKey);
+                String currentNodeId = IpUtils.getHostIp();
+                log.info("[TASK_MONITOR] [LOCK_SKIPPED] (Distributed) Failed to acquire lock. Key: {}, InstanceId: {}, Node: {}, LockName: {}",
+                         jobKey, sysJob.getFireInstanceId(), currentNodeId, lockKey);
                 return;
             }
 
-            log.info("从全局队列获取任务并执行: {}", jobKey);
+            log.info("[TASK_MONITOR] [EXECUTE] Starting distributed execution. Key: {}, InstanceId: {}", jobKey, sysJob.getFireInstanceId());
 
             long startTime = System.currentTimeMillis();
             try {
                 JobInvokeUtil.invokeMethod(sysJob);
                 long runMs = System.currentTimeMillis() - startTime;
-                log.info("任务 {} 执行完成, 耗时: {}ms", jobKey, runMs);
+                log.info("[TASK_MONITOR] [COMPLETE] Distributed execution finished. Key: {}, InstanceId: {}, Duration: {}ms",
+                         jobKey, sysJob.getFireInstanceId(), runMs);
                 recordLog(sysJob, null, runMs);
             } catch (Exception e) {
                 long runMs = System.currentTimeMillis() - startTime;
@@ -209,6 +233,7 @@ public class TaskDistributor {
                 lock.unlock();
             }
             TraceIdUtil.clearTraceId();
+            org.slf4j.MDC.remove("taskInstanceId");
         }
     }
 
