@@ -15,20 +15,36 @@ import time
 import random
 from datetime import datetime
 from typing import Optional, List, Dict, Any
+from logging.handlers import TimedRotatingFileHandler
 
-from fastapi import FastAPI, HTTPException, Query, Body
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 from playwright.async_api import async_playwright, Browser, BrowserContext
 
+# =========================================================
 # Logging Setup
-logging.basicConfig(
-    level=logging.INFO,
-    format="[%(asctime)s] [%(levelname)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
-)
-logger = logging.getLogger("stock-service")
+# =========================================================
 
-app = FastAPI(title="Stock Data Service", version="1.1.0")
+LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+
+logger = logging.getLogger("stock-service")
+logger.setLevel(logging.INFO)
+
+# Console Handler
+ch = logging.StreamHandler()
+ch.setFormatter(logging.Formatter("[%(asctime)s] [%(levelname)s] %(message)s", "%Y-%m-%d %H:%M:%S"))
+logger.addHandler(ch)
+
+# File Handler
+fh = TimedRotatingFileHandler(
+    os.path.join(LOG_DIR, "stock_service.log"),
+    when="midnight", interval=1, backupCount=30, encoding="utf-8"
+)
+fh.setFormatter(logging.Formatter("[%(asctime)s] [%(levelname)s] %(message)s", "%Y-%m-%d %H:%M:%S"))
+logger.addHandler(fh)
+
+app = FastAPI(title="Stock Data Service", version="1.2.0")
 
 # Global State
 PLAYWRIGHT = None
@@ -43,6 +59,25 @@ UA_POOL = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/15.4 Safari/605.1.15",
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/118 Safari/537.36"
+]
+
+URL_TEMPLATES_KLINE = [
+    # Mode A (Newer)
+    (
+        "https://push2his.eastmoney.com/api/qt/stock/kline/get?"
+        "secid={market}.{secid}&ut=7eea3edcaed734bea9cbfc24409ed989&"
+        "fields1=f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12,f13,f18&"
+        "fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&"
+        "klt=101&fqt=1&beg={beg}&end={end}&smplmt=100000&lmt=1000000"
+    ),
+    # Mode B (Older)
+    (
+        "https://push2his.eastmoney.com/api/qt/stock/kline/get?"
+        "fields1=f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12,f13&"
+        "fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&"
+        "beg={beg}&end={end}&ut=fa5fd1943c7b386f172d6893dbfba10b&"
+        "secid={market}.{secid}&klt=101&fqt=1"
+    ),
 ]
 
 def random_ua():
@@ -82,16 +117,20 @@ def normalize_secid(code: str):
 async def startup():
     global PLAYWRIGHT, BROWSER
     logger.info("Starting Playwright...")
-    PLAYWRIGHT = await async_playwright().start()
-    BROWSER = await PLAYWRIGHT.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
-    # Warmup
     try:
-        page = await BROWSER.new_page()
-        await page.goto("https://quote.eastmoney.com/", timeout=15000)
-        await page.close()
-    except:
-        pass
-    logger.info("Browser launched and warmed up.")
+        PLAYWRIGHT = await async_playwright().start()
+        BROWSER = await PLAYWRIGHT.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
+        # Warmup
+        try:
+            page = await BROWSER.new_page()
+            await page.goto("https://quote.eastmoney.com/", timeout=15000)
+            await page.close()
+            logger.info("Browser launched and warmed up.")
+        except Exception as warmup_error:
+            logger.warning(f"Warmup failed (non-fatal): {warmup_error}")
+    except Exception as e:
+        logger.critical(f"Failed to start Playwright: {e}")
+        raise e
 
 @app.on_event("shutdown")
 async def shutdown():
@@ -101,6 +140,15 @@ async def shutdown():
     if PLAYWRIGHT:
         await PLAYWRIGHT.stop()
     logger.info("Playwright stopped.")
+
+# Middleware for Request Logging
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    process_time = (time.time() - start_time) * 1000
+    logger.info(f"{request.method} {request.url.path} - {response.status_code} - {process_time:.2f}ms")
+    return response
 
 # =========================================================
 # Endpoint: ETF Realtime
@@ -132,7 +180,7 @@ async def fetch_etf_realtime(req: EtfRequest):
         context = await BROWSER.new_context(locale="zh-CN", user_agent=random_ua())
         page = await context.new_page()
         try:
-            logger.info(f"Fetching ETF: {req.url}")
+            # logger.info(f"Fetching ETF: {req.url}")
             await page.goto(req.url, timeout=20000, wait_until="domcontentloaded")
             text = await page.evaluate("() => document.body.innerText || ''")
             if not text: raise Exception("Empty response")
@@ -140,7 +188,7 @@ async def fetch_etf_realtime(req: EtfRequest):
             if not parsed: raise Exception("JSON parse failed")
             return standardize_etf_data(parsed.get("data", {}))
         except Exception as e:
-            logger.error(f"ETF Fetch Error: {e}")
+            logger.error(f"ETF Fetch Error [{req.url}]: {e}")
             raise HTTPException(status_code=500, detail=str(e))
         finally:
             await page.close()
@@ -174,7 +222,6 @@ def build_standard_stock_object(data: dict):
         "volumeRatio": safe_float(data, "f52"),
         "commissionRatio": safe_float(data, "f20"),
         "mainFundsInflow": safe_float(data, "f152"),
-        # Null fields
         "peRatio": None, "pbRatio": None, "turnoverRate": None, "amplitude": None,
         "eps": None, "mainNetInflow": None, "circulatingShares": None,
         "totalShares": None, "volumePriceTrend": None, "dividendYield": None,
@@ -187,13 +234,13 @@ async def fetch_stock_realtime(req: StockRealtimeRequest):
         context = await BROWSER.new_context(locale="zh-CN", user_agent=random_ua())
         page = await context.new_page()
         try:
-            logger.info(f"Fetching Stock Realtime: {req.url}")
+            # logger.info(f"Fetching Stock Realtime: {req.url}")
             await page.goto(req.url, timeout=20000, wait_until="domcontentloaded")
             text = await page.evaluate("() => document.body.innerText || ''")
             parsed = parse_json_or_jsonp(text) or {}
             return build_standard_stock_object(parsed.get("data", {}))
         except Exception as e:
-            logger.error(f"Stock Realtime Fetch Error: {e}")
+            logger.error(f"Stock Realtime Fetch Error [{req.url}]: {e}")
             raise HTTPException(status_code=500, detail=str(e))
         finally:
             await page.close()
@@ -227,7 +274,6 @@ def aggregate_daily(rows, secid):
         v = sum(int(float(x[5])) for x in rows)
         amt = sum(float(x[6]) for x in rows)
 
-        # Calculate change if prev_close exists
         chg = round(c - prev_close, 4) if prev_close is not None else None
         pct = round(chg / prev_close * 100, 4) if (prev_close and prev_close != 0) else None
 
@@ -246,7 +292,6 @@ def aggregate_daily(rows, secid):
 
 @app.post("/stock/kline")
 async def fetch_stock_kline(req: KlineTrendsRequest):
-    # Used for fetchKlineDataFiveDay & Hybrid
     secid = normalize_secid(req.secid)
     async with SEMAPHORE:
         context = await BROWSER.new_context(locale="zh-CN", user_agent=random_ua())
@@ -281,7 +326,7 @@ async def fetch_stock_kline(req: KlineTrendsRequest):
             return []
 
         except Exception as e:
-            logger.error(f"Kline Trends Fetch Error: {e}")
+            logger.error(f"Kline Trends Fetch Error [{secid}]: {e}")
             raise HTTPException(status_code=500, detail=str(e))
         finally:
             await page.close()
@@ -289,7 +334,7 @@ async def fetch_stock_kline(req: KlineTrendsRequest):
 
 
 # =========================================================
-# Endpoint: Kline Range (Historical)
+# Endpoint: Kline Range (Historical) - Improved with Retry
 # =========================================================
 
 class KlineRangeRequest(BaseModel):
@@ -336,33 +381,31 @@ async def fetch_kline_range(req: KlineRangeRequest):
         context = await BROWSER.new_context(locale="zh-CN", user_agent=random_ua())
         page = await context.new_page()
         try:
-            # Warmup
             try: await page.goto("https://quote.eastmoney.com/", timeout=5000)
             except: pass
 
-            url_template = (
-                "https://push2his.eastmoney.com/api/qt/stock/kline/get?"
-                "secid={market}.{secid}&ut=7eea3edcaed734bea9cbfc24409ed989&"
-                "fields1=f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12,f13,f18&"
-                "fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&"
-                "klt=101&fqt=1&beg={beg}&end={end}&smplmt=100000&lmt=1000000"
-            )
-            url = url_template.format(market=req.market, secid=req.secid, beg=req.beg, end=req.end)
+            # Retry logic: Try multiple URL templates
+            for url_template in URL_TEMPLATES_KLINE:
+                url = url_template.format(market=req.market, secid=req.secid, beg=req.beg, end=req.end)
+                try:
+                    await page.goto(url, timeout=20000)
+                    text = await page.evaluate("() => document.body.innerText || ''")
+                    parsed = parse_json_or_jsonp(text)
 
-            await page.goto(url, timeout=20000)
-            text = await page.evaluate("() => document.body.innerText || ''")
-            parsed = parse_json_or_jsonp(text)
+                    if parsed and parsed.get("data", {}).get("klines"):
+                        data = parsed["data"]
+                        pre_close = None
+                        if "preKPrice" in data: pre_close = float(data["preKPrice"])
+                        elif "f18" in data: pre_close = float(data["f18"])
+                        return parse_kline_items(data, pre_close)
+                except Exception as ex:
+                     logger.warning(f"URL attempt failed: {url} | {ex}")
+                     continue
 
-            if parsed and parsed.get("data", {}).get("klines"):
-                data = parsed["data"]
-                pre_close = None
-                if "preKPrice" in data: pre_close = float(data["preKPrice"])
-                elif "f18" in data: pre_close = float(data["f18"])
-                return parse_kline_items(data, pre_close)
             return []
 
         except Exception as e:
-            logger.error(f"Kline Range Error: {e}")
+            logger.error(f"Kline Range Error [{req.secid}]: {e}")
             raise HTTPException(status_code=500, detail=str(e))
         finally:
             await page.close()
@@ -375,16 +418,12 @@ async def fetch_kline_range(req: KlineRangeRequest):
 
 @app.post("/stock/kline/us")
 async def fetch_us_kline(req: KlineRangeRequest):
-    # Reuse range logic but URL/params might be slightly different for US
-    # fetch_stock_realtime.py uses "secid={secid}" directly (e.g. 105.NVDA)
-    # So we construct secid from market.code
     full_secid = f"{req.market}.{req.secid}"
 
     async with SEMAPHORE:
         context = await BROWSER.new_context(locale="zh-CN", user_agent=random_ua())
         page = await context.new_page()
         try:
-             # Warmup
             try: await page.goto("https://quote.eastmoney.com/", timeout=5000)
             except: pass
 
@@ -400,7 +439,6 @@ async def fetch_us_kline(req: KlineRangeRequest):
             text = await page.evaluate("() => document.body.innerText || ''")
             parsed = parse_json_or_jsonp(text)
 
-            # Logic from fetch_stock_realtime.py (normalize_record)
             result = []
             if parsed and parsed.get("data", {}).get("klines"):
                 data = parsed["data"]
@@ -433,7 +471,7 @@ async def fetch_us_kline(req: KlineRangeRequest):
             return result
 
         except Exception as e:
-            logger.error(f"US Kline Error: {e}")
+            logger.error(f"US Kline Error [{full_secid}]: {e}")
             raise HTTPException(status_code=500, detail=str(e))
         finally:
             await page.close()
