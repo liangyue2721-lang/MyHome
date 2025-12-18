@@ -1,135 +1,139 @@
 <template>
   <div class="app-container">
-    <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch" label-width="68px">
-      <el-form-item label="股票代码" prop="stockCode">
-        <el-input
-          v-model="queryParams.stockCode"
-          placeholder="请输入股票代码"
-          clearable
-          @keyup.enter.native="handleQuery"
-        />
-      </el-form-item>
-      <el-form-item label="股票名称" prop="stockName">
-        <el-input
-          v-model="queryParams.stockName"
-          placeholder="请输入股票名称"
-          clearable
-          @keyup.enter.native="handleQuery"
-        />
-      </el-form-item>
-      <el-form-item>
-        <el-button type="primary" icon="el-icon-search" size="mini" @click="handleQuery">搜索</el-button>
-        <el-button icon="el-icon-refresh" size="mini" @click="resetQuery">重置</el-button>
-      </el-form-item>
-    </el-form>
+    <el-card shadow="never" class="box-card mb-20">
+      <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch" label-width="68px">
+        <el-form-item label="股票代码" prop="stockCode">
+          <el-input
+            v-model="queryParams.stockCode"
+            placeholder="请输入股票代码"
+            clearable
+            @keyup.enter.native="handleQuery"
+          />
+        </el-form-item>
+        <el-form-item label="股票名称" prop="stockName">
+          <el-input
+            v-model="queryParams.stockName"
+            placeholder="请输入股票名称"
+            clearable
+            @keyup.enter.native="handleQuery"
+          />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" icon="el-icon-search" size="mini" @click="handleQuery">搜索</el-button>
+          <el-button icon="el-icon-refresh" size="mini" @click="resetQuery">重置</el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
 
-    <el-row :gutter="10" class="mb8">
-      <el-col :span="1.5">
-        <el-button
-          type="primary"
-          plain
-          icon="el-icon-plus"
-          size="mini"
-          @click="handleAdd"
-          v-hasPermi="['stock:sell_price_alerts:add']"
-        >新增
-        </el-button>
-      </el-col>
-      <el-col :span="1.5">
-        <el-button
-          type="success"
-          plain
-          icon="el-icon-edit"
-          size="mini"
-          :disabled="single"
-          @click="handleUpdate"
-          v-hasPermi="['stock:sell_price_alerts:edit']"
-        >修改
-        </el-button>
-      </el-col>
-      <el-col :span="1.5">
-        <el-button
-          type="danger"
-          plain
-          icon="el-icon-delete"
-          size="mini"
-          :disabled="multiple"
-          @click="handleDelete"
-          v-hasPermi="['stock:sell_price_alerts:remove']"
-        >删除
-        </el-button>
-      </el-col>
-      <el-col :span="1.5">
-        <el-button
-          type="warning"
-          plain
-          icon="el-icon-download"
-          size="mini"
-          @click="handleExport"
-          v-hasPermi="['stock:sell_price_alerts:export']"
-        >导出
-        </el-button>
-      </el-col>
-      <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
-    </el-row>
-
-    <el-table v-loading="loading" :data="sell_price_alertsList" @selection-change="handleSelectionChange" :stripe="true" :border="false">
-      <el-table-column type="selection" width="55" align="center"/>
-<!--      <el-table-column label="主键ID" align="center" prop="id"/>-->
-      <!--      <el-table-column label="提醒日期" align="center" prop="alertDate" width="180">-->
-      <!--        <template slot-scope="scope">-->
-      <!--          <span>{{ parseTime(scope.row.alertDate, '{y}-{m}-{d}') }}</span>-->
-      <!--        </template>-->
-      <!--      </el-table-column>-->
-      <el-table-column label="股票代码" align="center" prop="stockCode">
-        <template slot-scope="scope">
-          <el-tag size="mini">{{ scope.row.stockCode }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="股票名称" align="center" prop="stockName" style="font-weight: bold;"/>
-      <el-table-column label="最新价格" align="right" prop="latestPrice">
-        <template slot-scope="scope">
-          <span>{{ scope.row.latestPrice ? Number(scope.row.latestPrice).toFixed(2) : '--' }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="阈值价格" align="right" prop="thresholdPrice">
-         <template slot-scope="scope">
-          <span>{{ scope.row.thresholdPrice ? Number(scope.row.thresholdPrice).toFixed(2) : '--' }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="通知次数" align="center" prop="indexCount"/>
-      <el-table-column label="是否持仓" align="center" prop="isEnabled">
-        <template slot-scope="scope">
-          <dict-tag :options="dict.type.position_status" :value="scope.row.isEnabled"/>
-        </template>
-      </el-table-column>
-      <el-table-column label="更新时间" align="center" prop="updatedAt" width="180">
-        <template slot-scope="scope">
-          <span>{{ parseTime(scope.row.updatedAt, '{y}-{m}-{d}') }}</span>
-        </template>
-      </el-table-column>
-      <!--      <el-table-column label="API 接口" align="center" prop="stockApi"/>-->
-      <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
-        <template slot-scope="scope">
+    <el-card shadow="never" class="box-card">
+      <el-row :gutter="10" class="mb8">
+        <el-col :span="1.5">
           <el-button
+            type="primary"
+            plain
+            icon="el-icon-plus"
             size="mini"
-            type="text"
+            @click="handleAdd"
+            v-hasPermi="['stock:sell_price_alerts:add']"
+          >新增
+          </el-button>
+        </el-col>
+        <el-col :span="1.5">
+          <el-button
+            type="success"
+            plain
             icon="el-icon-edit"
-            @click="handleUpdate(scope.row)"
+            size="mini"
+            :disabled="single"
+            @click="handleUpdate"
             v-hasPermi="['stock:sell_price_alerts:edit']"
           >修改
           </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+        </el-col>
+        <el-col :span="1.5">
+          <el-button
+            type="danger"
+            plain
+            icon="el-icon-delete"
+            size="mini"
+            :disabled="multiple"
+            @click="handleDelete"
+            v-hasPermi="['stock:sell_price_alerts:remove']"
+          >删除
+          </el-button>
+        </el-col>
+        <el-col :span="1.5">
+          <el-button
+            type="warning"
+            plain
+            icon="el-icon-download"
+            size="mini"
+            @click="handleExport"
+            v-hasPermi="['stock:sell_price_alerts:export']"
+          >导出
+          </el-button>
+        </el-col>
+        <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
+      </el-row>
 
-    <pagination
-      v-show="total>0"
-      :total="total"
-      :page.sync="queryParams.pageNum"
-      :limit.sync="queryParams.pageSize"
-      @pagination="getList"
-    />
+      <el-table v-loading="loading" :data="sell_price_alertsList" @selection-change="handleSelectionChange" :stripe="true" :border="false">
+        <el-table-column type="selection" width="55" align="center"/>
+  <!--      <el-table-column label="主键ID" align="center" prop="id"/>-->
+        <!--      <el-table-column label="提醒日期" align="center" prop="alertDate" width="180">-->
+        <!--        <template slot-scope="scope">-->
+        <!--          <span>{{ parseTime(scope.row.alertDate, '{y}-{m}-{d}') }}</span>-->
+        <!--        </template>-->
+        <!--      </el-table-column>-->
+        <el-table-column label="股票代码" align="center" prop="stockCode">
+          <template slot-scope="scope">
+            <el-tag size="mini">{{ scope.row.stockCode }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="股票名称" align="center" prop="stockName" style="font-weight: bold;"/>
+        <el-table-column label="最新价格" align="right" prop="latestPrice">
+          <template slot-scope="scope">
+            <span :style="priceStyle(scope.row)">{{ scope.row.latestPrice ? Number(scope.row.latestPrice).toFixed(2) : '--' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="阈值价格" align="right" prop="thresholdPrice">
+           <template slot-scope="scope">
+            <span>{{ scope.row.thresholdPrice ? Number(scope.row.thresholdPrice).toFixed(2) : '--' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="通知次数" align="center" prop="indexCount"/>
+        <el-table-column label="是否持仓" align="center" prop="isEnabled">
+          <template slot-scope="scope">
+            <dict-tag :options="dict.type.position_status" :value="scope.row.isEnabled"/>
+          </template>
+        </el-table-column>
+        <el-table-column label="更新时间" align="center" prop="updatedAt" width="180">
+          <template slot-scope="scope">
+            <span>{{ parseTime(scope.row.updatedAt, '{y}-{m}-{d}') }}</span>
+          </template>
+        </el-table-column>
+        <!--      <el-table-column label="API 接口" align="center" prop="stockApi"/>-->
+        <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
+          <template slot-scope="scope">
+            <el-button
+              size="mini"
+              type="text"
+              icon="el-icon-edit"
+              @click="handleUpdate(scope.row)"
+              v-hasPermi="['stock:sell_price_alerts:edit']"
+            >修改
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <pagination
+        v-show="total>0"
+        :total="total"
+        :page.sync="queryParams.pageNum"
+        :limit.sync="queryParams.pageSize"
+        @pagination="getList"
+      />
+    </el-card>
 
     <!-- 添加或修改卖出价位提醒对话框 -->
     <el-dialog :title="title" :visible.sync="open" width="500px" append-to-body>
@@ -331,7 +335,25 @@ export default {
       this.download('stock/sell_price_alerts/export', {
         ...this.queryParams
       }, `sell_price_alerts_${new Date().getTime()}.xlsx`)
+    },
+    priceStyle(row) {
+      if (row.latestPrice == null || row.thresholdPrice == null) {
+        return '';
+      }
+      const latest = parseFloat(row.latestPrice);
+      const threshold = parseFloat(row.thresholdPrice);
+      // ≥ 阈值：红色 (#F56C6C)
+      if (latest >= threshold) {
+        return 'color: #F56C6C; font-weight: bold;';
+      }
+      // < 阈值：绿色 (#67C23A)
+      return 'color: #67C23A; font-weight: bold;';
     }
   }
 }
 </script>
+<style scoped>
+.mb-20 {
+  margin-bottom: 20px;
+}
+</style>
