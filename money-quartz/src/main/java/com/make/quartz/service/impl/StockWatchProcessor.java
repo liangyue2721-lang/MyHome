@@ -74,20 +74,25 @@ public class StockWatchProcessor {
                         log.debug("[请求股票数据] TraceId={} code={} , api={}", traceId, code, api);
 
                         StockRealtimeInfo stockRealtimeInfo = KlineDataFetcher.fetchRealtimeInfo(api);
-                        // 更新行情
-                        watchstock.setNewPrice(BigDecimal.valueOf(stockRealtimeInfo.getPrice()));
-                        watchstock.setHighPrice(BigDecimal.valueOf(stockRealtimeInfo.getHighPrice()));
-                        watchstock.setLowPrice(BigDecimal.valueOf(stockRealtimeInfo.getLowPrice()));
+                        if (stockRealtimeInfo != null) {
+                            // 更新行情
+                            watchstock.setNewPrice(BigDecimal.valueOf(stockRealtimeInfo.getPrice()));
+                            watchstock.setHighPrice(BigDecimal.valueOf(stockRealtimeInfo.getHighPrice()));
+                            watchstock.setLowPrice(BigDecimal.valueOf(stockRealtimeInfo.getLowPrice()));
 
-                        log.debug("[股票数据更新] TraceId={} code={} , 最新={} , 高={} , 低={}",
-                                traceId, code, stockRealtimeInfo.getPrice(), stockRealtimeInfo.getHighPrice(), stockRealtimeInfo.getLowPrice());
+                            log.debug("[股票数据更新] TraceId={} code={} , 最新={} , 高={} , 低={}",
+                                    traceId, code, stockRealtimeInfo.getPrice(), stockRealtimeInfo.getHighPrice(), stockRealtimeInfo.getLowPrice());
 
-                        // 周高低逻辑
-                        watchStockUpdater.updateWeekHighLowIfNeeded(watchstock);
-                        return watchstock;
+                            // 周高低逻辑
+                            watchStockUpdater.updateWeekHighLowIfNeeded(watchstock);
+                            return watchstock;
+                        } else {
+                            log.warn("[无行情数据] TraceId={} code={}", traceId, code);
+                            return null;
+                        }
 
                     } catch (Exception e) {
-                        log.error("[处理异常] TraceId={} code={}, err={}", traceId, code, e.getMessage());
+                        log.error("[处理异常] TraceId={} code={}, err={}", traceId, code, e);
                         return null;
                     }
                 }));

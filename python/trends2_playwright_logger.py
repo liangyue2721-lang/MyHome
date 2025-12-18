@@ -127,7 +127,7 @@ def fetch_trends_eastmoney(page, secid, ndays):
     if text.startswith("<"):
         return None
     parsed = parse_json_or_jsonp(text)
-    if parsed and parsed.get("data", {}).get("trends"):
+    if parsed and parsed.get("data") and parsed.get("data").get("trends"):
         return parsed["data"]["trends"]
     return None
 

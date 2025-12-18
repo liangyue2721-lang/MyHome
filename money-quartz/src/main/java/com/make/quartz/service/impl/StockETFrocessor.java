@@ -80,7 +80,7 @@ public class StockETFrocessor {
                         }
                     } catch (Exception e) {
                         log.error("[ETF-处理异常] TraceId={} code={} err={}",
-                                traceId, code, e.getMessage());
+                                traceId, code, e);
                         return null;
                     }
                 }));
@@ -95,7 +95,7 @@ public class StockETFrocessor {
                         batchUpdatedList.add(data);
                     }
                 } catch (Exception e) {
-                    log.error("[ETF-线程执行失败] TraceId={} err={}", traceId, e.getMessage());
+                    log.error("[ETF-线程执行失败] TraceId={} err={}", traceId, e);
                 }
             }
 

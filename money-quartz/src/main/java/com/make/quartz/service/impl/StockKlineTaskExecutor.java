@@ -78,7 +78,7 @@ public class StockKlineTaskExecutor {
                 } catch (Exception e) {
                     failCount++;
                     log.error("❌ [Kline] 单任务异常 TraceId={} Code={} err={}",
-                            traceId, batch.get(i).getStockCode(), e.getMessage());
+                            traceId, batch.get(i).getStockCode(), e);
                 }
             }
 
