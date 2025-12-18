@@ -125,10 +125,13 @@ public abstract class AbstractQuartzJob implements Job {
             if (!locked) {
                 // 记录日志或指标：跳过执行
                 String currentNodeId = IpUtils.getHostIp(); // 简单使用IP作为节点标识
-                log.info("[TASK_MONITOR] [LOCK_SKIPPED] Failed to acquire lock. Key: {}, InstanceId: {}, Node: {}, LockName: {}",
-                        jobKey, fireInstanceId, currentNodeId, lockKey);
+                long ttl = lock.remainTimeToLive();
+                log.info("[TASK_MONITOR] [LOCK_SKIPPED] Failed to acquire lock. Key: {}, InstanceId: {}, Node: {}, LockName: {}, TTL: {}ms",
+                        jobKey, fireInstanceId, currentNodeId, lockKey, ttl);
                 return;
             }
+
+            log.info("[TASK_MONITOR] [LOCK_ACQUIRED] Key: {}, InstanceId: {}, Node: {}", jobKey, fireInstanceId, IpUtils.getHostIp());
 
             // 记录到本地执行Map，恢复本地执行状态跟踪
             executingJobs.put(jobKey, System.currentTimeMillis());
@@ -163,9 +166,17 @@ public abstract class AbstractQuartzJob implements Job {
             }
 
             // 真正执行子类逻辑
-            log.info("[TASK_MONITOR] [EXECUTE] Starting local execution. Key: {}, InstanceId: {}", jobKey, fireInstanceId);
+            log.info("[TASK_MONITOR] [EXECUTE_START] Starting local execution. Key: {}, InstanceId: {}", jobKey, fireInstanceId);
             taskMonitoringService.recordTaskStart(jobKey);
-            doExecute(context, sysJob);
+
+            long start = System.currentTimeMillis();
+            try {
+                doExecute(context, sysJob);
+            } finally {
+                long duration = System.currentTimeMillis() - start;
+                log.info("[TASK_MONITOR] [EXECUTE_END] Local execution finished. Key: {}, InstanceId: {}, Duration: {}ms",
+                        jobKey, fireInstanceId, duration);
+            }
 
             after(context, sysJob, null);
         } catch (Exception e) {
@@ -178,6 +189,7 @@ public abstract class AbstractQuartzJob implements Job {
             // 释放分布式锁
             if (locked && lock.isHeldByCurrentThread()) {
                 lock.unlock();
+                log.info("[TASK_MONITOR] [LOCK_RELEASED] Key: {}, InstanceId: {}, Node: {}", jobKey, fireInstanceId, IpUtils.getHostIp());
             }
 
             if (locked) { // 只有真正执行完成才记录结束（分发的任务由消费者记录）
