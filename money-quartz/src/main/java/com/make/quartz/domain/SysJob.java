@@ -58,6 +58,10 @@ public class SysJob extends BaseEntity
     @Excel(name = "主节点执行", readConverterExp = "0=否,1=是")
     private String isMasterNode = "0"; // 默认值
 
+    /** 任务优先级 (HIGH/NORMAL) */
+    @Excel(name = "优先级")
+    private String priority = "NORMAL";
+
     /** 链路追踪ID */
     private String traceId; // 默认值
 
@@ -193,6 +197,14 @@ public class SysJob extends BaseEntity
 
     public void setIsMasterNode(String isMasterNode) {
         this.isMasterNode = isMasterNode;
+    }
+
+    public String getPriority() {
+        return priority;
+    }
+
+    public void setPriority(String priority) {
+        this.priority = priority;
     }
 
     @Override

@@ -91,28 +91,28 @@ public class TaskExecutionService {
                 log.warn("[EXEC_SKIP] 任务 {} 已在执行中", message.getTaskId());
                 return;
             }
-            
-            taskExecutor.submit(() -> {
-                try {
-                    executingTasks.put(message.getTaskId(), System.currentTimeMillis());
-                    
-                    SysJob sysJob = reconstructSysJob(message);
-                    if (sysJob != null) {
-                        executeSysJob(sysJob);
-                    } else {
-                        executeTask(message.getTaskId());
-                    }
 
-                } catch (Exception e) {
-                    log.error("[EXEC_FAIL] 任务执行异常 | TaskID: {}", message.getTaskId(), e);
-                    throw new RuntimeException(e);
-                } finally {
-                    executingTasks.remove(message.getTaskId());
+            // 同步执行任务，确保任务执行完成后才返回，从而触发外部的ACK
+            try {
+                executingTasks.put(message.getTaskId(), System.currentTimeMillis());
+
+                SysJob sysJob = reconstructSysJob(message);
+                if (sysJob != null) {
+                    executeSysJob(sysJob);
+                } else {
+                    executeTask(message.getTaskId());
                 }
-            });
+
+            } catch (Exception e) {
+                log.error("[EXEC_FAIL] 任务执行异常 | TaskID: {}", message.getTaskId(), e);
+                // 抛出异常以触发Requeue
+                throw new RuntimeException(e);
+            } finally {
+                executingTasks.remove(message.getTaskId());
+            }
             
         } catch (Exception e) {
-            log.error("[EXEC_SUBMIT_ERROR] 提交任务失败 | TaskID: {}", message.getTaskId(), e);
+            log.error("[EXEC_ERROR] 执行任务失败 | TaskID: {}", message.getTaskId(), e);
             throw e;
         }
     }

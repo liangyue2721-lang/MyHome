@@ -224,6 +224,23 @@ public class SchedulerManager {
     }
     
     /**
+     * 获取所有活跃节点列表
+     * @return 节点ID列表
+     */
+    public java.util.List<String> getAliveNodes() {
+        try {
+            Set<String> nodes = redisTemplate.opsForSet().members(SCHEDULER_NODES_KEY);
+            if (nodes == null || nodes.isEmpty()) {
+                return new java.util.ArrayList<>();
+            }
+            return new java.util.ArrayList<>(nodes);
+        } catch (Exception e) {
+            log.error("获取活跃节点失败", e);
+            return new java.util.ArrayList<>();
+        }
+    }
+
+    /**
      * 获取线程池使用率最低的节点
      * @param excludeCurrentNode 是否排除当前节点
      * @return 节点ID，如果没有可用节点则返回null
