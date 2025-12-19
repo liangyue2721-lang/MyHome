@@ -1,12 +1,14 @@
 #!/bin/bash
 # ==========================================================
 # Stock Service startup script (Linux / macOS)
+#
 # Features:
 # 1. Bind to a specific Python interpreter
 # 2. Check & auto-install uvicorn / fastapi
 # 3. Prevent duplicate start (port check)
 # 4. Graceful stop with PID file
 # 5. Background run with nohup
+# 6. JSON access log handled by FastAPI middleware
 # ==========================================================
 
 set -euo pipefail
@@ -14,8 +16,9 @@ set -euo pipefail
 # -------------------- Config --------------------
 BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 PID_FILE="$BASE_DIR/stock_service.pid"
+
 LOG_DIR="$BASE_DIR/logs"
-LOG_FILE="$LOG_DIR/service.log"
+SERVICE_LOG="$LOG_DIR/service.log"
 
 APP_MODULE="stock_service:app"
 HOST="0.0.0.0"
@@ -29,11 +32,12 @@ cd "$BASE_DIR"
 mkdir -p "$LOG_DIR"
 
 echo "[INFO] Using Python: $PYTHON_BIN"
+echo "[INFO] Base directory: $BASE_DIR"
 echo "[INFO] Starting Stock Service..."
 
 # -------------------- Check Python --------------------
 if [ ! -x "$PYTHON_BIN" ]; then
-    echo "[ERROR] Python not found: $PYTHON_BIN"
+    echo "[ERROR] Python not found or not executable: $PYTHON_BIN"
     exit 1
 fi
 
@@ -48,23 +52,35 @@ echo "[INFO] Checking Python dependencies..."
 
 "$PYTHON_BIN" - <<'EOF'
 import importlib.util, sys
+
 missing = []
 for m in ("uvicorn", "fastapi"):
     if importlib.util.find_spec(m) is None:
         missing.append(m)
-sys.exit(1 if missing else 0)
+
+if missing:
+    print("Missing:", ", ".join(missing))
+    sys.exit(1)
+sys.exit(0)
 EOF
 
 if [ $? -ne 0 ]; then
-    echo "[INFO] Missing dependencies detected, installing..."
+    echo "[INFO] Installing missing dependencies..."
     "$PYTHON_BIN" -m pip install --upgrade pip
     "$PYTHON_BIN" -m pip install uvicorn fastapi
 fi
 
 # -------------------- Port check --------------------
-if ss -lnt 2>/dev/null | grep -q ":$PORT "; then
-    echo "[WARN] Port $PORT is already in use. Service may already be running."
-    exit 0
+if command -v ss >/dev/null 2>&1; then
+    if ss -lnt | grep -q ":$PORT "; then
+        echo "[WARN] Port $PORT is already in use. Service may already be running."
+        exit 0
+    fi
+else
+    if lsof -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+        echo "[WARN] Port $PORT is already in use. Service may already be running."
+        exit 0
+    fi
 fi
 
 # -------------------- Stop existing process --------------------
@@ -83,11 +99,14 @@ if [ -f "$PID_FILE" ]; then
 fi
 
 # -------------------- Start service --------------------
+echo "[INFO] Launching uvicorn..."
+
 nohup "$PYTHON_BIN" -m uvicorn "$APP_MODULE" \
     --host "$HOST" \
     --port "$PORT" \
     --log-level info \
-    >> "$LOG_FILE" 2>&1 &
+    --no-access-log \
+    >> "$SERVICE_LOG" 2>&1 &
 
 NEW_PID=$!
 sleep 1
@@ -95,8 +114,10 @@ sleep 1
 # -------------------- Verify start --------------------
 if ps -p "$NEW_PID" >/dev/null 2>&1; then
     echo "$NEW_PID" > "$PID_FILE"
-    echo "[INFO] Stock Service started successfully (PID=$NEW_PID)"
-    echo "[INFO] Log file: $LOG_FILE"
+    echo "[INFO] Stock Service started successfully"
+    echo "[INFO] PID        : $NEW_PID"
+    echo "[INFO] Service log: $SERVICE_LOG"
+    echo "[INFO] Access log : $LOG_DIR/access.log"
 else
     echo "[ERROR] Failed to start Stock Service"
     exit 1
