@@ -55,7 +55,7 @@ echo [INFO] Checking uvicorn...
 "%PYTHON_EXE%" -c "import uvicorn; print('uvicorn OK')" 2>nul
 if errorlevel 1 (
     echo [ERROR] uvicorn is not installed
-    echo [HINT ] Run the following command manually:
+    echo [HINT ] Run:
     echo         "%PYTHON_EXE%" -m pip install uvicorn fastapi
     pause
     exit /b 1
@@ -67,7 +67,6 @@ REM ==========================================================
 netstat -ano | findstr LISTENING | findstr :%PORT% >nul
 if not errorlevel 1 (
     echo [ERROR] Port %PORT% is already in use
-    echo [HINT ] Stop the existing service or change the port
     pause
     exit /b 1
 )
@@ -77,7 +76,7 @@ REM 6. Start service (FOREGROUND)
 REM ==========================================================
 echo.
 echo =========================================
-echo Starting uvicorn in FOREGROUND mode
+echo Starting uvicorn (JSON access log enabled)
 echo URL: http://127.0.0.1:%PORT%
 echo Press Ctrl+C to stop
 echo =========================================
@@ -86,7 +85,8 @@ echo.
 "%PYTHON_EXE%" -m uvicorn %APP_MODULE% ^
     --host %HOST% ^
     --port %PORT% ^
-    --log-level info
+    --log-level info ^
+    --no-access-log
 
 echo.
 echo =========================================
