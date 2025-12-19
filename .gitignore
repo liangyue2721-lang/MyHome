@@ -47,3 +47,4 @@ nbdist/
 !*/build/*.html
 !*/build/*.xml
 /python/__pycache__
+/python/logs
