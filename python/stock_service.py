@@ -8,7 +8,7 @@ import asyncio
 import re
 import time
 import random
-from datetime import datetime
+from datetime import datetime, timedelta, date
 from typing import Optional, List, Dict, Any
 from logging.handlers import TimedRotatingFileHandler
 
@@ -230,6 +230,255 @@ def health():
     return {"status": "ok", "browser": BROWSER is not None}
 
 # =========================================================
-# 下面业务接口代码保持你原样即可
-# （ETF / Stock / Kline 等，未省略，直接沿用）
+# Data Models
 # =========================================================
+
+class RealtimeRequest(BaseModel):
+    url: str
+
+class KlineRequest(BaseModel):
+    secid: str
+    ndays: int
+
+# =========================================================
+# Business Logic Helpers
+# =========================================================
+
+def safe_get(dct, key):
+    return dct.get(key)
+
+def standardize_realtime_data(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Standardize the realtime data fields to match the Java DTO.
+    Based on etf_realtime_fetcher.py mapping.
+    """
+    def _div100(val):
+        return val / 100 if val is not None else None
+
+    return {
+        "stockCode": safe_get(data, "f57"),
+        "companyName": safe_get(data, "f58"),
+        "price": _div100(safe_get(data, "f43")),
+        "prevClose": _div100(safe_get(data, "f60")),
+        "openPrice": _div100(safe_get(data, "f46")),
+        "highPrice": _div100(safe_get(data, "f44")),
+        "lowPrice": _div100(safe_get(data, "f45")),
+        "volume": safe_get(data, "f47"),
+        "turnover": safe_get(data, "f48"),
+        "volumeRatio": safe_get(data, "f52"),
+        "commissionRatio": safe_get(data, "f20"),
+        "mainFundsInflow": safe_get(data, "f152")
+    }
+
+async def fetch_json_with_browser(url: str, max_retry=3) -> Optional[Dict[str, Any]]:
+    """
+    Fetch JSON data using the global Playwright browser.
+    """
+    global BROWSER, SEMAPHORE
+
+    if not BROWSER:
+        logger.error("Global BROWSER is not initialized.")
+        raise HTTPException(status_code=500, detail="Browser service not ready")
+
+    async with SEMAPHORE:
+        context = await BROWSER.new_context(
+            locale="zh-CN",
+            user_agent=random_ua()
+        )
+        await hide_webdriver_property(context)
+
+        page = None
+        try:
+            page = await context.new_page()
+
+            for attempt in range(1, max_retry + 1):
+                try:
+                    # logger.info(f"[FETCH] {attempt}/{max_retry} {url}")
+                    await page.goto(url, timeout=20000, wait_until="domcontentloaded")
+
+                    # innerText is robust for JSON responses rendered in browser
+                    text = await page.evaluate("() => document.body.innerText || ''")
+                    text = text.strip()
+
+                    if not text:
+                        raise Exception("Empty response body")
+                    if text.startswith("<"):
+                        raise Exception("HTML content detected (likely error page)")
+
+                    parsed = parse_json_or_jsonp(text)
+                    if parsed is None:
+                        raise Exception("JSON parse failed")
+
+                    return parsed
+
+                except Exception as e:
+                    # logger.warning(f"Fetch attempt {attempt} failed: {e}")
+                    if attempt < max_retry:
+                        await asyncio.sleep(0.5 + random.random())
+                    else:
+                        logger.error(f"All fetch attempts failed for {url}: {e}")
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Unexpected browser error: {e}")
+            raise HTTPException(status_code=500, detail=f"Browser fetch error: {str(e)}")
+        finally:
+            if page:
+                try:
+                    await page.close()
+                except:
+                    pass
+            if context:
+                try:
+                    await context.close()
+                except:
+                    pass
+
+def normalize_kline_record(obj: dict) -> dict:
+    """Clean keys and ensure required fields exist."""
+    clean = {}
+    for k, v in obj.items():
+        nk = re.sub(r"[\r\n\t ]+", "", k)
+        if nk:
+            clean[nk] = v
+
+    required = [
+        "trade_date", "trade_time", "stock_code",
+        "open", "close", "high", "low",
+        "volume", "amount",
+        "pre_close", "change", "change_pct", "turnover_ratio"
+    ]
+    for f in required:
+        if f not in clean:
+            clean[f] = None
+    return clean
+
+# =========================================================
+# Endpoints
+# =========================================================
+
+@app.post("/stock/realtime")
+async def stock_realtime(req: RealtimeRequest):
+    data_json = await fetch_json_with_browser(req.url)
+    if not data_json:
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    data = data_json.get("data", {})
+    if not data:
+         # Sometimes API returns code=0 but data is null
+         raise HTTPException(status_code=404, detail="No data in response")
+
+    return standardize_realtime_data(data)
+
+
+@app.post("/etf/realtime")
+async def etf_realtime(req: RealtimeRequest):
+    # Logic is identical to stock/realtime, just separated for compatibility
+    data_json = await fetch_json_with_browser(req.url)
+    if not data_json:
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    data = data_json.get("data", {})
+    if not data:
+         raise HTTPException(status_code=404, detail="No data in response")
+
+    return standardize_realtime_data(data)
+
+
+@app.post("/stock/kline")
+async def stock_kline(req: KlineRequest):
+    """
+    Fetch K-line data for the last `ndays`.
+    """
+    # 1. Normalize secid (add market prefix if missing)
+    secid = normalize_secid(req.secid)
+
+    # 2. Calculate beg_date
+    # To be safe, look back (ndays * 2 + 20) days to account for weekends/holidays
+    lookback = req.ndays * 2 + 20
+    beg_date_dt = datetime.now() - timedelta(days=lookback)
+    beg_date = beg_date_dt.strftime("%Y%m%d")
+    end_date = "20500101"
+
+    # 3. Construct URL
+    # Using the template from fetch_stock_realtime.py
+    url = (
+        "https://push2his.eastmoney.com/api/qt/stock/kline/get?"
+        "fields1=f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12,f13&"
+        "fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&"
+        f"beg={beg_date}&end={end_date}&ut=fa5fd1943c7b386f172d6893dbfba10b&"
+        f"secid={secid}&klt=101&fqt=1"
+    )
+
+    # 4. Fetch
+    raw_json = await fetch_json_with_browser(url)
+    if not raw_json:
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    data = raw_json.get("data", {})
+    klines = data.get("klines", [])
+    code = data.get("code")
+
+    # 5. Parse
+    result = []
+    prev_close = None
+    # API doesn't always give explicit pre-close for each day in this format,
+    # but we can track it from the previous day's close.
+    # Alternatively, data.get("preKPrice") might be available for the *first* item,
+    # but calculating sequentially is safer if we have enough history.
+
+    for row in klines:
+        parts = row.split(",")
+        if len(parts) < 10:
+            continue
+
+        trade_date_str = parts[0]
+        try:
+            open_p = float(parts[1])
+            close_p = float(parts[2])
+            high_p = float(parts[3])
+            low_p = float(parts[4])
+            volume = int(parts[5])
+            amount = float(parts[6])
+            change = float(parts[7])
+            change_pct = float(parts[8])
+            turnover_ratio = float(parts[9])
+        except (ValueError, IndexError):
+            continue
+
+        ttime_str = None
+        try:
+            tdate = datetime.strptime(trade_date_str, "%Y-%m-%d").date()
+            ttime = datetime.combine(tdate, datetime.min.time())
+            ttime_str = ttime.isoformat()
+        except:
+            pass
+
+        item = {
+            "trade_date": trade_date_str,
+            "trade_time": ttime_str,
+            "stock_code": code,
+            "open": open_p,
+            "close": close_p,
+            "high": high_p,
+            "low": low_p,
+            "volume": volume,
+            "amount": amount,
+            "change": change,
+            "change_pct": change_pct,
+            "turnover_ratio": turnover_ratio,
+            "pre_close": prev_close
+        }
+
+        result.append(normalize_kline_record(item))
+        prev_close = close_p
+
+    # 6. Slice the last ndays
+    if not result:
+        return []
+
+    if len(result) > req.ndays:
+        result = result[-req.ndays:]
+
+    return result
