@@ -79,6 +79,7 @@ public class StockWatchProcessor {
                             watchstock.setNewPrice(BigDecimal.valueOf(stockRealtimeInfo.getPrice()));
                             watchstock.setHighPrice(BigDecimal.valueOf(stockRealtimeInfo.getHighPrice()));
                             watchstock.setLowPrice(BigDecimal.valueOf(stockRealtimeInfo.getLowPrice()));
+                            watchstock.setPreviousClose(BigDecimal.valueOf(stockRealtimeInfo.getPrevClose()));
 
                             log.debug("[股票数据更新] TraceId={} code={} , 最新={} , 高={} , 低={}",
                                     traceId, code, stockRealtimeInfo.getPrice(), stockRealtimeInfo.getHighPrice(), stockRealtimeInfo.getLowPrice());
