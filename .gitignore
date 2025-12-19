@@ -48,3 +48,4 @@ nbdist/
 !*/build/*.xml
 /python/__pycache__
 /python/logs
+/node_modules
