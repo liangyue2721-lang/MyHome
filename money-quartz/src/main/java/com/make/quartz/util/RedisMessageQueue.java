@@ -2,8 +2,11 @@ package com.make.quartz.util;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONException;
+import com.alibaba.fastjson2.annotation.JSONField;
+import com.make.common.utils.StringUtils;
 import com.make.common.utils.ThreadPoolUtil;
 import com.make.common.utils.spring.SpringUtils;
+import com.make.quartz.config.QuartzProperties;
 import com.make.quartz.service.TaskExecutionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,75 +15,96 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 基于Redis的简易消息队列实现
- * 用于在分布式节点间传递任务执行消息
+ * 基于Redis的可靠消息队列实现 (Reliable Redis Message Queue)
+ *
+ * 核心机制：
+ * 1. **Reliable Consumption (RPOPLPUSH)**:
+ *    使用 Redis 的 `RPOPLPUSH` 命令将任务从 "等待队列" 原子移动到 "处理中队列" (Processing Queue)。
+ *    这确保了即使消费者在处理过程中崩溃，任务也不会丢失，而是保留在处理中队列中。
+ *
+ * 2. **Acknowledgement (ACK)**:
+ *    任务执行成功后，消费者显式调用 `acknowledge()`，将任务从处理中队列移除。
+ *
+ * 3. **Retry (Requeue)**:
+ *    如果任务执行失败，调用 `requeue()` 将任务重新放回等待队列（增加重试计数）。
+ *
+ * 4. **Auto Cleanup**:
+ *    后台线程定期扫描处理中队列，发现超时未完成的任务（判定为消费者崩溃），自动将其重新入队。
+ *
+ * 5. **Priority Queues**:
+ *    支持 HIGH (高) 和 NORMAL (普通) 优先级队列。消费者优先消费高优先级队列。
  */
 @Component
 public class RedisMessageQueue {
 
     private static final Logger log = LoggerFactory.getLogger(RedisMessageQueue.class);
 
-    /**
-     * 任务队列Redis key前缀
-     */
     private static final String TASK_QUEUE_PREFIX = "task:queue:";
+    private static final String HIGH_PRIORITY_SUFFIX = ":high";
+    private static final String NORMAL_PRIORITY_SUFFIX = ":normal";
+    private static final String PROCESSING_QUEUE_SUFFIX = ":processing";
 
-    /**
-     * 任务队列Redis key
-     */
-    private static final String TASK_QUEUE_KEY = "task:queue:jobs";
-
-    @Autowired
-    private RedisTemplate<String, String> redisTemplate;
+    private final RedisTemplate<String, String> redisTemplate;
+    private final QuartzProperties quartzProperties;
 
     private ThreadPoolExecutor executorService;
-
-    // 添加一个用于任务处理的线程池
     private ThreadPoolExecutor taskProcessExecutor;
-
+    private ScheduledExecutorService cleanupScheduler;
     private static RedisMessageQueue instance;
+    private volatile String currentNodeId;
 
-    /**
-     * 用于跟踪正在处理的消息
-     * key: taskId, value: 开始处理时间
-     */
+    // 本地去重缓存: 防止同一节点重复执行相同任务
     private static final ConcurrentHashMap<String, Long> processingMessages = new ConcurrentHashMap<>();
+
+    @Autowired
+    public RedisMessageQueue(RedisTemplate<String, String> redisTemplate, QuartzProperties quartzProperties) {
+        this.redisTemplate = redisTemplate;
+        this.quartzProperties = quartzProperties;
+    }
 
     @PostConstruct
     public void init() {
-        // 初始化监听线程池（用于监听Redis队列）
-        // 提高监听线程池的核心线程数和最大线程数，以提升任务消费速度
+        int cpuCores = Runtime.getRuntime().availableProcessors();
+
+        // 监听线程池: 负责阻塞监听 Redis 队列
         this.executorService = (ThreadPoolExecutor) ThreadPoolUtil.createCustomThreadPool(
-                Runtime.getRuntime().availableProcessors(),  // 核心线程数改为CPU核心数
-                Runtime.getRuntime().availableProcessors() * 4,  // 最大线程数改为CPU核心数的4倍
-                200,  // 增加队列容量
+                cpuCores * quartzProperties.getListenerCoreThreadsMultiple(),
+                cpuCores * quartzProperties.getListenerMaxThreadsMultiple(),
+                200,
                 "RedisQueueListener"
         );
 
-        // 初始化任务处理线程池（用于实际处理任务）
+        // 任务处理线程池: 负责实际执行任务逻辑
         this.taskProcessExecutor = (ThreadPoolExecutor) ThreadPoolUtil.createCustomThreadPool(
-                Runtime.getRuntime().availableProcessors() * 2,  // 增加核心线程数
-                Runtime.getRuntime().availableProcessors() * 8,  // 增加最大线程数
-                10000,  // 增加队列容量
+                cpuCores * quartzProperties.getExecutorCoreThreadsMultiple(),
+                cpuCores * quartzProperties.getExecutorMaxThreadsMultiple(),
+                10000,
                 "TaskProcessor"
         );
 
+        // 清理调度器: 定期回收超时任务
+        this.cleanupScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "RedisQueueCleanup");
+            t.setDaemon(true);
+            return t;
+        });
+
+        this.cleanupScheduler.scheduleAtFixedRate(this::cleanupProcessingTasks, 1, 1, TimeUnit.MINUTES);
+
         instance = this;
-        log.info("Redis消息队列初始化完成，监听线程池: 核心线程{}，最大线程{}；任务处理线程池: 核心线程{}，最大线程{}",
-                Runtime.getRuntime().availableProcessors(), Runtime.getRuntime().availableProcessors() * 4,
-                Runtime.getRuntime().availableProcessors() * 2, Runtime.getRuntime().availableProcessors() * 8);
+        log.info("Redis消息队列初始化完成 | Listeners: {} | Executors: {}",
+                executorService.getCorePoolSize(), taskProcessExecutor.getCorePoolSize());
     }
 
-    /**
-     * 获取RedisMessageQueue实例
-     * @return RedisMessageQueue实例
-     */
     public static RedisMessageQueue getInstance() {
         if (instance == null) {
             instance = SpringUtils.getBean(RedisMessageQueue.class);
@@ -89,298 +113,304 @@ public class RedisMessageQueue {
     }
 
     /**
-     * 发送任务消息到队列
-     * @param taskId 任务ID
-     * @param targetNode 目标节点
-     * @param jobData 任务数据
+     * 发送任务消息 (默认普通优先级)
      */
     public void sendTaskMessage(String taskId, String targetNode, Object jobData) {
+        sendTaskMessage(taskId, targetNode, jobData, null, null, "NORMAL");
+    }
+
+    /**
+     * 发送任务消息 (带Payload和TraceId)
+     */
+    public void sendTaskMessage(String taskId, String targetNode, Object jobData, Map<String, Object> payload, String traceId) {
+        sendTaskMessage(taskId, targetNode, jobData, payload, traceId, "NORMAL");
+    }
+
+    /**
+     * 发送任务消息 (全参数)
+     */
+    public void sendTaskMessage(String taskId, String targetNode, Object jobData, Map<String, Object> payload, String traceId, String priority) {
         try {
-            // 检查任务是否已经在处理中
-            if (processingMessages.containsKey(taskId)) {
-                log.warn("任务 {} 已在处理中，不重复发送消息", taskId);
+            if (isTaskRunningLocally(taskId)) {
+                log.warn("[QUEUE_SEND_SKIP] 任务 {} 已在本地运行中，不重复发送消息", taskId);
                 return;
             }
 
-            // 检查任务是否正在AbstractQuartzJob中执行
-            if (AbstractQuartzJob.isJobExecuting(taskId)) {
-                log.warn("任务 {} 正在AbstractQuartzJob中执行，不重复发送消息", taskId);
-                return;
-            }
-
-            // 检查任务是否已在TaskExecutionService中执行
-            if (TaskExecutionService.isTaskExecuting(taskId)) {
-                log.warn("任务 {} 正在TaskExecutionService中执行，不重复发送消息", taskId);
-                return;
-            }
-
-            // 构造消息
             TaskMessage message = new TaskMessage();
             message.setTaskId(taskId);
             message.setTargetNode(targetNode);
             message.setJobData(jobData);
+            message.setPayload(payload);
+            message.setTraceId(traceId);
+            message.setPriority(priority);
             message.setTimestamp(System.currentTimeMillis());
+            message.setRetryCount(0);
 
-            // 将消息序列化为JSON
             String messageJson = JSON.toJSONString(message);
+            String queueKey = getQueueKey(targetNode, priority);
 
-            // 记录发送的消息内容，便于调试
-            log.debug("准备发送任务消息: {}", messageJson);
-
-            // 发送到Redis队列
-            String queueKey = TASK_QUEUE_PREFIX + targetNode;
-            Long queueLength = redisTemplate.opsForList().leftPush(queueKey, messageJson);
-
-            log.info("任务消息已发送到队列，任务ID: {}, 目标节点: {}, 队列名称: {}, 队列长度: {}",
-                    taskId, targetNode, queueKey, queueLength);
+            redisTemplate.opsForList().leftPush(queueKey, messageJson);
+            log.info("[QUEUE_ENQUEUE] 任务入队成功 | Queue: {} | TaskID: {} | Priority: {} | TraceId: {}",
+                    queueKey, taskId, priority, traceId);
         } catch (Exception e) {
-            log.error("发送任务消息失败，任务ID: {}, 目标节点: {}", taskId, targetNode, e);
+            log.error("[QUEUE_SEND_ERROR] 发送任务消息失败 | TaskID: {}", taskId, e);
         }
     }
 
+    private String getQueueKey(String targetNode, String priority) {
+        return "HIGH".equalsIgnoreCase(priority) ?
+               TASK_QUEUE_PREFIX + targetNode + HIGH_PRIORITY_SUFFIX :
+               TASK_QUEUE_PREFIX + targetNode + NORMAL_PRIORITY_SUFFIX;
+    }
+
     /**
-     * 启动消息监听器
-     * @param nodeId 当前节点ID
-     * @param messageHandler 消息处理器
+     * 启动消息监听
      */
     public void startListening(String nodeId, MessageHandler messageHandler) {
-        String queueKey = TASK_QUEUE_PREFIX + nodeId;
-        log.info("启动消息监听器，监听队列: {}, 当前节点ID: {}", queueKey, nodeId);
+        this.currentNodeId = nodeId;
+        String highPriorityQueue = TASK_QUEUE_PREFIX + nodeId + HIGH_PRIORITY_SUFFIX;
+        String normalPriorityQueue = TASK_QUEUE_PREFIX + nodeId + NORMAL_PRIORITY_SUFFIX;
+        String processingQueueKey = TASK_QUEUE_PREFIX + nodeId + PROCESSING_QUEUE_SUFFIX;
+        String legacyQueue = TASK_QUEUE_PREFIX + nodeId;
 
-        // 提交监听任务到线程池
+        log.info("启动消息监听器 | NodeID: {} | ProcessingQueue: {}", nodeId, processingQueueKey);
+
         executorService.submit(() -> {
-            log.info("消息监听线程已启动，监听队列: {}", queueKey);
+            log.info("消息监听线程已启动");
             while (!Thread.currentThread().isInterrupted()) {
                 try {
-                    // 阻塞式获取消息，超时时间为10秒
-                    String messageJson = redisTemplate.opsForList().rightPop(queueKey, 10, TimeUnit.SECONDS);
+                    // 1. 优先尝试高优先级队列
+                    String messageJson = redisTemplate.opsForList().rightPopAndLeftPush(highPriorityQueue, processingQueueKey, 2, TimeUnit.SECONDS);
+
+                    // 2. 如果没有高优先级任务，尝试普通优先级
+                    if (messageJson == null) {
+                        messageJson = redisTemplate.opsForList().rightPopAndLeftPush(normalPriorityQueue, processingQueueKey, 2, TimeUnit.SECONDS);
+                    }
+
+                    // 3. 兼容旧队列
+                    if (messageJson == null) {
+                         messageJson = redisTemplate.opsForList().rightPopAndLeftPush(legacyQueue, processingQueueKey, 1, TimeUnit.SECONDS);
+                    }
+
                     if (messageJson != null) {
-                        log.debug("接收到原始消息内容: {}", messageJson);
-
-                        // 解析消息
-                        TaskMessage message = parseMessage(messageJson);
-                        if (message == null) {
-                            log.warn("无法解析消息内容，跳过处理: {}", messageJson);
-                            continue;
+                        // 日志记录：收到消息，已进入 processing 队列
+                        if (log.isDebugEnabled()) {
+                            log.debug("[QUEUE_RECEIVE] 接收到消息并移入处理队列 | Msg: {}", StringUtils.substring(messageJson, 0, 100));
                         }
-
-                        // 检查任务是否已经在处理中
-                        if (processingMessages.containsKey(message.getTaskId())) {
-                            log.warn("任务 {} 已在处理中，跳过重复处理", message.getTaskId());
-                            continue;
-                        }
-
-                        // 检查任务是否正在AbstractQuartzJob中执行
-                        if (AbstractQuartzJob.isJobExecuting(message.getTaskId())) {
-                            log.warn("任务 {} 正在AbstractQuartzJob中执行，跳过重复处理", message.getTaskId());
-                            continue;
-                        }
-
-                        // 检查任务是否已在TaskExecutionService中执行
-                        if (TaskExecutionService.isTaskExecuting(message.getTaskId())) {
-                            log.warn("任务 {} 正在TaskExecutionService中执行，跳过重复处理", message.getTaskId());
-                            continue;
-                        }
-
-                        log.info("接收到任务消息，任务ID: {}, 目标节点: {}, 发送时间: {}",
-                                message.getTaskId(), message.getTargetNode(), message.getTimestamp());
-
-                        // 将消息处理任务提交到专门的任务处理线程池
-                        taskProcessExecutor.submit(() -> {
-                            // 标记消息为正在处理
-                            processingMessages.put(message.getTaskId(), System.currentTimeMillis());
-                            log.info("任务 {} 标记为正在处理", message.getTaskId());
-
-                            // 处理消息
-                            long startTime = System.currentTimeMillis();
-                            try {
-                                messageHandler.handleMessage(message);
-                            } catch (Exception e) {
-                                log.error("处理任务消息时发生业务异常，任务ID: {}", message.getTaskId(), e);
-                            } finally {
-                                // 从处理中消息列表中移除
-                                processingMessages.remove(message.getTaskId());
-                                log.info("任务 {} 从处理中列表移除", message.getTaskId());
-
-                                long endTime = System.currentTimeMillis();
-                                log.info("任务消息处理完成，任务ID: {}, 处理耗时: {}ms", message.getTaskId(), (endTime - startTime));
-                            }
-                        });
-                    } else {
-                        log.debug("队列超时未获取到消息，继续监听，队列名称: {}", queueKey);
+                        processReceivedMessage(messageJson, messageHandler, processingQueueKey);
                     }
                 } catch (Exception e) {
-                    log.error("处理消息时发生异常，队列名称: {}", queueKey, e);
-                    // 防止异常导致监听线程中断
-                    try {
-                        Thread.sleep(1000);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        log.info("消息监听线程被中断，队列名称: {}", queueKey);
-                        break;
-                    }
+                    log.error("[QUEUE_LISTEN_ERROR] 消息监听循环异常", e);
+                    sleep(1000);
                 }
             }
-            log.info("消息监听线程已退出，队列名称: {}", queueKey);
+        });
+    }
+
+    private void processReceivedMessage(String messageJson, MessageHandler messageHandler, String processingQueueKey) {
+        TaskMessage message = parseMessage(messageJson);
+        if (message == null) {
+            log.warn("[QUEUE_MSG_INVALID] 无法解析消息，移除 | Msg: {}", messageJson);
+            redisTemplate.opsForList().remove(processingQueueKey, 1, messageJson);
+            return;
+        }
+
+        if (isTaskRunningLocally(message.getTaskId())) {
+            log.info("[QUEUE_MSG_DUPLICATE] 任务 {} 已在本地运行，自动确认消息", message.getTaskId());
+            acknowledge(message);
+            return;
+        }
+
+        taskProcessExecutor.submit(() -> {
+            processingMessages.put(message.getTaskId(), System.currentTimeMillis());
+            try {
+                log.info("[QUEUE_PROCESS_START] 开始处理任务 | TaskID: {} | TraceId: {}", message.getTaskId(), message.getTraceId());
+                messageHandler.handleMessage(message);
+
+                // 执行成功 -> ACK
+                acknowledge(message);
+                log.info("[QUEUE_PROCESS_SUCCESS] 任务处理完成并确认 | TaskID: {}", message.getTaskId());
+            } catch (Exception e) {
+                log.error("[QUEUE_PROCESS_ERROR] 处理任务异常 | TaskID: {}", message.getTaskId(), e);
+                // 执行失败 -> Requeue
+                requeue(message);
+            } finally {
+                processingMessages.remove(message.getTaskId());
+            }
         });
     }
 
     /**
-     * 停止消息监听
+     * 确认消息 (ACK): 从 processing 队列移除
      */
-    public void stopListening() {
-        if (executorService != null && !executorService.isShutdown()) {
-            log.info("正在停止消息监听器，当前活跃线程数: {}", executorService.getActiveCount());
-            executorService.shutdown();
-            try {
-                if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
-                    log.warn("消息监听器未能在5秒内正常关闭，强制关闭");
-                    executorService.shutdownNow();
-                }
-            } catch (InterruptedException e) {
-                log.warn("等待消息监听器关闭时被中断，强制关闭");
-                executorService.shutdownNow();
-                Thread.currentThread().interrupt();
-            }
-            log.info("消息监听器已停止");
-        } else {
-            log.debug("消息监听器已处于关闭状态，无需重复关闭");
-        }
-
-        // 同时关闭任务处理线程池
-        if (taskProcessExecutor != null && !taskProcessExecutor.isShutdown()) {
-            log.info("正在停止任务处理线程池，当前活跃线程数: {}", taskProcessExecutor.getActiveCount());
-            taskProcessExecutor.shutdown();
-            try {
-                if (!taskProcessExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
-                    log.warn("任务处理线程池未能在5秒内正常关闭，强制关闭");
-                    taskProcessExecutor.shutdownNow();
-                }
-            } catch (InterruptedException e) {
-                log.warn("等待任务处理线程池关闭时被中断，强制关闭");
-                taskProcessExecutor.shutdownNow();
-                Thread.currentThread().interrupt();
-            }
-            log.info("任务处理线程池已停止");
-        } else {
-            log.debug("任务处理线程池已处于关闭状态，无需重复关闭");
-        }
-    }
-
-    /**
-     * 解析消息内容
-     * @param messageContent 消息内容
-     * @return 解析后的TaskMessage对象，解析失败返回null
-     */
-    private TaskMessage parseMessage(String messageContent) {
-        // 首先尝试按JSON格式解析
+    public void acknowledge(TaskMessage message) {
+        if (message == null || StringUtils.isEmpty(message.getOriginalJson())) return;
         try {
-            return JSON.parseObject(messageContent, TaskMessage.class);
-        } catch (JSONException e) {
-            log.debug("按JSON格式解析消息失败: {}", messageContent);
-        }
-
-        // 如果JSON解析失败，尝试按旧格式解析（直接的任务ID）
-        try {
-            TaskMessage message = new TaskMessage();
-            message.setTaskId(messageContent);
-            message.setTargetNode(""); // 目标节点未知
-            message.setJobData(null);
-            message.setTimestamp(System.currentTimeMillis());
-            log.info("按旧格式解析消息成功: {}", messageContent);
-            return message;
+            String processingQueueKey = TASK_QUEUE_PREFIX + message.getTargetNode() + PROCESSING_QUEUE_SUFFIX;
+            redisTemplate.opsForList().remove(processingQueueKey, 1, message.getOriginalJson());
+            log.debug("[QUEUE_ACK] 消息已确认移除 | TaskID: {}", message.getTaskId());
         } catch (Exception e) {
-            log.error("按旧格式解析消息也失败: {}", messageContent, e);
-        }
-
-        // 两种格式都解析失败
-        return null;
-    }
-
-    /**
-     * 任务消息类
-     */
-    public static class TaskMessage {
-        /**
-         * 任务ID
-         */
-        private String taskId;
-
-        /**
-         * 目标节点
-         */
-        private String targetNode;
-
-        /**
-         * 任务数据
-         */
-        private Object jobData;
-
-        /**
-         * 时间戳
-         */
-        private long timestamp;
-
-        public String getTaskId() {
-            return taskId;
-        }
-
-        public void setTaskId(String taskId) {
-            this.taskId = taskId;
-        }
-
-        public String getTargetNode() {
-            return targetNode;
-        }
-
-        public void setTargetNode(String targetNode) {
-            this.targetNode = targetNode;
-        }
-
-        public Object getJobData() {
-            return jobData;
-        }
-
-        public void setJobData(Object jobData) {
-            this.jobData = jobData;
-        }
-
-        public long getTimestamp() {
-            return timestamp;
-        }
-
-        public void setTimestamp(long timestamp) {
-            this.timestamp = timestamp;
-        }
-
-        @Override
-        public String toString() {
-            return "TaskMessage{" +
-                    "taskId='" + taskId + '\'' +
-                    ", targetNode='" + targetNode + '\'' +
-                    ", jobData=" + jobData +
-                    ", timestamp=" + timestamp +
-                    '}';
+            log.error("[QUEUE_ACK_ERROR] 确认消息失败 | TaskID: {}", message.getTaskId(), e);
         }
     }
 
     /**
-     * 消息处理器接口
+     * 重新入队 (Retry): 失败重试
      */
-    public interface MessageHandler {
-        /**
-         * 处理消息
-         * @param message 任务消息
-         */
-        void handleMessage(TaskMessage message);
+    public void requeue(TaskMessage message) {
+        if (message == null) return;
+        try {
+            // 先从 processing 队列移除
+            acknowledge(message);
+
+            // 检查最大重试次数
+            if (message.getRetryCount() >= quartzProperties.getMaxRetryCount()) {
+                log.error("[QUEUE_RETRY_LIMIT] 任务 {} 超过最大重试次数 ({})，丢弃任务",
+                        message.getTaskId(), quartzProperties.getMaxRetryCount());
+                return;
+            }
+
+            message.setRetryCount(message.getRetryCount() + 1);
+            message.setTimestamp(System.currentTimeMillis());
+
+            String messageJson = JSON.toJSONString(message);
+            String queueKey = getQueueKey(message.getTargetNode(), message.getPriority());
+
+            // 重新推入等待队列
+            redisTemplate.opsForList().leftPush(queueKey, messageJson);
+            log.info("[QUEUE_REQUEUE] 任务已重新入队 | TaskID: {} | Retry: {}/{}",
+                    message.getTaskId(), message.getRetryCount(), quartzProperties.getMaxRetryCount());
+        } catch (Exception e) {
+            log.error("[QUEUE_REQUEUE_ERROR] 重新入队失败 | TaskID: {}", message.getTaskId(), e);
+        }
     }
 
     /**
-     * 检查消息是否正在处理
-     * @param taskId 任务ID
-     * @return true-正在处理，false-未在处理
+     * 清理超时任务 (Crash Recovery)
      */
+    private void cleanupProcessingTasks() {
+        if (StringUtils.isEmpty(currentNodeId)) return;
+        String processingQueueKey = TASK_QUEUE_PREFIX + currentNodeId + PROCESSING_QUEUE_SUFFIX;
+
+        try {
+            java.util.List<String> messages = redisTemplate.opsForList().range(processingQueueKey, 0, -1);
+            if (messages == null || messages.isEmpty()) return;
+
+            long now = System.currentTimeMillis();
+            int recoveredCount = 0;
+
+            for (String msgJson : messages) {
+                TaskMessage message = parseMessage(msgJson);
+                if (message == null) {
+                    redisTemplate.opsForList().remove(processingQueueKey, 1, msgJson);
+                    continue;
+                }
+
+                // 检查是否超时
+                if (now - message.getTimestamp() > quartzProperties.getTaskTimeout()) {
+                    // 再次确认是否正在本地运行 (避免误杀长任务)
+                    if (!isTaskRunningLocally(message.getTaskId())) {
+                        log.warn("[QUEUE_CLEANUP] 发现超时任务，准备回收 | TaskID: {} | Timeout: {}ms",
+                                message.getTaskId(), now - message.getTimestamp());
+                        requeue(message);
+                        recoveredCount++;
+                    }
+                }
+            }
+            if (recoveredCount > 0) {
+                log.info("[QUEUE_CLEANUP_SUMMARY] 已回收 {} 个超时任务", recoveredCount);
+            }
+        } catch (Exception e) {
+            log.error("[QUEUE_CLEANUP_ERROR] 清理队列异常", e);
+        }
+    }
+
+    public long getLocalQueueLength() {
+        if (StringUtils.isEmpty(currentNodeId)) return 0;
+        try {
+            String highKey = TASK_QUEUE_PREFIX + currentNodeId + HIGH_PRIORITY_SUFFIX;
+            String normalKey = TASK_QUEUE_PREFIX + currentNodeId + NORMAL_PRIORITY_SUFFIX;
+            Long h = redisTemplate.opsForList().size(highKey);
+            Long n = redisTemplate.opsForList().size(normalKey);
+            return (h != null ? h : 0) + (n != null ? n : 0);
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    public void stopListening() {
+        if (executorService != null) executorService.shutdownNow();
+        if (taskProcessExecutor != null) taskProcessExecutor.shutdownNow();
+        if (cleanupScheduler != null) cleanupScheduler.shutdownNow();
+    }
+
+    private void sleep(long millis) {
+        try { Thread.sleep(millis); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+    }
+
+    private TaskMessage parseMessage(String messageContent) {
+        try {
+            TaskMessage msg = JSON.parseObject(messageContent, TaskMessage.class);
+            if (msg != null) msg.setOriginalJson(messageContent);
+            return msg;
+        } catch (JSONException e) {
+            try {
+                TaskMessage message = new TaskMessage();
+                message.setTaskId(messageContent);
+                message.setTargetNode(currentNodeId);
+                message.setTimestamp(System.currentTimeMillis());
+                message.setOriginalJson(messageContent);
+                return message;
+            } catch (Exception ex) {
+                return null;
+            }
+        }
+    }
+
     public static boolean isMessageProcessing(String taskId) {
         return processingMessages.containsKey(taskId);
+    }
+
+    private boolean isTaskRunningLocally(String taskId) {
+        return processingMessages.containsKey(taskId) ||
+               AbstractQuartzJob.isJobExecuting(taskId) ||
+               TaskExecutionService.isTaskExecuting(taskId);
+    }
+
+    public static class TaskMessage {
+        private String taskId;
+        private String targetNode;
+        private Object jobData;
+        private long timestamp;
+        private Map<String, Object> payload;
+        private String traceId;
+        private int retryCount = 0;
+        private String priority = "NORMAL";
+        @JSONField(serialize = false)
+        private transient String originalJson;
+
+        // Getters and Setters
+        public String getTaskId() { return taskId; }
+        public void setTaskId(String taskId) { this.taskId = taskId; }
+        public String getTargetNode() { return targetNode; }
+        public void setTargetNode(String targetNode) { this.targetNode = targetNode; }
+        public Object getJobData() { return jobData; }
+        public void setJobData(Object jobData) { this.jobData = jobData; }
+        public long getTimestamp() { return timestamp; }
+        public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
+        public Map<String, Object> getPayload() { return payload; }
+        public void setPayload(Map<String, Object> payload) { this.payload = payload; }
+        public String getTraceId() { return traceId; }
+        public void setTraceId(String traceId) { this.traceId = traceId; }
+        public int getRetryCount() { return retryCount; }
+        public void setRetryCount(int retryCount) { this.retryCount = retryCount; }
+        public String getPriority() { return priority; }
+        public void setPriority(String priority) { this.priority = priority; }
+        public String getOriginalJson() { return originalJson; }
+        public void setOriginalJson(String originalJson) { this.originalJson = originalJson; }
+    }
+
+    public interface MessageHandler {
+        void handleMessage(TaskMessage message);
     }
 }
