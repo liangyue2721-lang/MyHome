@@ -349,6 +349,66 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
         }
     }
 
+    /**
+     * 获取所有队列中的详细任务信息 (For Monitoring)
+     * 使用 SCAN 替代 KEYS 避免阻塞，并限制返回数量防止 OOM
+     */
+    public java.util.List<java.util.Map<String, Object>> getAllQueueDetails() {
+        java.util.List<java.util.Map<String, Object>> allTasks = new java.util.ArrayList<>();
+        try {
+            // 使用 SCAN 命令查找匹配的 Key
+            java.util.Set<String> keys = new java.util.HashSet<>();
+            redisTemplate.execute((org.springframework.data.redis.core.RedisCallback<Void>) connection -> {
+                org.springframework.data.redis.core.Cursor<byte[]> cursor = connection.scan(
+                        org.springframework.data.redis.core.ScanOptions.scanOptions().match(TASK_QUEUE_PREFIX + "*").count(100).build()
+                );
+                while (cursor.hasNext()) {
+                    keys.add(new String(cursor.next()));
+                }
+                return null;
+            });
+
+            if (!keys.isEmpty()) {
+                for (String key : keys) {
+                    // 限制每个队列最多读取前 50 条消息
+                    java.util.List<String> messages = redisTemplate.opsForList().range(key, 0, 49);
+                    if (messages != null) {
+                        for (String msgJson : messages) {
+                            try {
+                                TaskMessage task = JSON.parseObject(msgJson, TaskMessage.class);
+                                java.util.Map<String, Object> taskMap = new java.util.HashMap<>();
+                                taskMap.put("queueName", key);
+                                taskMap.put("taskId", task.getTaskId());
+                                taskMap.put("targetNode", task.getTargetNode());
+                                taskMap.put("priority", task.getPriority());
+                                taskMap.put("traceId", task.getTraceId());
+                                taskMap.put("enqueueTime", task.getTimestamp());
+                                taskMap.put("retryCount", task.getRetryCount());
+                                // 区分是等待队列还是处理中队列
+                                if (key.endsWith(PROCESSING_QUEUE_SUFFIX)) {
+                                    taskMap.put("status", "PROCESSING");
+                                } else {
+                                    taskMap.put("status", "WAITING");
+                                }
+                                allTasks.add(taskMap);
+
+                                // 总条数限制保护 (例如 500 条)
+                                if (allTasks.size() >= 500) {
+                                    return allTasks;
+                                }
+                            } catch (Exception e) {
+                                // Ignore parse error for monitoring
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("获取队列详情失败", e);
+        }
+        return allTasks;
+    }
+
     public void stopListening() {
         this.running = false;
         if (executorService != null) {

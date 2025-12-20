@@ -322,18 +322,69 @@
           </div>
         </el-card>
       </el-col>
+
+      <!-- Queue Monitor Section -->
+      <el-col :span="24" class="card-box">
+        <el-card>
+          <div slot="header">
+            <span><i class="el-icon-s-order"></i> 任务队列实时监控</span>
+            <el-button
+              style="float: right; margin-top: -5px;"
+              size="mini"
+              @click="getQueueInfo"
+            >
+              刷新
+            </el-button>
+          </div>
+          <el-table :data="queueData" style="width: 100%" v-loading="queueLoading" stripe border height="400">
+             <el-table-column prop="queueName" label="队列名称" width="250" show-overflow-tooltip></el-table-column>
+             <el-table-column prop="taskId" label="任务ID" width="200" show-overflow-tooltip></el-table-column>
+             <el-table-column prop="targetNode" label="目标节点" width="150" align="center"></el-table-column>
+             <el-table-column prop="priority" label="优先级" width="100" align="center">
+                <template slot-scope="scope">
+                   <el-tag :type="scope.row.priority === 'HIGH' ? 'danger' : 'info'">{{ scope.row.priority }}</el-tag>
+                </template>
+             </el-table-column>
+             <el-table-column prop="status" label="状态" width="120" align="center">
+                <template slot-scope="scope">
+                   <el-tag :type="scope.row.status === 'PROCESSING' ? 'success' : 'warning'">{{ scope.row.status }}</el-tag>
+                </template>
+             </el-table-column>
+             <el-table-column prop="traceId" label="Trace ID" show-overflow-tooltip></el-table-column>
+             <el-table-column label="入队时间" width="180" align="center">
+               <template slot-scope="scope">
+                  {{ formatDate(scope.row.enqueueTime) }}
+               </template>
+             </el-table-column>
+             <el-table-column prop="retryCount" label="重试" width="80" align="center"></el-table-column>
+          </el-table>
+        </el-card>
+      </el-col>
     </el-row>
   </div>
 </template>
 
 <script>
 import { getServer, getClusterThreadPool, getClusterThreadPoolRedis, getClusterServerRedis } from "@/api/monitor/server";
+import request from '@/utils/request';
 import * as echarts from "echarts";
+
+// API function for queue details
+function getQueueDetails() {
+  return request({
+    url: '/monitor/job/queue/details',
+    method: 'get'
+  })
+}
 
 export default {
   name: "Server",
   data() {
     return {
+      // Queue Data
+      queueData: [],
+      queueLoading: false,
+
       // 服务器信息
       server: {
         cpu: {},
@@ -352,6 +403,7 @@ export default {
       // 定时器
       timer: null,
       clusterInfoTimer: null,
+    queueTimer: null,
       // 是否使用Redis模式
       useRedis: true,
       // 图表实例
@@ -399,8 +451,10 @@ export default {
     this.openLoading();
     this.getList();
     this.getClusterInfo();
+    this.getQueueInfo();
     this.timer = setInterval(this.getList, 5000);
     this.clusterInfoTimer = setInterval(this.getClusterInfo, 5000);
+    this.queueTimer = setInterval(this.getQueueInfo, 5000);
   },
   mounted() {
     this.initCharts();
@@ -408,6 +462,7 @@ export default {
   beforeDestroy() {
     clearInterval(this.timer);
     clearInterval(this.clusterInfoTimer);
+    if (this.queueTimer) clearInterval(this.queueTimer);
     if (this.cpuChart) this.cpuChart.dispose();
     if (this.memoryChart) this.memoryChart.dispose();
     if (this.clusterCpuChart) this.clusterCpuChart.dispose();
@@ -603,6 +658,20 @@ export default {
       if (!sysFiles || sysFiles.length === 0) return '-';
       let highestUsageFile = sysFiles.reduce((max, file) => parseFloat(file.usage) > parseFloat(max.usage) ? file : max, sysFiles[0]);
       return `${highestUsageFile.dirName}: ${highestUsageFile.usage}%`;
+    },
+    getQueueInfo() {
+      // Avoid spinner flicker on refresh
+      // this.queueLoading = true;
+      getQueueDetails().then(response => {
+        this.queueData = response.data || [];
+        // this.queueLoading = false;
+      }).catch(() => {
+        // this.queueLoading = false;
+      });
+    },
+    formatDate(timestamp) {
+        if (!timestamp) return '-';
+        return new Date(timestamp).toLocaleString();
     }
   }
 };

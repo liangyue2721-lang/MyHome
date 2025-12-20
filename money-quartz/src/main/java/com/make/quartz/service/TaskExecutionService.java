@@ -150,23 +150,24 @@ public class TaskExecutionService {
         long startTime = System.currentTimeMillis();
         String traceId = sysJob.getTraceId();
         String jobName = sysJob.getJobName();
+        String invokeTarget = sysJob.getInvokeTarget();
 
-        log.info("[JOB-EXEC-START] 开始执行任务 | Job: {} | TraceId: {}", jobName, traceId);
+        log.info("[TASK_MONITOR] [EXECUTE_START] 开始执行任务 | Job: {} | TraceId: {} | InvokeTarget: {}", jobName, traceId, invokeTarget);
 
         try {
             JobInvokeUtil.invokeMethod(sysJob);
             
             long endTime = System.currentTimeMillis();
-            log.info("[JOB-EXEC-END] 任务执行成功 | Job: {} | TraceId: {} | Cost: {}ms", jobName, traceId, (endTime - startTime));
+            log.info("[TASK_MONITOR] [EXECUTE_END] 任务执行成功 | Job: {} | TraceId: {} | Cost: {}ms", jobName, traceId, (endTime - startTime));
         } catch (Exception e) {
             long endTime = System.currentTimeMillis();
-            log.error("[JOB-EXEC-ERROR] 任务执行失败 | Job: {} | TraceId: {} | Cost: {}ms", jobName, traceId, (endTime - startTime), e);
+            log.error("[TASK_MONITOR] [EXECUTE_ERROR] 任务执行失败 | Job: {} | TraceId: {} | Cost: {}ms", jobName, traceId, (endTime - startTime), e);
             throw e;
         }
     }
 
     private void executeTask(String taskId) throws Exception {
-        log.info("[EXEC_LEGACY] 使用旧方式执行任务: {}", taskId);
+        log.info("[TASK_MONITOR] [EXEC_LEGACY] 使用旧方式执行任务: {}", taskId);
 
         if (taskId == null) {
              log.warn("[EXEC_INVALID_ID] TaskID为空");

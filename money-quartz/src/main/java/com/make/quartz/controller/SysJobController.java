@@ -5,9 +5,12 @@ import javax.servlet.http.HttpServletResponse;
 
 import com.make.quartz.domain.SysJob;
 import com.make.quartz.util.CronUtils;
+import com.make.quartz.util.RedisMessageQueue;
 import com.make.quartz.util.ScheduleUtils;
 import com.make.quartz.service.ISysJobService;
 import org.quartz.SchedulerException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -36,8 +39,13 @@ import com.make.common.utils.poi.ExcelUtil;
 @RestController
 @RequestMapping("/monitor/job")
 public class SysJobController extends BaseController {
+    private static final Logger log = LoggerFactory.getLogger(SysJobController.class);
+
     @Autowired
     private ISysJobService jobService;
+
+    @Autowired
+    private RedisMessageQueue redisMessageQueue;
 
     /**
      * 查询定时任务列表
@@ -138,8 +146,18 @@ public class SysJobController extends BaseController {
     @Log(title = "定时任务", businessType = BusinessType.UPDATE)
     @PutMapping("/run")
     public AjaxResult run(@RequestBody SysJob job) throws SchedulerException {
+        log.info("[TASK_MONITOR] [MANUAL_TRIGGER] User triggered job: {} | User: {}", job.getJobName(), getUsername());
         boolean result = jobService.run(job);
         return result ? success() : error("任务不存在或已过期！");
+    }
+
+    /**
+     * 获取队列详情
+     */
+    @PreAuthorize("@ss.hasPermi('monitor:job:list')")
+    @GetMapping("/queue/details")
+    public AjaxResult getQueueDetails() {
+        return success(redisMessageQueue.getAllQueueDetails());
     }
 
     /**
