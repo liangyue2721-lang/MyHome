@@ -98,6 +98,10 @@ public class TaskExecutionService {
 
                 SysJob sysJob = reconstructSysJob(message);
                 if (sysJob != null) {
+                    if (com.make.common.utils.StringUtils.isEmpty(sysJob.getInvokeTarget())) {
+                        log.debug("[EXEC_FILTER] 忽略无效任务消息 (invokeTarget为空) | TaskID: {}", message.getTaskId());
+                        return;
+                    }
                     executeSysJob(sysJob);
                 } else {
                     executeTask(message.getTaskId());

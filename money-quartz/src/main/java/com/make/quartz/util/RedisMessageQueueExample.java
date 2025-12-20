@@ -110,6 +110,12 @@ public class RedisMessageQueueExample implements CommandLineRunner {
 
         try {
             if (sysJob != null) {
+                // 校验 invokeTarget 是否为空，如果为空则视为无效消息（如示例消息），直接返回
+                if (StringUtils.isEmpty(sysJob.getInvokeTarget())) {
+                    log.debug("[EXAMPLE_FILTER] 忽略无效任务消息 (invokeTarget为空) | TaskID: {}", message.getTaskId());
+                    return;
+                }
+
                 // 设置链路追踪 ID 到 MDC，便于日志追踪
                 if (StringUtils.isNotEmpty(sysJob.getTraceId())) {
                     MDC.put("traceId", sysJob.getTraceId());
