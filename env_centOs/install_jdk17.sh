@@ -90,7 +90,6 @@ if ! grep -q "JAVA_HOME=.*jdk-17" "$PROFILE_FILE" 2>/dev/null; then
     echo "export JAVA_HOME=$JDK_HOME" >> "$PROFILE_FILE"
     echo "export PATH=\$JAVA_HOME/bin:\$PATH" >> "$PROFILE_FILE"
 fi
-
 echo "==============================="
 echo "JDK 17 setup completed"
 echo "Please run: source $PROFILE_FILE"
