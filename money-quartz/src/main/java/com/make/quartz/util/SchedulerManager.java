@@ -87,18 +87,16 @@ public class SchedulerManager {
                 if (currentMaster == null) {
                     // 没有主节点，当前节点成为主节点
                     redisTemplate.opsForValue().set(SCHEDULER_MASTER_KEY, CURRENT_NODE_ID, 60, TimeUnit.SECONDS);
-                    log.info("当前节点 {} 成为主节点", CURRENT_NODE_ID);
+                    log.info("当前节点 {} 成为主节点 (key was null)", CURRENT_NODE_ID);
                 } else {
-                    // 检查主节点是否还活跃
-                    long expireTime = redisTemplate.getExpire(SCHEDULER_MASTER_KEY, TimeUnit.SECONDS);
-                    if (expireTime <= 0) {
-                        // 主节点已失效，重新选举
-                        redisTemplate.opsForValue().set(SCHEDULER_MASTER_KEY, CURRENT_NODE_ID, 60, TimeUnit.SECONDS);
-                        log.info("原主节点失效，当前节点 {} 成为主节点", CURRENT_NODE_ID);
-                    } else {
-                        // 延长主节点有效期
+                    // 如果当前节点是主节点，则续期
+                    if (CURRENT_NODE_ID.equals(currentMaster)) {
                         redisTemplate.expire(SCHEDULER_MASTER_KEY, 60, TimeUnit.SECONDS);
-                        log.debug("主节点 {} 状态正常", currentMaster);
+                        log.debug("主节点 {} 状态正常，已续期", currentMaster);
+                    } else {
+                        // 如果当前节点不是主节点，则什么都不做，等待主节点失效
+                        // 注意：这里不能检查expireTime <= 0的情况，因为redisTemplate.opsForValue().get()在key过期时会返回null，已在上面处理
+                        log.debug("当前节点 {} 不是主节点，主节点是: {}。跳过续期。", CURRENT_NODE_ID, currentMaster);
                     }
                 }
             } else {
