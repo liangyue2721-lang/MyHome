@@ -154,14 +154,13 @@ public abstract class AbstractQuartzJob implements Job {
 
             log.info("[TASK_MONITOR] [LOCK_ACQUIRED] Key: {}, InstanceId: {}, Node: {}", jobKey, fireInstanceId, IpUtils.getHostIp());
 
-            // 记录到本地执行Map，恢复本地执行状态跟踪
-            executingJobs.put(jobKey, System.currentTimeMillis());
-
             // 获取锁成功，检查是否应该在本地执行
             boolean executeLocally = taskDistributor.shouldExecuteLocally(jobKey, 0.8);
             log.debug("[TASK_MONITOR] [DECISION_DEBUG] Task: {}, Local: {}, Threshold: 0.8", jobKey, executeLocally);
 
             if (executeLocally) {
+                // 记录到本地执行Map，恢复本地执行状态跟踪
+                executingJobs.put(jobKey, System.currentTimeMillis());
                 log.info("[TASK_MONITOR] [DECISION] Executing Locally. Key: {}, InstanceId: {}", jobKey, fireInstanceId);
             } else {
                 log.info("[TASK_MONITOR] [DECISION] Distributing. Key: {}, InstanceId: {}", jobKey, fireInstanceId);
@@ -181,8 +180,6 @@ public abstract class AbstractQuartzJob implements Job {
                 // 必须释放锁，以便消费者能获取锁并执行
                 lock.unlock();
                 locked = false;
-                // 分发后也视为本地执行结束
-                executingJobs.remove(jobKey);
 
                 recordDispatchedTask(sysJob);
                 return;
