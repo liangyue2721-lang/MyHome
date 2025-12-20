@@ -47,6 +47,25 @@ public class SysJobController extends BaseController {
     @Autowired
     private RedisMessageQueue redisMessageQueue;
 
+    @Autowired
+    private com.make.quartz.service.ISysJobLogService jobLogService;
+
+    /**
+     * 任务执行状态概览
+     */
+    @GetMapping("/status-summary")
+    public AjaxResult getStatusSummary() {
+        java.util.Map<String, Long> redisStats = redisMessageQueue.getGlobalTaskCounts();
+        long completedTotal = jobLogService.countTotalJobs();
+
+        java.util.Map<String, Object> result = new java.util.HashMap<>();
+        result.put("pending", redisStats.getOrDefault("pending", 0L));
+        result.put("executing", redisStats.getOrDefault("executing", 0L));
+        result.put("completed", completedTotal);
+
+        return success(result);
+    }
+
     /**
      * 查询定时任务列表
      */

@@ -332,4 +332,17 @@ public class RedisCache {
         return redisTemplate.expire(key, timeout, timeUnit);
     }
 
+    /**
+     * 如果key不存在，则设置key的值
+     *
+     * @param key      缓存键
+     * @param value    缓存值
+     * @param timeout  超时时间
+     * @param timeUnit 时间单位
+     * @return true=设置成功；false=设置失败（key已存在）
+     */
+    public <T> boolean setCacheObjectIfAbsent(final String key, final T value, final long timeout, final TimeUnit timeUnit) {
+        Boolean result = redisTemplate.opsForValue().setIfAbsent(key, value, timeout, timeUnit);
+        return Boolean.TRUE.equals(result);
+    }
 }

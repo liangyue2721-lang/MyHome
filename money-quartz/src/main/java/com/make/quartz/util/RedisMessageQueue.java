@@ -22,6 +22,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.Set;
+import java.util.HashMap;
 
 /**
  * 基于Redis的可靠消息队列实现 (Reliable Redis Message Queue)
@@ -380,6 +382,34 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
         } catch (Exception e) {
             return 0;
         }
+    }
+
+    /**
+     * 获取全局任务统计信息 (Pending & Executing)
+     */
+    public Map<String, Long> getGlobalTaskCounts() {
+        Map<String, Long> stats = new HashMap<>();
+        stats.put("pending", 0L);
+        stats.put("executing", 0L);
+
+        try {
+            Set<String> keys = redisTemplate.keys(TASK_QUEUE_PREFIX + "*");
+            if (keys != null) {
+                for (String key : keys) {
+                    Long size = redisTemplate.opsForList().size(key);
+                    if (size == null) size = 0L;
+
+                    if (key.endsWith(PROCESSING_QUEUE_SUFFIX)) {
+                        stats.put("executing", stats.get("executing") + size);
+                    } else if (key.endsWith(HIGH_PRIORITY_SUFFIX) || key.endsWith(NORMAL_PRIORITY_SUFFIX)) {
+                        stats.put("pending", stats.get("pending") + size);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("获取全局任务统计失败", e);
+        }
+        return stats;
     }
 
     /**

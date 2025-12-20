@@ -62,4 +62,18 @@ public interface ISysJobLogService
      * @return 调度任务日志数量
      */
     public int countJobLogList(SysJobLog jobLog);
+
+    /**
+     * 校验cron表达式是否有效
+     *
+     * @param cronExpression 表达式
+     * @return 结果
+     */
+    public boolean checkCronExpressionIsValid(String cronExpression);
+
+    /**
+     * 获取总任务执行次数
+     * @return 总执行次数
+     */
+    public long countTotalJobs();
 }

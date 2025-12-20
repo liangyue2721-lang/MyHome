@@ -141,6 +141,7 @@ public abstract class AbstractQuartzJob implements Job {
 
             // 尝试获取锁：开启看门狗（不设置leaseTime），等待0秒（立即返回）
             // 如果已经被锁，说明其他节点或线程正在运行
+            log.debug("[TASK_MONITOR] [LOCK_ATTEMPT] Attempting to acquire lock. Key: {}, Node: {}", jobKey, IpUtils.getHostIp());
             locked = lock.tryLock(0, TimeUnit.SECONDS);
             if (!locked) {
                 // 记录日志或指标：跳过执行
@@ -158,6 +159,8 @@ public abstract class AbstractQuartzJob implements Job {
 
             // 获取锁成功，检查是否应该在本地执行
             boolean executeLocally = taskDistributor.shouldExecuteLocally(jobKey, 0.8);
+            log.debug("[TASK_MONITOR] [DECISION_DEBUG] Task: {}, Local: {}, Threshold: 0.8", jobKey, executeLocally);
+
             if (executeLocally) {
                 log.info("[TASK_MONITOR] [DECISION] Executing Locally. Key: {}, InstanceId: {}", jobKey, fireInstanceId);
             } else {

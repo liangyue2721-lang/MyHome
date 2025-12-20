@@ -44,32 +44,47 @@ public class KlineAggregatorServiceImpl implements KlineAggregatorService {
             try {
                 stockWatchProcessor.processTask(traceId);
             } catch (Exception e) {
-                log.error("[KlineAggregator] WatchTask Error", e);
+                log.error("[KlineAggregator] WatchTask Error | TraceId: {}", traceId, e);
+                throw new RuntimeException(e); // Propagate exception to future
             }
-        }, ThreadPoolUtil.getWatchStockExecutor());
+        }, ThreadPoolUtil.getWatchStockExecutor()).exceptionally(e -> {
+             log.error("[KlineAggregator] WatchTask Failed | TraceId: {}", traceId, e);
+             return null;
+        });
 
         // 2. ETF
         CompletableFuture<Void> etfTask = CompletableFuture.runAsync(() -> {
             try {
                 stockETFrocessor.processTask(traceId);
             } catch (Exception e) {
-                log.error("[KlineAggregator] ETFTask Error", e);
+                log.error("[KlineAggregator] ETFTask Error | TraceId: {}", traceId, e);
+                throw new RuntimeException(e);
             }
-        }, ThreadPoolUtil.getWatchStockExecutor());
+        }, ThreadPoolUtil.getWatchStockExecutor()).exceptionally(e -> {
+            log.error("[KlineAggregator] ETFTask Failed | TraceId: {}", traceId, e);
+            return null;
+        });
 
         // 3. 历史K线
         CompletableFuture<Void> klineTask = CompletableFuture.runAsync(() -> {
             try {
                 taskExecutor.executeAll(nodeId, traceId);
             } catch (Exception e) {
-                log.error("[KlineAggregator] KlineTask Error", e);
+                log.error("[KlineAggregator] KlineTask Error | TraceId: {}", traceId, e);
+                throw new RuntimeException(e);
             }
-        }, ThreadPoolUtil.getWatchStockExecutor());
+        }, ThreadPoolUtil.getWatchStockExecutor()).exceptionally(e -> {
+            log.error("[KlineAggregator] KlineTask Failed | TraceId: {}", traceId, e);
+            return null;
+        });
 
         try {
+            // join() will throw CompletionException if any future failed (and wasn't handled by exceptionally,
+            // but we added exceptionally which returns null, so join() will succeed but log errors)
+            // If we want the main task to reflect partial success, this is fine.
             CompletableFuture.allOf(watchTask, etfTask, klineTask).join();
         } catch (Exception e) {
-            log.error("=====【KlineAggregator】任务异常 =====", e);
+            log.error("=====【KlineAggregator】任务聚合异常 | TraceId: {} =====", traceId, e);
         }
 
         log.info("=====【KlineAggregator】任务结束 Cost={} ms =====", System.currentTimeMillis() - start);

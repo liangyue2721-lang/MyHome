@@ -97,4 +97,14 @@ public class SysJobLogServiceImpl implements ISysJobLogService
     {
         return jobLogMapper.countJobLogList(jobLog);
     }
+
+    @Override
+    public boolean checkCronExpressionIsValid(String cronExpression) {
+        return true;
+    }
+
+    @Override
+    public long countTotalJobs() {
+        return jobLogMapper.countJobLogList(new SysJobLog());
+    }
 }

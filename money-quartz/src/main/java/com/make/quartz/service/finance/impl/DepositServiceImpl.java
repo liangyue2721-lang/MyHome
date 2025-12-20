@@ -63,19 +63,36 @@ public class DepositServiceImpl implements DepositService {
     @Override
     @Transactional
     public void refreshDepositAmount() {
-        log.info("【DepositService】开始刷新年度存款与工行存款数据");
-        updateAnnualDepositSummary();
-        // 更新工商银行存款数据（固定参数：loanRepaymentId=1L, assetId=7L）
-        updateBankDepositAmount(BankType.ICBC, 1L, 7L);
-
-        // 调用利润服务
-        if (profitService != null) {
-            profitService.queryStockProfitData();
-        } else {
-            log.warn("【DepositService】ProfitService未注入，跳过queryStockProfitData");
+        String lockKey = "LOCK:REFRESH_DEPOSIT:" + LocalDate.now();
+        // 使用原子操作 setIfAbsent 获取锁，防止并发重复执行
+        boolean acquired = redisCache.setCacheObjectIfAbsent(lockKey, "1", 1, TimeUnit.DAYS);
+        if (!acquired) {
+            log.warn("【DepositService】今日已执行过刷新存款任务，跳过执行");
+            return;
         }
 
-        log.info("【DepositService】刷新存款数据完成");
+        log.info("【DepositService】开始刷新年度存款与工行存款数据");
+        try {
+            updateAnnualDepositSummary();
+            // 更新工商银行存款数据（固定参数：loanRepaymentId=1L, assetId=7L）
+            updateBankDepositAmount(BankType.ICBC, 1L, 7L);
+
+            // 调用利润服务
+            if (profitService != null) {
+                profitService.queryStockProfitData();
+            } else {
+                log.warn("【DepositService】ProfitService未注入，跳过queryStockProfitData");
+            }
+
+            log.info("【DepositService】刷新存款数据完成");
+        } catch (Exception e) {
+            log.error("【DepositService】刷新存款数据异常", e);
+            // 异常时释放锁，允许重试? 或者保持锁防止坏数据?
+            // 根据需求“防止重复执行”，通常如果是系统故障可以重试，但如果是数据问题则不应重试。
+            // 这里为了安全，如果失败，我们删除锁，允许后续重试。
+            redisCache.deleteObject(lockKey);
+            throw e;
+        }
     }
 
     @Override
