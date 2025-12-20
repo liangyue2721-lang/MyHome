@@ -52,3 +52,5 @@ Due to the unrestricted TTL renewal logic, a Master node identity persists in Re
 
 **Requirement for Manual Intervention**:
 To switch the Master, the `SCHEDULER_MASTER` key must be manually deleted from Redis or the system must completely stop (all nodes down) to let the key expire naturally.
+
+*This document is descriptive only and does not propose changes to the current implementation.*
