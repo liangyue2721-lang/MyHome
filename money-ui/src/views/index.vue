@@ -5,14 +5,6 @@
       <div class="header-content">
         <h2 class="page-title">儀表板</h2>
         <div class="header-controls">
-          <el-select v-model="selectedUserId" placeholder="選擇用戶" @change="handleUserChange" filterable clearable>
-            <el-option
-              v-for="user in userList"
-              :key="user.id"
-              :label="user.name"
-              :value="user.id"
-            />
-          </el-select>
         </div>
       </div>
     </el-card>
@@ -98,47 +90,6 @@
             <span>💰 月度收支對比</span>
           </div>
           <div id="monthlyIncomeExpenseBarChart" class="chart-box"></div>
-        </el-card>
-      </el-col>
-    </el-row>
-
-    <el-row :gutter="20">
-      <el-col :xs="24" :lg="12">
-        <el-card class="chart-card" shadow="hover">
-          <div slot="header" class="chart-header">
-            <span>📊 交易類型分布 (微信/支付寶)</span>
-          </div>
-          <div id="clientPieChart" class="chart-box"></div>
-        </el-card>
-
-        <el-card class="chart-card" shadow="hover">
-          <div slot="header" class="chart-header">
-            <span>💸 每月支出總額趨勢</span>
-          </div>
-          <div id="monthlyConsumptionColumnChart" class="chart-box"></div>
-        </el-card>
-      </el-col>
-
-      <el-col :xs="24" :lg="12">
-        <el-card class="chart-card" shadow="hover">
-          <div slot="header" class="chart-header">
-            <span>🏦 貸款償還進度 (本金+利息)</span>
-          </div>
-          <div id="totalRepaymentPieChart" class="chart-box"></div>
-        </el-card>
-
-        <el-card class="chart-card" shadow="hover">
-          <div slot="header" class="chart-header">
-            <span>💧 年度收支比例</span>
-          </div>
-          <el-row :gutter="10">
-            <el-col :span="12">
-              <div id="expenseLiquidChart" class="chart-box-small"></div>
-            </el-col>
-            <el-col :span="12">
-              <div id="incomeLiquidChart" class="chart-box-small"></div>
-            </el-col>
-          </el-row>
         </el-card>
       </el-col>
     </el-row>
