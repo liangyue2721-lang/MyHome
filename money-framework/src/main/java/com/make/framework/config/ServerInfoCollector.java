@@ -104,7 +104,7 @@ public class ServerInfoCollector {
                 redisCache.expire(CLUSTER_SERVER_INFO_KEY, expireTime, TimeUnit.SECONDS);
             }
             
-            logger.debug("✅ 本节点服务器信息存储完成: nodeId={}, info={}", nodeId, JSON.toJSONString(serverInfo, String.valueOf(true)));
+            logger.debug("✅ 本节点服务器信息存储完成: nodeId={}, keys={}, size={}", nodeId, serverInfo.keySet(), serverInfo.size());
         } catch (Exception e) {
             logger.warn("💥 收集并存储本节点服务器信息失败", e);
         }
@@ -269,7 +269,7 @@ public class ServerInfoCollector {
                 info.put("networkTraffic", interfaces); // 只传递接口列表而不是整个对象
             }
             
-            logger.debug("🔄 收集本节点服务器信息完成: {}", info);
+            logger.debug("🔄 收集本节点服务器信息完成: keys={}, size={}", info.keySet(), info.size());
         } catch (Exception e) {
             logger.warn("💥 收集本节点服务器信息失败", e);
             // 出现异常时返回空信息
