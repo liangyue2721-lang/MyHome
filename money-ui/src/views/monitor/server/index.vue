@@ -347,14 +347,23 @@
              </el-table-column>
              <el-table-column prop="status" label="状态" width="120" align="center">
                 <template slot-scope="scope">
-                   <el-tag :type="scope.row.status === 'PROCESSING' ? 'success' : 'warning'">{{ scope.row.status }}</el-tag>
+                   <el-tag v-if="scope.row.status === 'PROCESSING'" type="primary">PROCESSING</el-tag>
+                   <el-tag v-else-if="scope.row.status === 'WAITING'" type="warning">WAITING</el-tag>
+                   <el-tag v-else-if="scope.row.status === 'SUCCESS'" type="success">SUCCESS</el-tag>
+                   <el-tag v-else-if="scope.row.status === 'FAIL'" type="danger">FAIL</el-tag>
+                   <el-tag v-else type="info">{{ scope.row.status }}</el-tag>
                 </template>
              </el-table-column>
              <el-table-column prop="traceId" label="Trace ID" show-overflow-tooltip></el-table-column>
-             <el-table-column label="入队时间" width="180" align="center">
+             <el-table-column label="入队时间" width="160" align="center">
                <template slot-scope="scope">
                   {{ formatDate(scope.row.enqueueTime) }}
                </template>
+             </el-table-column>
+             <el-table-column label="完成时间" width="160" align="center">
+                <template slot-scope="scope">
+                   {{ formatDate(scope.row.completionTime) }}
+                </template>
              </el-table-column>
              <el-table-column prop="retryCount" label="重试" width="80" align="center"></el-table-column>
           </el-table>

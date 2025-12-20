@@ -52,6 +52,7 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
     private static final String HIGH_PRIORITY_SUFFIX = ":high";
     private static final String NORMAL_PRIORITY_SUFFIX = ":normal";
     private static final String PROCESSING_QUEUE_SUFFIX = ":processing";
+    private static final String RECENT_MONITOR_KEY = "task:monitor:recent";
 
     private final RedisTemplate<String, String> redisTemplate;
     private final QuartzProperties quartzProperties;
@@ -252,16 +253,47 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
     }
 
     /**
-     * 确认消息 (ACK): 从 processing 队列移除
+     * 确认消息 (ACK): 从 processing 队列移除并记录成功状态
      */
     public void acknowledge(TaskMessage message) {
         if (message == null || StringUtils.isEmpty(message.getOriginalJson())) return;
         try {
-            String processingQueueKey = TASK_QUEUE_PREFIX + message.getTargetNode() + PROCESSING_QUEUE_SUFFIX;
-            redisTemplate.opsForList().remove(processingQueueKey, 1, message.getOriginalJson());
+            deleteFromProcessingQueue(message);
+            recordRecentTask(message, "SUCCESS");
             log.debug("[QUEUE_ACK] 消息已确认移除 | TaskID: {}", message.getTaskId());
         } catch (Exception e) {
             log.error("[QUEUE_ACK_ERROR] 确认消息失败 | TaskID: {}", message.getTaskId(), e);
+        }
+    }
+
+    /**
+     * 从处理队列中删除消息
+     */
+    private void deleteFromProcessingQueue(TaskMessage message) {
+        String processingQueueKey = TASK_QUEUE_PREFIX + message.getTargetNode() + PROCESSING_QUEUE_SUFFIX;
+        redisTemplate.opsForList().remove(processingQueueKey, 1, message.getOriginalJson());
+    }
+
+    /**
+     * 记录最近完成的任务 (Success/Fail)
+     */
+    private void recordRecentTask(TaskMessage message, String status) {
+        try {
+            Map<String, Object> record = new java.util.HashMap<>();
+            record.put("taskId", message.getTaskId());
+            record.put("targetNode", message.getTargetNode());
+            record.put("priority", message.getPriority());
+            record.put("traceId", message.getTraceId());
+            record.put("enqueueTime", message.getTimestamp());
+            record.put("completionTime", System.currentTimeMillis());
+            record.put("status", status);
+            record.put("retryCount", message.getRetryCount());
+
+            String json = JSON.toJSONString(record);
+            redisTemplate.opsForList().leftPush(RECENT_MONITOR_KEY, json);
+            redisTemplate.opsForList().trim(RECENT_MONITOR_KEY, 0, 49); // Keep last 50
+        } catch (Exception e) {
+            log.error("[MONITOR_REC_ERROR] 记录最近任务失败", e);
         }
     }
 
@@ -272,17 +304,18 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
         if (message == null) return;
         try {
             // 先从 processing 队列移除
-            acknowledge(message);
+            deleteFromProcessingQueue(message);
 
             // 检查最大重试次数
             if (message.getRetryCount() >= quartzProperties.getMaxRetryCount()) {
                 log.error("[QUEUE_RETRY_LIMIT] 任务 {} 超过最大重试次数 ({})，丢弃任务",
                         message.getTaskId(), quartzProperties.getMaxRetryCount());
+                recordRecentTask(message, "FAIL");
                 return;
             }
 
             message.setRetryCount(message.getRetryCount() + 1);
-            message.setTimestamp(System.currentTimeMillis());
+            message.setTimestamp(System.currentTimeMillis()); // Update enqueue time for retry
 
             String messageJson = JSON.toJSONString(message);
             String queueKey = getQueueKey(message.getTargetNode(), message.getPriority());
@@ -400,6 +433,20 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
                                 // Ignore parse error for monitoring
                             }
                         }
+                    }
+                }
+            }
+
+            // 获取最近完成的任务
+            java.util.List<String> recentTasks = redisTemplate.opsForList().range(RECENT_MONITOR_KEY, 0, -1);
+            if (recentTasks != null) {
+                for (String msgJson : recentTasks) {
+                    try {
+                        java.util.Map<String, Object> taskMap = JSON.parseObject(msgJson, java.util.Map.class);
+                        taskMap.put("queueName", "RECENT_HISTORY");
+                        allTasks.add(taskMap);
+                    } catch (Exception e) {
+                        // Ignore
                     }
                 }
             }
