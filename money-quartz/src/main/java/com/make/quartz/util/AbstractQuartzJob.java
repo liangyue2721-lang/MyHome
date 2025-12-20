@@ -41,35 +41,48 @@ public abstract class AbstractQuartzJob implements Job {
     /**
      * Redis 分布式锁工具，需要在 Spring 容器中注册
      */
-    private final RedisQuartzSemaphore redisQuartzSemaphore;
+    private RedisQuartzSemaphore redisQuartzSemaphore;
 
     /**
      * 调度管理器
      */
-    private final SchedulerManager schedulerManager;
+    private SchedulerManager schedulerManager;
 
     /**
      * 任务分发器
      */
-    private final TaskDistributor taskDistributor;
+    private TaskDistributor taskDistributor;
 
     /**
      * IP黑名单管理器
      */
-    private final IpBlackListManager ipBlackListManager;
+    private IpBlackListManager ipBlackListManager;
 
     /**
      * 任务监控服务
      */
-    private final TaskMonitoringService taskMonitoringService;
+    private TaskMonitoringService taskMonitoringService;
 
-    public AbstractQuartzJob() {
-        // 通过 SpringUtils 获取已注册的 Bean
-        this.redisQuartzSemaphore = SpringUtils.getBean(RedisQuartzSemaphore.class);
-        this.schedulerManager = SpringUtils.getBean(SchedulerManager.class);
-        this.taskDistributor = SpringUtils.getBean(TaskDistributor.class);
-        this.ipBlackListManager = SpringUtils.getBean(IpBlackListManager.class);
-        this.taskMonitoringService = SpringUtils.getBean(TaskMonitoringService.class);
+    /**
+     * 初始化 Beans
+     * 避免在构造函数中直接调用 SpringUtils.getBean，以防止 Spring 容器销毁时抛出 BeanCreationNotAllowedException
+     */
+    private void initBeans() {
+        if (this.redisQuartzSemaphore == null) {
+            this.redisQuartzSemaphore = SpringUtils.getBean(RedisQuartzSemaphore.class);
+        }
+        if (this.schedulerManager == null) {
+            this.schedulerManager = SpringUtils.getBean(SchedulerManager.class);
+        }
+        if (this.taskDistributor == null) {
+            this.taskDistributor = SpringUtils.getBean(TaskDistributor.class);
+        }
+        if (this.ipBlackListManager == null) {
+            this.ipBlackListManager = SpringUtils.getBean(IpBlackListManager.class);
+        }
+        if (this.taskMonitoringService == null) {
+            this.taskMonitoringService = SpringUtils.getBean(TaskMonitoringService.class);
+        }
     }
 
     @Override
@@ -88,6 +101,13 @@ public abstract class AbstractQuartzJob implements Job {
         sysJob.setFireInstanceId(fireInstanceId);
 
         String jobKey = sysJob.getJobGroup() + "." + sysJob.getJobName();
+
+        try {
+            initBeans();
+        } catch (Exception e) {
+            log.warn("[TASK_MONITOR] [SKIP] 任务【{}】跳过执行，原因：Spring容器可能正在关闭 ({})", jobKey, e.getMessage());
+            return;
+        }
 
         log.info("[TASK_MONITOR] [TRIGGER] Job triggered. Key: {}, TraceId: {}, InstanceId: {}, InvokeTarget: {}",
                 jobKey, traceId, fireInstanceId, sysJob.getInvokeTarget());

@@ -80,7 +80,8 @@ public class Threads
             }
             catch (CancellationException ce)
             {
-                t = ce;
+                logger.debug("Task cancelled normally");
+                return;
             }
             catch (ExecutionException ee)
             {
