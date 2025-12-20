@@ -48,7 +48,7 @@ public class NodeRegistry {
     private RedisTemplate<String, String> redisTemplate;
     
     private ScheduledExecutorService heartbeatScheduler;
-    private volatile boolean shuttingDown = false;
+    private volatile boolean active = true;
     
     @PostConstruct
     public void init() {
@@ -59,7 +59,7 @@ public class NodeRegistry {
     
     private void registerNode() {
         try {
-            if (shuttingDown) return;
+            if (!active) return;
             redisTemplate.opsForSet().add(SCHEDULER_NODES_KEY, CURRENT_NODE_ID);
             redisTemplate.expire(SCHEDULER_NODES_KEY, 300, TimeUnit.SECONDS);
         } catch (Exception e) {
@@ -78,9 +78,10 @@ public class NodeRegistry {
     }
     
     private void updateHeartbeat() {
+        if (!active || Thread.currentThread().isInterrupted()) {
+            return;
+        }
         try {
-            if (shuttingDown) return;
-            
             Map<String, Object> metrics = collectNodeMetrics();
             String metricsJson = JSON.toJSONString(metrics);
             
@@ -94,8 +95,18 @@ public class NodeRegistry {
             if (log.isDebugEnabled()) {
                 log.debug("[NODE_HEARTBEAT] 心跳上报成功 | Metrics: {}", metricsJson);
             }
+        } catch (org.springframework.data.redis.RedisConnectionFailureException | org.springframework.data.redis.RedisSystemException e) {
+            if (!active) {
+                log.debug("[NODE_HEARTBEAT_SKIP] shutdown in progress, skip heartbeat");
+                return;
+            }
+            throw e;
         } catch (Exception e) {
-            log.error("[NODE_HEARTBEAT_ERROR] 更新心跳失败", e);
+            if (!active) {
+                log.debug("[NODE_HEARTBEAT_SKIP] shutdown exception suppressed: {}", e.getClass().getSimpleName());
+                return;
+            }
+            log.error("[NODE_HEARTBEAT_ERROR] heartbeat failed", e);
         }
     }
     
@@ -126,7 +137,7 @@ public class NodeRegistry {
     }
     
     public void destroy() {
-        shuttingDown = true;
+        this.active = false;
         if (heartbeatScheduler != null) {
             heartbeatScheduler.shutdownNow();
         }
@@ -137,7 +148,8 @@ public class NodeRegistry {
             redisTemplate.delete(metricsKey);
             log.info("[NODE_DESTROY] 节点注销完成");
         } catch (Exception e) {
-            log.error("[NODE_DESTROY_ERROR] 注销失败", e);
+            // 忽略销毁时的异常
+            log.info("[NODE_DESTROY] 节点注销过程异常(可忽略): {}", e.getMessage());
         }
     }
 }

@@ -44,7 +44,7 @@ import java.util.concurrent.TimeUnit;
  *    支持 HIGH (高) 和 NORMAL (普通) 优先级队列。消费者优先消费高优先级队列。
  */
 @Component
-public class RedisMessageQueue {
+public class RedisMessageQueue implements org.springframework.context.SmartLifecycle {
 
     private static final Logger log = LoggerFactory.getLogger(RedisMessageQueue.class);
 
@@ -61,6 +61,7 @@ public class RedisMessageQueue {
     private ScheduledExecutorService cleanupScheduler;
     private static RedisMessageQueue instance;
     private volatile String currentNodeId;
+    private volatile boolean running = false;
 
     // 本地去重缓存: 防止同一节点重复执行相同任务
     private static final ConcurrentHashMap<String, Long> processingMessages = new ConcurrentHashMap<>();
@@ -92,13 +93,14 @@ public class RedisMessageQueue {
         );
 
         // 清理调度器: 定期回收超时任务
-        this.cleanupScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+        this.cleanupScheduler = Executors.newScheduledThreadPool(2, r -> {
             Thread t = new Thread(r, "RedisQueueCleanup");
             t.setDaemon(true);
             return t;
         });
 
         this.cleanupScheduler.scheduleAtFixedRate(this::cleanupProcessingTasks, 1, 1, TimeUnit.MINUTES);
+        this.cleanupScheduler.scheduleAtFixedRate(this::monitorThreadPools, 60, 60, TimeUnit.SECONDS);
 
         instance = this;
         log.info("Redis消息队列初始化完成 | Listeners: {} | Executors: {}",
@@ -177,7 +179,7 @@ public class RedisMessageQueue {
 
         executorService.submit(() -> {
             log.info("消息监听线程已启动");
-            while (!Thread.currentThread().isInterrupted()) {
+            while (running && !Thread.currentThread().isInterrupted()) {
                 try {
                     // 1. 优先尝试高优先级队列
                     String messageJson = redisTemplate.opsForList().rightPopAndLeftPush(highPriorityQueue, processingQueueKey, 2, TimeUnit.SECONDS);
@@ -199,7 +201,16 @@ public class RedisMessageQueue {
                         }
                         processReceivedMessage(messageJson, messageHandler, processingQueueKey);
                     }
+                } catch (org.springframework.data.redis.RedisConnectionFailureException | org.springframework.data.redis.RedisSystemException e) {
+                    log.warn("[QUEUE_LISTEN_WARN] Redis连接中断，尝试重连: {}", e.getMessage());
+                    sleep(2000);
                 } catch (Exception e) {
+                    // Check specifically for Redis command interruption which can happen on client close
+                    if (e instanceof io.lettuce.core.RedisCommandInterruptedException || e.getCause() instanceof InterruptedException) {
+                        log.info("[QUEUE_LISTEN_STOP] 监听线程被中断，停止监听");
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
                     log.error("[QUEUE_LISTEN_ERROR] 消息监听循环异常", e);
                     sleep(1000);
                 }
@@ -339,9 +350,52 @@ public class RedisMessageQueue {
     }
 
     public void stopListening() {
-        if (executorService != null) executorService.shutdownNow();
+        this.running = false;
+        if (executorService != null) {
+            executorService.shutdownNow();
+            try {
+                executorService.awaitTermination(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
         if (taskProcessExecutor != null) taskProcessExecutor.shutdownNow();
         if (cleanupScheduler != null) cleanupScheduler.shutdownNow();
+    }
+
+    private void monitorThreadPools() {
+        if (!running) return;
+        try {
+            long queueSize = getLocalQueueLength();
+            log.info("[MONITOR] Pool: RedisQueueListener | Active: {}/{} | Queue: N/A | RedisQueue: {}",
+                    executorService.getActiveCount(), executorService.getCorePoolSize(), queueSize);
+
+            log.info("[MONITOR] Pool: TaskProcessor | Active: {}/{} | Queue: {}",
+                    taskProcessExecutor.getActiveCount(), taskProcessExecutor.getCorePoolSize(), taskProcessExecutor.getQueue().size());
+        } catch (Exception e) {
+            log.error("[MONITOR_ERROR] 监控指标采集失败", e);
+        }
+    }
+
+    @Override
+    public void start() {
+        this.running = true;
+    }
+
+    @Override
+    public void stop() {
+        log.info("停止Redis消息队列监听...");
+        stopListening();
+    }
+
+    @Override
+    public boolean isRunning() {
+        return running;
+    }
+
+    @Override
+    public int getPhase() {
+        return Integer.MAX_VALUE; // 确保最先停止
     }
 
     private void sleep(long millis) {

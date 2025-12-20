@@ -96,7 +96,14 @@ public class TaskExecutionService {
             try {
                 executingTasks.put(message.getTaskId(), System.currentTimeMillis());
 
-                SysJob sysJob = reconstructSysJob(message);
+                SysJob sysJob = null;
+                try {
+                    sysJob = reconstructSysJob(message);
+                } catch (Exception e) {
+                    log.error("[EXEC_RECONSTRUCT_FAIL] SysJob重建失败，跳过任务 | TaskID: {}", message.getTaskId(), e);
+                    return; // Return effectively ACKs the message (skipped)
+                }
+
                 if (sysJob != null) {
                     if (com.make.common.utils.StringUtils.isEmpty(sysJob.getInvokeTarget())) {
                         log.debug("[EXEC_FILTER] 忽略无效任务消息 (invokeTarget为空) | TaskID: {}", message.getTaskId());
@@ -161,41 +168,57 @@ public class TaskExecutionService {
     private void executeTask(String taskId) throws Exception {
         log.info("[EXEC_LEGACY] 使用旧方式执行任务: {}", taskId);
 
-        if (taskId == null || !taskId.contains(".")) {
-            log.error("任务ID格式错误: {}", taskId);
-            return;
+        if (taskId == null) {
+             log.warn("[EXEC_INVALID_ID] TaskID为空");
+             return;
         }
 
-        String[] parts = taskId.split("\\.", 2);
-        String jobGroup = parts[0];
-        String jobName = parts[1];
-
-        JobKey jobKey = JobKey.jobKey(jobName, jobGroup);
-        JobDetail jobDetail = scheduler.getJobDetail(jobKey);
-
-        if (jobDetail == null) {
-            log.error("未找到任务详情: {}", taskId);
-            return;
+        // Defensive: Strict validation of TaskID format
+        if (!taskId.contains(".") || taskId.endsWith(".")) {
+            log.warn("[EXEC_INVALID_ID] TaskID格式无效: {}", taskId);
+            return; // Skip execution, do not throw exception
         }
 
-        JobDataMap jobDataMap = jobDetail.getJobDataMap();
-        SysJob sysJob = new SysJob();
-        sysJob.setJobName(jobName);
-        sysJob.setJobGroup(jobGroup);
-
-        Object jobProperties = jobDataMap.get("TASK_PROPERTIES");
-        if (jobProperties != null) {
-            copyBeanProp(sysJob, jobProperties);
-        } else {
-            if (jobDataMap.containsKey("invokeTarget")) {
-                sysJob.setInvokeTarget(jobDataMap.getString("invokeTarget"));
+        try {
+            String[] parts = taskId.split("\\.", 2);
+            if (parts.length < 2 || parts[0].isEmpty() || parts[1].isEmpty()) {
+                log.warn("[EXEC_INVALID_ID] TaskID解析后格式无效: {}", taskId);
+                return;
             }
-        }
 
-        if (sysJob.getInvokeTarget() != null) {
-            executeSysJob(sysJob);
-        } else {
-             log.error("无法执行任务，invokeTarget为空: {}", taskId);
+            String jobGroup = parts[0];
+            String jobName = parts[1];
+
+            JobKey jobKey = JobKey.jobKey(jobName, jobGroup);
+            JobDetail jobDetail = scheduler.getJobDetail(jobKey);
+
+            if (jobDetail == null) {
+                log.error("未找到任务详情: {}", taskId);
+                return;
+            }
+
+            JobDataMap jobDataMap = jobDetail.getJobDataMap();
+            SysJob sysJob = new SysJob();
+            sysJob.setJobName(jobName);
+            sysJob.setJobGroup(jobGroup);
+
+            Object jobProperties = jobDataMap.get("TASK_PROPERTIES");
+            if (jobProperties != null) {
+                copyBeanProp(sysJob, jobProperties);
+            } else {
+                if (jobDataMap.containsKey("invokeTarget")) {
+                    sysJob.setInvokeTarget(jobDataMap.getString("invokeTarget"));
+                }
+            }
+
+            if (sysJob.getInvokeTarget() != null) {
+                executeSysJob(sysJob);
+            } else {
+                 log.error("无法执行任务，invokeTarget为空: {}", taskId);
+            }
+        } catch (Exception e) {
+            log.error("[EXEC_PARSE_FAIL] 任务参数解析或加载失败 | TaskID: {}", taskId, e);
+            // Swallowing exception to prevent thread pool impact, treating as skipped
         }
     }
     

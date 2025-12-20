@@ -33,7 +33,7 @@ import java.util.concurrent.TimeUnit;
  * - [DIST_DECISION]: 分发决策结果 (Target Node, Priority)
  */
 @Component
-public class TaskDistributor {
+public class TaskDistributor implements org.springframework.context.SmartLifecycle {
 
     private static final Logger log = LoggerFactory.getLogger(TaskDistributor.class);
 
@@ -47,6 +47,8 @@ public class TaskDistributor {
     private final QuartzProperties quartzProperties;
 
     private ThreadPoolExecutor distributorExecutor;
+    private volatile boolean running = false;
+    private final java.util.concurrent.ScheduledExecutorService monitorExecutor = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
 
     @Autowired
     public TaskDistributor(RedisTemplate<String, String> redisTemplate,
@@ -67,6 +69,7 @@ public class TaskDistributor {
                 100,
                 "TaskDistributor"
         );
+        this.monitorExecutor.scheduleAtFixedRate(this::monitor, 60, 60, TimeUnit.SECONDS);
 
         startDistributor();
         log.info("任务分发器初始化完成 | Threads: {}", quartzProperties.getDistributorThreads());
@@ -74,8 +77,12 @@ public class TaskDistributor {
 
     @PreDestroy
     public void destroy() {
+        this.running = false;
         if (distributorExecutor != null) {
             distributorExecutor.shutdownNow();
+        }
+        if (monitorExecutor != null) {
+            monitorExecutor.shutdownNow();
         }
     }
 
@@ -86,7 +93,7 @@ public class TaskDistributor {
     }
 
     private void distributeTasksLoop() {
-        while (!Thread.currentThread().isInterrupted()) {
+        while (running && !Thread.currentThread().isInterrupted()) {
             try {
                 if (!checkIsMaster()) {
                     sleep(5000);
@@ -100,7 +107,15 @@ public class TaskDistributor {
                     log.debug("[DIST_FETCH] 从全局队列获取任务");
                     distributeTask(jobJson);
                 }
+            } catch (org.springframework.data.redis.RedisConnectionFailureException | org.springframework.data.redis.RedisSystemException e) {
+                log.warn("[DIST_WARN] Redis连接中断: {}", e.getMessage());
+                sleep(2000);
             } catch (Exception e) {
+                if (e instanceof io.lettuce.core.RedisCommandInterruptedException || e.getCause() instanceof InterruptedException) {
+                    log.info("[DIST_STOP] 分发线程被中断");
+                    Thread.currentThread().interrupt();
+                    break;
+                }
                 log.error("[DIST_ERROR] 任务分发异常", e);
                 sleep(1000);
             }
@@ -116,6 +131,12 @@ public class TaskDistributor {
      */
     public void distributeTask(SysJob sysJob) {
         if (sysJob == null) return;
+
+        // Task ID Format Validation
+        if (sysJob.getJobId() == null || StringUtils.isEmpty(sysJob.getJobName())) {
+             log.warn("[DIST_INVALID_ID] 任务ID格式无效 (JobId or JobName is empty) | JobName: {}", sysJob.getJobName());
+             return;
+        }
 
         try {
             String priority = StringUtils.defaultIfEmpty(sysJob.getPriority(), "NORMAL");
@@ -244,5 +265,44 @@ public class TaskDistributor {
     public boolean shouldExecuteLocally(String taskId, double threshold) {
         // 返回false表示"本地不执行"，从而触发AbstractScheduledTask调用distributeTask
         return false;
+    }
+
+    private void monitor() {
+        if (!running) return;
+        try {
+            log.info("[MONITOR] Pool: TaskDistributor | Active: {}/{} | Queue: {}",
+                   distributorExecutor.getActiveCount(), distributorExecutor.getCorePoolSize(), distributorExecutor.getQueue().size());
+        } catch (Exception e) {
+            log.error("[MONITOR_ERROR] 分发器监控采集失败", e);
+        }
+    }
+
+    @Override
+    public void start() {
+        this.running = true;
+    }
+
+    @Override
+    public void stop() {
+        log.info("停止任务分发器...");
+        this.running = false;
+        if (distributorExecutor != null) {
+            distributorExecutor.shutdownNow();
+            try {
+                distributorExecutor.awaitTermination(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    @Override
+    public boolean isRunning() {
+        return running;
+    }
+
+    @Override
+    public int getPhase() {
+        return Integer.MAX_VALUE;
     }
 }
