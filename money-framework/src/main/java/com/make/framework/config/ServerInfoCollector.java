@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 import java.lang.management.ManagementFactory;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -256,7 +257,8 @@ public class ServerInfoCollector {
             
             // 磁盘信息
             if (server.getSysFiles() != null) {
-                info.put("sysFiles", server.getSysFiles());
+                // 使用ArrayList包装，避免LinkedList序列化问题
+                info.put("sysFiles", new ArrayList<>(server.getSysFiles()));
             }
             
             // 网络流量信息
@@ -266,7 +268,8 @@ public class ServerInfoCollector {
                 List<NetworkTraffic.NetworkInterfaceInfo> interfaces = networkTraffic.getInterfaces().stream()
                     .filter(iface -> iface != null && iface.getName() != null && !iface.getName().startsWith("lo"))
                     .collect(Collectors.toList());
-                info.put("networkTraffic", interfaces); // 只传递接口列表而不是整个对象
+                // 使用ArrayList包装，避免LinkedList序列化问题
+                info.put("networkTraffic", new ArrayList<>(interfaces)); // 只传递接口列表而不是整个对象
             }
             
             logger.debug("🔄 收集本节点服务器信息完成: keys={}, size={}", info.keySet(), info.size());

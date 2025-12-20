@@ -5,10 +5,10 @@ import com.make.common.utils.ip.IpUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.SmartLifecycle;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.PostConstruct;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.OperatingSystemMXBean;
@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * - [NODE_METRICS_ERROR]: 指标收集失败
  */
 @Component
-public class NodeRegistry {
+public class NodeRegistry implements SmartLifecycle {
     
     private static final Logger log = LoggerFactory.getLogger(NodeRegistry.class);
     
@@ -48,15 +48,41 @@ public class NodeRegistry {
     private RedisTemplate<String, String> redisTemplate;
     
     private ScheduledExecutorService heartbeatScheduler;
-    private volatile boolean active = true;
+    private volatile boolean active = false;
+    private volatile boolean isRunning = false;
     
-    @PostConstruct
-    public void init() {
+    @Override
+    public void start() {
+        if (isRunning) {
+            return;
+        }
+        active = true;
+        isRunning = true;
         registerNode();
         startHeartbeat();
         log.info("[NODE_INIT] 节点注册完成 | ID: {}", CURRENT_NODE_ID);
     }
-    
+
+    @Override
+    public void stop() {
+        if (!isRunning) {
+            return;
+        }
+        destroy();
+        isRunning = false;
+    }
+
+    @Override
+    public boolean isRunning() {
+        return isRunning;
+    }
+
+    @Override
+    public int getPhase() {
+        // Integer.MAX_VALUE means start last and stop first
+        return Integer.MAX_VALUE;
+    }
+
     private void registerNode() {
         try {
             if (!active) return;

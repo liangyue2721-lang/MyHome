@@ -126,6 +126,8 @@ public class ScheduleConfig {
         factory.setOverwriteExistingJobs(true);
         // 设置自动启动，默认为true
         factory.setAutoStartup(true);
+        // 确保关闭时等待任务完成
+        factory.setWaitForJobsToCompleteOnShutdown(true);
 
         log.info("✅ [{}] Quartz调度器配置初始化完成 | 调度器名称: {} | 线程: {}(ID:{})",
                 LocalTime.now().toString(), schedulerName, threadName, threadId);
