@@ -7,6 +7,7 @@ import com.make.common.utils.StringUtils;
 import com.make.common.utils.ThreadPoolUtil;
 import com.make.common.utils.spring.SpringUtils;
 import com.make.quartz.config.QuartzProperties;
+import com.make.quartz.domain.SysJob;
 import com.make.quartz.service.TaskExecutionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -441,12 +442,36 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
                                 TaskMessage task = JSON.parseObject(msgJson, TaskMessage.class);
                                 java.util.Map<String, Object> taskMap = new java.util.HashMap<>();
                                 taskMap.put("queueName", key);
-                                taskMap.put("taskId", task.getTaskId());
-                                taskMap.put("targetNode", task.getTargetNode());
-                                taskMap.put("priority", task.getPriority());
-                                taskMap.put("traceId", task.getTraceId());
-                                taskMap.put("enqueueTime", task.getTimestamp());
-                                taskMap.put("retryCount", task.getRetryCount());
+
+                                // 处理 SysJob 类型的消息 (taskId 为空)
+                                if (task.getTaskId() == null) {
+                                    try {
+                                        SysJob sysJob = JSON.parseObject(msgJson, SysJob.class);
+                                        if (sysJob != null && sysJob.getJobId() != null) {
+                                            taskMap.put("taskId", sysJob.getJobId() + "." + sysJob.getJobName());
+                                            taskMap.put("targetNode", null); // 全局队列中无目标节点
+                                            taskMap.put("priority", sysJob.getPriority());
+                                            taskMap.put("traceId", sysJob.getTraceId());
+                                            taskMap.put("enqueueTime", sysJob.getEnqueueTime());
+                                            taskMap.put("retryCount", 0);
+                                        }
+                                    } catch (Exception ex) {
+                                        // Ignore
+                                    }
+                                } else {
+                                    taskMap.put("taskId", task.getTaskId());
+                                    taskMap.put("targetNode", task.getTargetNode());
+                                    taskMap.put("priority", task.getPriority());
+                                    taskMap.put("traceId", task.getTraceId());
+                                    taskMap.put("enqueueTime", task.getTimestamp());
+                                    taskMap.put("retryCount", task.getRetryCount());
+                                }
+
+                                // 如果仍然没有 TaskId，跳过
+                                if (!taskMap.containsKey("taskId")) {
+                                    continue;
+                                }
+
                                 // 区分是等待队列还是处理中队列
                                 if (key.endsWith(PROCESSING_QUEUE_SUFFIX)) {
                                     taskMap.put("status", "PROCESSING");
