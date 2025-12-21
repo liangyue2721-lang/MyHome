@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # ==========================================================
-# Install JDK 17 (Linux / macOS)
-# - Auto download (resume + retry)
-# - Safe extract
+# Install / Upgrade JDK 17 (Linux / macOS)
+# - Stable source (Adoptium API)
+# - Versioned install
+# - Symlink based upgrade
 # - Idempotent
-# - No latest redirect
 # ==========================================================
 
 set -euo pipefail
 
 echo "==============================="
-echo "Install JDK 17"
+echo "Install / Upgrade JDK 17"
 echo "==============================="
 
 # ----------------------------------------------------------
@@ -23,10 +23,12 @@ case "$OS_NAME" in
     Linux)
         OS="linux"
         BASE_DIR="/opt/java"
+        PROFILE_FILE="/etc/profile.d/java.sh"
         ;;
     Darwin)
         OS="mac"
         BASE_DIR="/usr/local/java"
+        PROFILE_FILE="$HOME/.zshrc"
         ;;
     *)
         echo "Unsupported OS: $OS_NAME"
@@ -50,92 +52,94 @@ esac
 # ----------------------------------------------------------
 # 2. Paths
 # ----------------------------------------------------------
-JDK_HOME="$BASE_DIR/jdk-17"
-TMP_DIR="/tmp/jdk17_install"
+JDK_ROOT="$BASE_DIR/jdk-17"
+VERSION_DIR="$BASE_DIR/jdk-17-versions"
+TMP_DIR="$(mktemp -d /tmp/jdk17_XXXX)"
 ARCHIVE="$TMP_DIR/jdk17.tar.gz"
 
-mkdir -p "$BASE_DIR"
+mkdir -p "$VERSION_DIR"
 
 # ----------------------------------------------------------
-# 3. JDK source (Temurin 17 LTS - fixed version)
+# 3. Download URL (Adoptium official API)
 # ----------------------------------------------------------
-JDK_VERSION="17.0.10_7"
-JDK_URL="https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.10%2B7/OpenJDK17U-jdk_${CPU}_${OS}_hotspot_${JDK_VERSION}.tar.gz"
+JDK_URL="https://api.adoptium.net/v3/binary/latest/17/ga/${OS}/${CPU}/jdk/hotspot/normal/eclipse"
+
+echo "Download URL:"
+echo "  $JDK_URL"
 
 # ----------------------------------------------------------
-# 4. Install if not exists
+# 4. Download
 # ----------------------------------------------------------
-if [ -x "$JDK_HOME/bin/java" ]; then
-    echo "JDK 17 already installed: $JDK_HOME"
+echo "Downloading JDK 17..."
+
+if command -v curl >/dev/null 2>&1; then
+    curl -fL -C - \
+         --retry 5 \
+         --retry-delay 5 \
+         --connect-timeout 30 \
+         -o "$ARCHIVE" \
+         "$JDK_URL"
+elif command -v wget >/dev/null 2>&1; then
+    wget -c --tries=5 --timeout=30 "$JDK_URL" -O "$ARCHIVE"
 else
-    echo "Downloading JDK 17..."
-    rm -rf "$TMP_DIR"
-    mkdir -p "$TMP_DIR"
+    echo "ERROR: curl or wget is required"
+    exit 1
+fi
 
-    if command -v curl >/dev/null 2>&1; then
-        curl -fL -C - \
-             --retry 5 \
-             --retry-delay 10 \
-             --connect-timeout 30 \
-             --max-time 0 \
-             -o "$ARCHIVE" \
-             "$JDK_URL"
-    elif command -v wget >/dev/null 2>&1; then
-        wget -c --tries=5 --timeout=30 "$JDK_URL" -O "$ARCHIVE"
-    else
-        echo "ERROR: curl or wget is required"
-        exit 1
-    fi
-
-    # ------------------------------------------------------
-    # 5. Validate archive
-    # ------------------------------------------------------
-    if ! gzip -t "$ARCHIVE" >/dev/null 2>&1; then
-        echo "ERROR: Downloaded file is not a valid tar.gz"
-        exit 1
-    fi
-
-    echo "Extracting JDK..."
-    tar -xzf "$ARCHIVE" -C "$TMP_DIR"
-
-    JDK_EXTRACTED="$(find "$TMP_DIR" -maxdepth 1 -type d -name 'jdk-17*' | head -n 1)"
-
-    if [ -z "$JDK_EXTRACTED" ]; then
-        echo "ERROR: Failed to locate extracted JDK directory"
-        exit 1
-    fi
-
-    rm -rf "$JDK_HOME"
-    mv "$JDK_EXTRACTED" "$JDK_HOME"
-    rm -rf "$TMP_DIR"
-
-    echo "JDK 17 installed at $JDK_HOME"
+if ! gzip -t "$ARCHIVE" >/dev/null 2>&1; then
+    echo "ERROR: Invalid tar.gz archive"
+    exit 1
 fi
 
 # ----------------------------------------------------------
-# 6. Environment variables
+# 5. Extract
 # ----------------------------------------------------------
-if [ -n "${ZSH_VERSION:-}" ]; then
-    PROFILE="$HOME/.zshrc"
+echo "Extracting..."
+tar -xzf "$ARCHIVE" -C "$TMP_DIR"
+
+JDK_EXTRACTED="$(find "$TMP_DIR" -maxdepth 1 -type d -name 'jdk-17*' | head -n 1)"
+
+if [ -z "$JDK_EXTRACTED" ]; then
+    echo "ERROR: Failed to locate JDK directory"
+    exit 1
+fi
+
+VERSION_NAME="$(basename "$JDK_EXTRACTED")"
+TARGET_DIR="$VERSION_DIR/$VERSION_NAME"
+
+if [ -d "$TARGET_DIR" ]; then
+    echo "Version already exists: $VERSION_NAME"
 else
-    PROFILE="$HOME/.bashrc"
-fi
-
-if ! grep -q "JAVA_HOME=.*jdk-17" "$PROFILE" 2>/dev/null; then
-    {
-        echo ""
-        echo "# JDK 17"
-        echo "export JAVA_HOME=$JDK_HOME"
-        echo "export PATH=\$JAVA_HOME/bin:\$PATH"
-    } >> "$PROFILE"
+    mv "$JDK_EXTRACTED" "$TARGET_DIR"
+    echo "Installed version: $VERSION_NAME"
 fi
 
 # ----------------------------------------------------------
-# 7. Result
+# 6. Switch symlink (atomic upgrade)
+# ----------------------------------------------------------
+ln -sfn "$TARGET_DIR" "$JDK_ROOT"
+
+rm -rf "$TMP_DIR"
+
+# ----------------------------------------------------------
+# 7. Environment variables (write once)
+# ----------------------------------------------------------
+if [ ! -f "$PROFILE_FILE" ] || ! grep -q "JAVA_HOME=.*jdk-17" "$PROFILE_FILE"; then
+    echo "Configuring JAVA_HOME..."
+
+    cat > "$PROFILE_FILE" <<EOF
+# JDK 17
+export JAVA_HOME=$JDK_ROOT
+export PATH=\$JAVA_HOME/bin:\$PATH
+EOF
+fi
+
+# ----------------------------------------------------------
+# 8. Result
 # ----------------------------------------------------------
 echo "==============================="
-echo "JDK 17 setup completed"
-echo "Run: source $PROFILE"
+echo "JDK 17 installed / upgraded"
+echo "JAVA_HOME = $JDK_ROOT"
 echo "==============================="
 
-"$JDK_HOME/bin/java" -version
+"$JDK_ROOT/bin/java" -version
