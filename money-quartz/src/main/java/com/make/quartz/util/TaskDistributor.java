@@ -63,16 +63,20 @@ public class TaskDistributor implements org.springframework.context.SmartLifecyc
 
     @PostConstruct
     public void init() {
+        // 使用 Producer Thread Pool 配置
         this.distributorExecutor = (ThreadPoolExecutor) ThreadPoolUtil.createCustomThreadPool(
-                quartzProperties.getDistributorThreads(),
-                quartzProperties.getDistributorThreads() * 2,
-                100,
-                "TaskDistributor"
+                quartzProperties.getProducerCoreSize(),
+                quartzProperties.getProducerMaxSize(),
+                quartzProperties.getProducerQueueCapacity(),
+                "TaskSchedulerProducer"
         );
         this.monitorExecutor.scheduleAtFixedRate(this::monitor, 60, 60, TimeUnit.SECONDS);
 
         startDistributor();
-        log.info("任务分发器初始化完成 | Threads: {}", quartzProperties.getDistributorThreads());
+        log.info("任务分发器初始化完成 | Producer Pool: Core={}, Max={}, Queue={}",
+                quartzProperties.getProducerCoreSize(),
+                quartzProperties.getProducerMaxSize(),
+                quartzProperties.getProducerQueueCapacity());
     }
 
     @PreDestroy
@@ -87,7 +91,8 @@ public class TaskDistributor implements org.springframework.context.SmartLifecyc
     }
 
     private void startDistributor() {
-        for (int i = 0; i < quartzProperties.getDistributorThreads(); i++) {
+        // Start loops equal to core size (or producer specific loop count if needed, defaulting to CoreSize)
+        for (int i = 0; i < quartzProperties.getProducerCoreSize(); i++) {
             distributorExecutor.submit(this::distributeTasksLoop);
         }
     }

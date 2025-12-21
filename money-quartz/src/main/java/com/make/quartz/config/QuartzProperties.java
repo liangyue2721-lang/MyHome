@@ -21,14 +21,18 @@ public class QuartzProperties {
     private int listenerMaxThreadsMultiple = 2;
 
     /**
-     * 任务执行器核心线程倍数 (相对于CPU核数)
+     * Producer Thread Pool (Scheduler)
      */
-    private int executorCoreThreadsMultiple = 4;
+    private int producerCoreSize = 4;
+    private int producerMaxSize = 8;
+    private int producerQueueCapacity = 1000;
 
     /**
-     * 任务执行器最大线程倍数 (相对于CPU核数)
+     * Consumer Thread Pool (Stock)
      */
-    private int executorMaxThreadsMultiple = 8;
+    private int consumerCoreSize = 8;
+    private int consumerMaxSize = 16;
+    private int consumerQueueCapacity = 2000;
 
     /**
      * 任务最大重试次数
@@ -61,21 +65,23 @@ public class QuartzProperties {
         this.listenerMaxThreadsMultiple = listenerMaxThreadsMultiple;
     }
 
-    public int getExecutorCoreThreadsMultiple() {
-        return executorCoreThreadsMultiple;
-    }
+    public int getProducerCoreSize() { return producerCoreSize; }
+    public void setProducerCoreSize(int producerCoreSize) { this.producerCoreSize = producerCoreSize; }
 
-    public void setExecutorCoreThreadsMultiple(int executorCoreThreadsMultiple) {
-        this.executorCoreThreadsMultiple = executorCoreThreadsMultiple;
-    }
+    public int getProducerMaxSize() { return producerMaxSize; }
+    public void setProducerMaxSize(int producerMaxSize) { this.producerMaxSize = producerMaxSize; }
 
-    public int getExecutorMaxThreadsMultiple() {
-        return executorMaxThreadsMultiple;
-    }
+    public int getProducerQueueCapacity() { return producerQueueCapacity; }
+    public void setProducerQueueCapacity(int producerQueueCapacity) { this.producerQueueCapacity = producerQueueCapacity; }
 
-    public void setExecutorMaxThreadsMultiple(int executorMaxThreadsMultiple) {
-        this.executorMaxThreadsMultiple = executorMaxThreadsMultiple;
-    }
+    public int getConsumerCoreSize() { return consumerCoreSize; }
+    public void setConsumerCoreSize(int consumerCoreSize) { this.consumerCoreSize = consumerCoreSize; }
+
+    public int getConsumerMaxSize() { return consumerMaxSize; }
+    public void setConsumerMaxSize(int consumerMaxSize) { this.consumerMaxSize = consumerMaxSize; }
+
+    public int getConsumerQueueCapacity() { return consumerQueueCapacity; }
+    public void setConsumerQueueCapacity(int consumerQueueCapacity) { this.consumerQueueCapacity = consumerQueueCapacity; }
 
     public int getMaxRetryCount() {
         return maxRetryCount;

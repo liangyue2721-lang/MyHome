@@ -96,12 +96,12 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
                 "RedisQueueListener"
         );
 
-        // 任务处理线程池: 负责实际执行任务逻辑
+        // 任务处理线程池 (Stock Consumer): 负责实际执行任务逻辑
         this.taskProcessExecutor = (ThreadPoolExecutor) ThreadPoolUtil.createCustomThreadPool(
-                cpuCores * quartzProperties.getExecutorCoreThreadsMultiple(),
-                cpuCores * quartzProperties.getExecutorMaxThreadsMultiple(),
-                10000,
-                "TaskProcessor"
+                quartzProperties.getConsumerCoreSize(),
+                quartzProperties.getConsumerMaxSize(),
+                quartzProperties.getConsumerQueueCapacity(),
+                "StockTaskConsumer"
         );
 
         // 清理调度器: 定期回收超时任务
@@ -289,9 +289,11 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
         }
 
         try {
-            // 监控任务堆积情况
-            if (taskProcessExecutor.getQueue().size() > 8000) {
-                log.warn("[QUEUE_HIGH_LOAD] 任务处理队列积压严重 | QueueSize: {}/10000", taskProcessExecutor.getQueue().size());
+            // 监控任务堆积情况 (80% of ConsumerQueueCapacity)
+            int capacity = quartzProperties.getConsumerQueueCapacity();
+            if (taskProcessExecutor.getQueue().size() > (capacity * 0.8)) {
+                log.warn("[QUEUE_HIGH_LOAD] 任务处理队列积压严重 | QueueSize: {}/{}",
+                        taskProcessExecutor.getQueue().size(), capacity);
             }
 
             taskProcessExecutor.submit(() -> {
