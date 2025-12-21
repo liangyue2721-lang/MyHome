@@ -71,8 +71,9 @@ public class TaskDistributor implements org.springframework.context.SmartLifecyc
                 "TaskSchedulerProducer"
         );
         this.monitorExecutor.scheduleAtFixedRate(this::monitor, 60, 60, TimeUnit.SECONDS);
+        // 定期从全局队列拉取任务 (避免启动时死循环线程的Race Condition)
+        this.monitorExecutor.scheduleAtFixedRate(this::processGlobalQueueTasks, 10, 60, TimeUnit.SECONDS);
 
-        startDistributor();
         log.info("任务分发器初始化完成 | Producer Pool: Core={}, Max={}, Queue={}",
                 quartzProperties.getProducerCoreSize(),
                 quartzProperties.getProducerMaxSize(),
@@ -90,41 +91,37 @@ public class TaskDistributor implements org.springframework.context.SmartLifecyc
         }
     }
 
-    private void startDistributor() {
-        // Start loops equal to core size (or producer specific loop count if needed, defaulting to CoreSize)
-        for (int i = 0; i < quartzProperties.getProducerCoreSize(); i++) {
-            distributorExecutor.submit(this::distributeTasksLoop);
+    /**
+     * 定期处理全局队列任务
+     * 策略：只要线程池有容量，就循环拉取并提交任务
+     */
+    private void processGlobalQueueTasks() {
+        // 1. 基础检查
+        if (!running || !checkIsMaster()) {
+            return;
         }
-    }
 
-    private void distributeTasksLoop() {
-        while (running && !Thread.currentThread().isInterrupted()) {
-            try {
-                if (!checkIsMaster()) {
-                    sleep(5000);
-                    continue;
+        try {
+            // 2. 循环拉取，直到队列满或无任务
+            while (distributorExecutor.getQueue().remainingCapacity() > 0) {
+                // 使用非阻塞 Pop
+                String jobJson = redisTemplate.opsForList().rightPop(GLOBAL_TASK_QUEUE);
+                if (StringUtils.isEmpty(jobJson)) {
+                    break; // 队列为空
                 }
 
-                // 阻塞获取任务
-                String jobJson = redisTemplate.opsForList().rightPop(GLOBAL_TASK_QUEUE, 5, TimeUnit.SECONDS);
-
-                if (jobJson != null) {
-                    log.debug("[DIST_FETCH] 从全局队列获取任务");
-                    // 标记为来自Global Queue (Transfer)
-                    distributeTask(jobJson, true);
-                }
-            } catch (org.springframework.data.redis.RedisConnectionFailureException | org.springframework.data.redis.RedisSystemException e) {
-                log.warn("[DIST_WARN] Redis连接中断: {}", e.getMessage());
-                sleep(2000);
-            } catch (Exception e) {
-                if (e instanceof io.lettuce.core.RedisCommandInterruptedException || e.getCause() instanceof InterruptedException) {
-                    log.info("[DIST_STOP] 分发线程被中断");
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-                log.error("[DIST_ERROR] 任务分发异常", e);
-                sleep(1000);
+                log.debug("[DIST_FETCH] 从全局队列获取任务");
+                // 提交到线程池执行 (标记为来自 Global Queue)
+                distributorExecutor.submit(() -> {
+                    try {
+                        distributeTask(jobJson, true);
+                    } catch (Exception ex) {
+                        log.error("[DIST_TASK_ERROR] 任务分发执行异常", ex);
+                    }
+                });
             }
+        } catch (Exception e) {
+            log.error("[DIST_ERROR] 处理全局队列任务异常", e);
         }
     }
 
