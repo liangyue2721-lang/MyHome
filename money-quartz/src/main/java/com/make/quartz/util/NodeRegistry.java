@@ -79,8 +79,13 @@ public class NodeRegistry implements SmartLifecycle {
 
     @Override
     public int getPhase() {
-        // Integer.MAX_VALUE means start last and stop first
-        return Integer.MAX_VALUE;
+        // Integer.MIN_VALUE means start first
+        return Integer.MIN_VALUE;
+    }
+
+    @Override
+    public boolean isAutoStartup() {
+        return true;
     }
 
     private void registerNode() {
