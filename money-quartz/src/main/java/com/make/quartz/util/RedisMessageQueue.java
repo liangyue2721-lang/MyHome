@@ -236,6 +236,10 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
         String processingQueueKey = TASK_QUEUE_PREFIX + nodeId + PROCESSING_QUEUE_SUFFIX;
         String legacyQueue = TASK_QUEUE_PREFIX + nodeId;
 
+        // Fix: Explicitly set running to true to handle race condition where
+        // listener is started (via @PostConstruct) before SmartLifecycle.start() is called by container.
+        this.running = true;
+
         log.info("启动消息监听器 | NodeID: {} | ProcessingQueue: {}", nodeId, processingQueueKey);
 
         executorService.submit(() -> {
