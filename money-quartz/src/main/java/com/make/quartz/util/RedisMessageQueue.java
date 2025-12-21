@@ -24,6 +24,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.Set;
+import java.util.HashSet;
 import java.util.HashMap;
 
 /**
@@ -56,6 +57,7 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
     private static final String NORMAL_PRIORITY_SUFFIX = ":normal";
     private static final String PROCESSING_QUEUE_SUFFIX = ":processing";
     private static final String RECENT_MONITOR_KEY = "task:monitor:recent";
+    public static final String PENDING_TASKS_SET = "task:pending_ids"; // Public for TaskDistributor usage
 
     private final RedisTemplate<String, String> redisTemplate;
     private final QuartzProperties quartzProperties;
@@ -122,24 +124,45 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
      * 发送任务消息 (默认普通优先级)
      */
     public void sendTaskMessage(String taskId, String targetNode, Object jobData) {
-        sendTaskMessage(taskId, targetNode, jobData, null, null, "NORMAL");
+        sendTaskMessage(taskId, targetNode, jobData, null, null, "NORMAL", true);
     }
 
     /**
      * 发送任务消息 (带Payload和TraceId)
      */
     public void sendTaskMessage(String taskId, String targetNode, Object jobData, Map<String, Object> payload, String traceId) {
-        sendTaskMessage(taskId, targetNode, jobData, payload, traceId, "NORMAL");
+        sendTaskMessage(taskId, targetNode, jobData, payload, traceId, "NORMAL", true);
     }
 
     /**
-     * 发送任务消息 (全参数)
+     * 发送任务消息 (全参数, 默认检查唯一性)
      */
     public void sendTaskMessage(String taskId, String targetNode, Object jobData, Map<String, Object> payload, String traceId, String priority) {
+        sendTaskMessage(taskId, targetNode, jobData, payload, traceId, priority, true);
+    }
+
+    /**
+     * 发送任务消息 (全参数, 可控制唯一性检查)
+     * @param checkUniqueness 是否检查任务是否已经在 Pending 状态
+     */
+    public void sendTaskMessage(String taskId, String targetNode, Object jobData, Map<String, Object> payload, String traceId, String priority, boolean checkUniqueness) {
         try {
             if (isTaskRunningLocally(taskId)) {
                 log.warn("[QUEUE_SEND_SKIP] 任务 {} 已在本地运行中，不重复发送消息", taskId);
                 return;
+            }
+
+            // 唯一性检查
+            if (checkUniqueness) {
+                // 尝试添加到Set，如果返回0表示已存在（重复）
+                Long added = redisTemplate.opsForSet().add(PENDING_TASKS_SET, taskId);
+                if (added != null && added == 0) {
+                    log.warn("[QUEUE_SEND_DUPLICATE] 任务 {} 已在 Pending 队列中，忽略重复发送", taskId);
+                    return;
+                }
+            } else {
+                // 如果是 Transfer 或 Requeue，确保它在 Set 中（防止数据不一致）
+                redisTemplate.opsForSet().add(PENDING_TASKS_SET, taskId);
             }
 
             TaskMessage message = new TaskMessage();
@@ -160,6 +183,10 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
                     queueKey, taskId, priority, traceId);
         } catch (Exception e) {
             log.error("[QUEUE_SEND_ERROR] 发送任务消息失败 | TaskID: {}", taskId, e);
+            // 失败回滚 Set 状态（虽然可能是网络超时实际成功了，但这里简单移除以允许重试）
+            if (checkUniqueness) {
+                redisTemplate.opsForSet().remove(PENDING_TASKS_SET, taskId);
+            }
         }
     }
 
@@ -228,6 +255,15 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
             log.warn("[QUEUE_MSG_INVALID] 无法解析消息，移除 | Msg: {}", messageJson);
             redisTemplate.opsForList().remove(processingQueueKey, 1, messageJson);
             return;
+        }
+
+        // 关键：任务开始处理，从 Pending Set 中移除
+        // 放在这里是因为 rightPopAndLeftPush 已经将任务移到了 Processing Queue
+        // 所以它已经不是 Pending 状态了
+        try {
+            redisTemplate.opsForSet().remove(PENDING_TASKS_SET, message.getTaskId());
+        } catch (Exception e) {
+            log.warn("[QUEUE_SET_REMOVE_FAIL] 移除Pending状态失败，可能导致任务无法重新入队 | TaskID: {}", message.getTaskId(), e);
         }
 
         if (isTaskRunningLocally(message.getTaskId())) {
@@ -317,6 +353,9 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
                 return;
             }
 
+            // 重新标记为 Pending
+            redisTemplate.opsForSet().add(PENDING_TASKS_SET, message.getTaskId());
+
             message.setRetryCount(message.getRetryCount() + 1);
             message.setTimestamp(System.currentTimeMillis()); // Update enqueue time for retry
 
@@ -329,6 +368,8 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
                     message.getTaskId(), message.getRetryCount(), quartzProperties.getMaxRetryCount());
         } catch (Exception e) {
             log.error("[QUEUE_REQUEUE_ERROR] 重新入队失败 | TaskID: {}", message.getTaskId(), e);
+            // 如果入队失败，尝试回滚 Pending 状态（虽然已经迟了）
+             redisTemplate.opsForSet().remove(PENDING_TASKS_SET, message.getTaskId());
         }
     }
 
@@ -394,16 +435,17 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
         stats.put("executing", 0L);
 
         try {
-            Set<String> keys = redisTemplate.keys(TASK_QUEUE_PREFIX + "*");
+            // Pending Count = Size of Unique Pending ID Set
+            Long pendingCount = redisTemplate.opsForSet().size(PENDING_TASKS_SET);
+            stats.put("pending", pendingCount != null ? pendingCount : 0L);
+
+            // Executing Count = Sum of processing queues
+            Set<String> keys = redisTemplate.keys(TASK_QUEUE_PREFIX + "*:processing");
             if (keys != null) {
                 for (String key : keys) {
                     Long size = redisTemplate.opsForList().size(key);
-                    if (size == null) size = 0L;
-
-                    if (key.endsWith(PROCESSING_QUEUE_SUFFIX)) {
+                    if (size != null) {
                         stats.put("executing", stats.get("executing") + size);
-                    } else if (key.endsWith(HIGH_PRIORITY_SUFFIX) || key.endsWith(NORMAL_PRIORITY_SUFFIX) || key.endsWith("global")) {
-                        stats.put("pending", stats.get("pending") + size);
                     }
                 }
             }
@@ -419,6 +461,8 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
      */
     public java.util.List<java.util.Map<String, Object>> getAllQueueDetails() {
         java.util.List<java.util.Map<String, Object>> allTasks = new java.util.ArrayList<>();
+        Set<String> visitedTaskIds = new HashSet<>(); // 过滤重复任务ID
+
         try {
             // 使用 SCAN 命令查找匹配的 Key
             java.util.Set<String> keys = new java.util.HashSet<>();
@@ -441,14 +485,14 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
                             try {
                                 TaskMessage task = JSON.parseObject(msgJson, TaskMessage.class);
                                 java.util.Map<String, Object> taskMap = new java.util.HashMap<>();
-                                taskMap.put("queueName", key);
+                                String taskId = null;
 
                                 // 处理 SysJob 类型的消息 (taskId 为空)
                                 if (task.getTaskId() == null) {
                                     try {
                                         SysJob sysJob = JSON.parseObject(msgJson, SysJob.class);
                                         if (sysJob != null && sysJob.getJobId() != null) {
-                                            taskMap.put("taskId", sysJob.getJobId() + "." + sysJob.getJobName());
+                                            taskId = sysJob.getJobId() + "." + sysJob.getJobName();
                                             taskMap.put("targetNode", null); // 全局队列中无目标节点
                                             taskMap.put("priority", sysJob.getPriority());
                                             taskMap.put("traceId", sysJob.getTraceId());
@@ -459,7 +503,7 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
                                         // Ignore
                                     }
                                 } else {
-                                    taskMap.put("taskId", task.getTaskId());
+                                    taskId = task.getTaskId();
                                     taskMap.put("targetNode", task.getTargetNode());
                                     taskMap.put("priority", task.getPriority());
                                     taskMap.put("traceId", task.getTraceId());
@@ -467,18 +511,22 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
                                     taskMap.put("retryCount", task.getRetryCount());
                                 }
 
-                                // 如果仍然没有 TaskId，跳过
-                                if (!taskMap.containsKey("taskId")) {
-                                    continue;
-                                }
+                                if (taskId == null) continue;
+                                taskMap.put("taskId", taskId);
+                                taskMap.put("queueName", key);
 
-                                // 区分是等待队列还是处理中队列
+                                // 过滤重复: 如果已经在列表中，跳过
                                 if (key.endsWith(PROCESSING_QUEUE_SUFFIX)) {
                                     taskMap.put("status", "PROCESSING");
+                                    // Processing tasks are always included
+                                    allTasks.add(taskMap);
                                 } else {
                                     taskMap.put("status", "WAITING");
+                                    // Pending tasks: filter duplicates
+                                    if (visitedTaskIds.add(taskId)) {
+                                        allTasks.add(taskMap);
+                                    }
                                 }
-                                allTasks.add(taskMap);
 
                                 // 总条数限制保护 (例如 500 条)
                                 if (allTasks.size() >= 500) {

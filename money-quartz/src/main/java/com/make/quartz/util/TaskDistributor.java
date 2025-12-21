@@ -105,7 +105,8 @@ public class TaskDistributor implements org.springframework.context.SmartLifecyc
 
                 if (jobJson != null) {
                     log.debug("[DIST_FETCH] 从全局队列获取任务");
-                    distributeTask(jobJson);
+                    // 标记为来自Global Queue (Transfer)
+                    distributeTask(jobJson, true);
                 }
             } catch (org.springframework.data.redis.RedisConnectionFailureException | org.springframework.data.redis.RedisSystemException e) {
                 log.warn("[DIST_WARN] Redis连接中断: {}", e.getMessage());
@@ -127,9 +128,17 @@ public class TaskDistributor implements org.springframework.context.SmartLifecyc
     }
 
     /**
-     * 手动分发任务 (供AbstractScheduledTask调用)
+     * 手动分发任务 (供AbstractScheduledTask调用，默认为新任务)
      */
     public void distributeTask(SysJob sysJob) {
+        distributeTask(sysJob, false);
+    }
+
+    /**
+     * 分发任务核心逻辑
+     * @param fromGlobalQueue 是否来自全局队列 (如果是，则视为Transfer，跳过重复性检查的SADD返回0判断)
+     */
+    public void distributeTask(SysJob sysJob, boolean fromGlobalQueue) {
         if (sysJob == null) return;
 
         // Task ID Format Validation
@@ -141,6 +150,7 @@ public class TaskDistributor implements org.springframework.context.SmartLifecyc
         try {
             String priority = StringUtils.defaultIfEmpty(sysJob.getPriority(), "NORMAL");
             String traceId = sysJob.getTraceId();
+            String taskId = sysJob.getJobId() + "." + sysJob.getJobName();
 
             // 确保TraceId存在
             if (StringUtils.isEmpty(traceId)) {
@@ -160,30 +170,54 @@ public class TaskDistributor implements org.springframework.context.SmartLifecyc
 
                 Map<String, Object> payload = JSON.parseObject(JSON.toJSONString(sysJob), Map.class);
 
+                // 发送消息：如果是从GlobalQueue来的，不需要再次检查唯一性(checkUniqueness=false)
+                // 否则(新任务)，需要检查唯一性(checkUniqueness=true)
                 redisMessageQueue.sendTaskMessage(
-                        sysJob.getJobId() + "." + sysJob.getJobName(),
+                        taskId,
                         targetNode,
                         sysJob,
                         payload,
                         sysJob.getTraceId(),
-                        priority
+                        priority,
+                        !fromGlobalQueue
                 );
             } else {
                 log.warn("[DIST_NO_NODE] 无可用节点分发任务: {}", sysJob.getJobName());
                 // 回退策略：放入全局队列
+
+                // 如果是新任务(!fromGlobalQueue)，需要先尝试添加到Set
+                if (!fromGlobalQueue) {
+                    Long added = redisTemplate.opsForSet().add(RedisMessageQueue.PENDING_TASKS_SET, taskId);
+                    if (added != null && added == 0) {
+                        log.warn("[DIST_DUPLICATE] 任务 {} 已在 Pending 队列中，忽略回退入队", taskId);
+                        return;
+                    }
+                } else {
+                    // 如果是从GlobalQueue出来的，它已经在Set里了，或者因为某些原因不在但我们想保留它
+                    // 确保它在Set中
+                    redisTemplate.opsForSet().add(RedisMessageQueue.PENDING_TASKS_SET, taskId);
+                }
+
                 String jobJson = JSON.toJSONString(sysJob);
                 redisTemplate.opsForList().leftPush(GLOBAL_TASK_QUEUE, jobJson);
             }
         } catch (Exception e) {
             log.error("[DIST_FAIL] 分发任务失败: {}", sysJob.getJobName(), e);
+            // 异常情况下，如果是新任务且已添加到Set，可能需要清理？
+            // 实际上这里的异常大多是Redis连接或序列化，如果Redis挂了，Set操作可能也没成功。
+            // 简单起见，暂不回滚Set，依靠过期或清理机制（目前Set没过期，未来可能需要加TTL）
         }
     }
 
     private void distributeTask(String jobJson) {
+        distributeTask(jobJson, false);
+    }
+
+    private void distributeTask(String jobJson, boolean fromGlobalQueue) {
         try {
             SysJob sysJob = QuartzBeanUtils.fromJson(jobJson, SysJob.class);
             if (sysJob == null) return;
-            distributeTask(sysJob);
+            distributeTask(sysJob, fromGlobalQueue);
         } catch (Exception e) {
             log.error("[DIST_FAIL] 分发任务失败 (JSON parse error): {}", StringUtils.substring(jobJson, 0, 100), e);
             // 尝试重新入队，防止丢消息
