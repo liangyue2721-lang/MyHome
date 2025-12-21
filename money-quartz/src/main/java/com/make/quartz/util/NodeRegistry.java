@@ -41,7 +41,8 @@ public class NodeRegistry implements SmartLifecycle {
     private static final String SCHEDULER_NODES_KEY = "SCHEDULER_NODES";
     private static final String SCHEDULER_NODE_PREFIX = "SCHEDULER_NODE:";
     private static final String SCHEDULER_NODE_METRICS_SUFFIX = ":METRICS";
-    
+    private static final String SCHEDULER_NODE_HEARTBEAT_SUFFIX = ":HEARTBEAT";
+
     private static final String CURRENT_NODE_ID = IpUtils.getHostIp() + ":" + UUID.randomUUID().toString();
     
     @Autowired
@@ -78,9 +79,13 @@ public class NodeRegistry implements SmartLifecycle {
     }
 
     @Override
+    public boolean isAutoStartup() {
+        return true;
+    }
+
+    @Override
     public int getPhase() {
-        // Integer.MAX_VALUE means start last and stop first
-        return Integer.MAX_VALUE;
+        return Integer.MIN_VALUE;
     }
 
     private void registerNode() {
@@ -88,6 +93,11 @@ public class NodeRegistry implements SmartLifecycle {
             if (!active) return;
             redisTemplate.opsForSet().add(SCHEDULER_NODES_KEY, CURRENT_NODE_ID);
             redisTemplate.expire(SCHEDULER_NODES_KEY, 300, TimeUnit.SECONDS);
+
+            // 立即发送一次心跳，确保节点立即可见
+            String heartbeatKey = SCHEDULER_NODE_PREFIX + CURRENT_NODE_ID + SCHEDULER_NODE_HEARTBEAT_SUFFIX;
+            redisTemplate.opsForValue().set(heartbeatKey, String.valueOf(System.currentTimeMillis()));
+            redisTemplate.expire(heartbeatKey, 60, TimeUnit.SECONDS);
         } catch (Exception e) {
             log.error("[NODE_REG_ERROR] 节点注册失败", e);
         }
@@ -108,18 +118,29 @@ public class NodeRegistry implements SmartLifecycle {
             return;
         }
         try {
+            long currentTimestamp = System.currentTimeMillis();
+
+            // 1. 发送权威心跳 (NodeMonitor仅依赖此key判定存活)
+            // TTL设为60s (心跳间隔30s * 2)，确保错过一次心跳不会立即导致下线
+            String heartbeatKey = SCHEDULER_NODE_PREFIX + CURRENT_NODE_ID + SCHEDULER_NODE_HEARTBEAT_SUFFIX;
+            redisTemplate.opsForValue().set(heartbeatKey, String.valueOf(currentTimestamp));
+            redisTemplate.expire(heartbeatKey, 60, TimeUnit.SECONDS);
+
+            // 2. 确保节点在集合中 (防止意外过期)
+            redisTemplate.opsForSet().add(SCHEDULER_NODES_KEY, CURRENT_NODE_ID);
+            redisTemplate.expire(SCHEDULER_NODES_KEY, 300, TimeUnit.SECONDS);
+
+            // 3. 上报负载指标 (可选，供负载均衡使用)
             Map<String, Object> metrics = collectNodeMetrics();
+            metrics.put("timestamp", currentTimestamp);
             String metricsJson = JSON.toJSONString(metrics);
             
             String metricsKey = SCHEDULER_NODE_PREFIX + CURRENT_NODE_ID + SCHEDULER_NODE_METRICS_SUFFIX;
             redisTemplate.opsForValue().set(metricsKey, metricsJson);
             redisTemplate.expire(metricsKey, 300, TimeUnit.SECONDS);
             
-            // 刷新节点列表过期时间
-            redisTemplate.expire(SCHEDULER_NODES_KEY, 300, TimeUnit.SECONDS);
-
             if (log.isDebugEnabled()) {
-                log.debug("[NODE_HEARTBEAT] 心跳上报成功 | Metrics: {}", metricsJson);
+                log.debug("[NODE_HEARTBEAT] 心跳上报成功 | Timestamp: {}, Metrics: {}", currentTimestamp, metricsJson);
             }
         } catch (org.springframework.data.redis.RedisConnectionFailureException | org.springframework.data.redis.RedisSystemException e) {
             if (!active) {
