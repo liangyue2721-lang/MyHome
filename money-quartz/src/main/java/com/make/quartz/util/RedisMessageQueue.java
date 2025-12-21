@@ -402,7 +402,7 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
 
                     if (key.endsWith(PROCESSING_QUEUE_SUFFIX)) {
                         stats.put("executing", stats.get("executing") + size);
-                    } else if (key.endsWith(HIGH_PRIORITY_SUFFIX) || key.endsWith(NORMAL_PRIORITY_SUFFIX)) {
+                    } else if (key.endsWith(HIGH_PRIORITY_SUFFIX) || key.endsWith(NORMAL_PRIORITY_SUFFIX) || key.endsWith("global")) {
                         stats.put("pending", stats.get("pending") + size);
                     }
                 }
