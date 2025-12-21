@@ -72,12 +72,18 @@ public class RedisMessageQueueExample implements CommandLineRunner {
      */
     private void sendSampleTasks(String targetNodeId, int count) {
         for (int i = 0; i < count; i++) {
-            String taskId = UUID.randomUUID().toString();
+            // Updated to use new semantics
+            String taskId = "EXAMPLE_TASK_JOB";
+            String executionId = UUID.randomUUID().toString();
+
             Map<String, Object> payload = new HashMap<>();
             payload.put("info", "这是任务 " + taskId + " 的示例数据");
             payload.put("index", i);
-            messageQueue.sendTaskMessage(taskId, targetNodeId, payload);
-            log.info("已发送示例任务 {} 至节点 {}", taskId, targetNodeId);
+
+            // Send with both Task ID and Execution ID
+            messageQueue.sendTaskMessage(taskId, executionId, targetNodeId, null, payload, null, "NORMAL", true);
+
+            log.info("已发送示例任务 Job: {}, ExecId: {} 至节点 {}", taskId, executionId, targetNodeId);
         }
     }
 
@@ -88,7 +94,9 @@ public class RedisMessageQueueExample implements CommandLineRunner {
      * @param message 收到的任务消息
      */
     private void handleTaskMessage(RedisMessageQueue.TaskMessage message) {
-        log.info("开始处理任务，任务 ID: {}，目标节点: {}，发送时间: {}", message.getTaskId(), message.getTargetNode(), message.getTimestamp());
+        log.info("开始处理任务，Job: {}, ExecId: {}, 目标节点: {}, 发送时间: {}",
+            message.getTaskId(), message.getExecutionId(), message.getTargetNode(), message.getTimestamp());
+
         Object jobData = message.getJobData();
         SysJob sysJob = null;
         // 优先尝试从 jobData 构造 SysJob
@@ -112,7 +120,7 @@ public class RedisMessageQueueExample implements CommandLineRunner {
             if (sysJob != null) {
                 // 校验 invokeTarget 是否为空，如果为空则视为无效消息（如示例消息），直接返回
                 if (StringUtils.isEmpty(sysJob.getInvokeTarget())) {
-                    log.debug("[EXAMPLE_FILTER] 忽略无效任务消息 (invokeTarget为空) | TaskID: {}", message.getTaskId());
+                    log.debug("[EXAMPLE_FILTER] 忽略无效任务消息 (invokeTarget为空) | Job: {}", message.getTaskId());
                     return;
                 }
 
@@ -124,10 +132,10 @@ public class RedisMessageQueueExample implements CommandLineRunner {
                 genericTaskExecutor.execute(sysJob);
                 log.info("任务 {}[{}] 执行完成", sysJob.getJobName(), sysJob.getJobId());
             } else {
-                // 如果 jobData 无法解析，则通过 taskId (格式: group.name) 查询 Quartz 任务并执行
+                // 如果 jobData 无法解析，则通过 taskId (格式: group.name 或 jobId_jobName) 查询 Quartz 任务并执行
                 String taskId = message.getTaskId();
-                if (StringUtils.isEmpty(taskId) || !taskId.contains(".")) {
-                    log.error("taskId 格式不正确，无法执行任务: {}", taskId);
+                if (StringUtils.isEmpty(taskId)) {
+                     // ignore example tasks
                 } else {
                     executeTaskByTaskId(taskId);
                 }
@@ -148,10 +156,16 @@ public class RedisMessageQueueExample implements CommandLineRunner {
      * @param taskId 任务唯一标识
      */
     private void executeTaskByTaskId(String taskId) {
+        // Skip example tasks
+        if ("EXAMPLE_TASK_JOB".equals(taskId)) return;
+
         long startTime = System.currentTimeMillis();
         try {
             log.info("根据 taskId 执行任务: {}", taskId);
-            String[] parts = taskId.split("\\.", 2);
+
+            String separator = taskId.contains("_") ? "_" : "\\.";
+            String[] parts = taskId.split(separator, 2);
+
             if (parts.length != 2) {
                 log.error("taskId 格式不正确，无法解析: {}", taskId);
                 return;

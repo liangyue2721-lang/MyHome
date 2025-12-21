@@ -157,14 +157,29 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
      * @param checkUniqueness 是否检查任务是否已经在 Pending 状态
      */
     public void sendTaskMessage(String taskId, String targetNode, Object jobData, Map<String, Object> payload, String traceId, String priority, boolean checkUniqueness) {
+        sendTaskMessage(taskId, null, targetNode, jobData, payload, traceId, priority, checkUniqueness);
+    }
+
+    /**
+     * 发送任务消息 (支持 ExecutionId)
+     * @param executionId 任务执行ID (用于去重)
+     */
+    public void sendTaskMessage(String taskId, String executionId, String targetNode, Object jobData, Map<String, Object> payload, String traceId, String priority, boolean checkUniqueness) {
         try {
-            if (isTaskRunningLocally(taskId)) {
-                log.warn("[QUEUE_SEND_SKIP] 任务 {} 已在本地运行中，不重复发送消息", taskId);
+            // 如果 executionId 为空，尝试使用 traceId，否则生成 UUID
+            // 确保 taskId (Job Definition) + executionId (Instance) 的组合唯一性
+            if (StringUtils.isEmpty(executionId)) {
+                executionId = StringUtils.isNotEmpty(traceId) ? traceId : java.util.UUID.randomUUID().toString();
+            }
+
+            if (isTaskRunningLocally(executionId)) {
+                log.warn("[QUEUE_SEND_SKIP] 任务实例 {} (Job: {}) 已在本地运行中，不重复发送消息", executionId, taskId);
                 return;
             }
 
             TaskMessage message = new TaskMessage();
             message.setTaskId(taskId);
+            message.setExecutionId(executionId);
             message.setTargetNode(targetNode);
             message.setJobData(jobData);
             message.setPayload(payload);
@@ -179,28 +194,28 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
             if (checkUniqueness) {
                 // Use Lua script for atomic Enqueue (Check Set -> Add Set -> Push List)
                 // KEYS[1]: PENDING_SET, KEYS[2]: QUEUE_LIST
-                // ARGV[1]: taskId, ARGV[2]: messageJson
+                // ARGV[1]: executionId (unique key), ARGV[2]: messageJson
                 Long result = redisTemplate.execute(atomicEnqueueScript,
                         java.util.Arrays.asList(PENDING_TASKS_SET, queueKey),
-                        taskId, messageJson);
+                        executionId, messageJson);
 
                 if (result != null && result == 0) {
-                     log.warn("[QUEUE_SEND_DUPLICATE] 任务 {} 已在 Pending 队列中 (Lua)，忽略重复发送", taskId);
+                     log.warn("[QUEUE_SEND_DUPLICATE] 任务实例 {} (Job: {}) 已在 Pending 队列中 (Lua)，忽略重复发送", executionId, taskId);
                      return;
                 }
             } else {
                 // 如果是 Transfer 或 Requeue，确保它在 Set 中（防止数据不一致）
-                redisTemplate.opsForSet().add(PENDING_TASKS_SET, taskId);
+                redisTemplate.opsForSet().add(PENDING_TASKS_SET, executionId);
                 redisTemplate.opsForList().leftPush(queueKey, messageJson);
             }
 
-            log.info("[QUEUE_ENQUEUE] 任务入队成功 | Queue: {} | TaskID: {} | Priority: {} | TraceId: {}",
-                    queueKey, taskId, priority, traceId);
+            log.info("[QUEUE_ENQUEUE] 任务入队成功 | Queue: {} | Job: {} | ExecId: {} | Priority: {} | TraceId: {}",
+                    queueKey, taskId, executionId, priority, traceId);
         } catch (Exception e) {
-            log.error("[QUEUE_SEND_ERROR] 发送任务消息失败 | TaskID: {}", taskId, e);
+            log.error("[QUEUE_SEND_ERROR] 发送任务消息失败 | Job: {} | ExecId: {}", taskId, executionId, e);
             // 失败回滚 Set 状态（虽然可能是网络超时实际成功了，但这里简单移除以允许重试）
-            if (checkUniqueness) {
-                redisTemplate.opsForSet().remove(PENDING_TASKS_SET, taskId);
+            if (checkUniqueness && executionId != null) {
+                redisTemplate.opsForSet().remove(PENDING_TASKS_SET, executionId);
             }
         }
     }
@@ -272,18 +287,20 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
             return;
         }
 
+        String executionId = getOrGenerateExecutionId(message);
+
         // 关键：任务开始处理
-        // 1. 从 Pending Set 中移除
-        // 2. 添加到 Executing Set
+        // 1. 从 Pending Set 中移除 (使用 executionId)
+        // 2. 添加到 Executing Set (使用 executionId)
         try {
-            redisTemplate.opsForSet().remove(PENDING_TASKS_SET, message.getTaskId());
-            redisTemplate.opsForSet().add(EXECUTING_TASKS_SET, message.getTaskId());
+            redisTemplate.opsForSet().remove(PENDING_TASKS_SET, executionId);
+            redisTemplate.opsForSet().add(EXECUTING_TASKS_SET, executionId);
         } catch (Exception e) {
-            log.warn("[QUEUE_SET_UPDATE_FAIL] 更新任务集合状态失败 | TaskID: {}", message.getTaskId(), e);
+            log.warn("[QUEUE_SET_UPDATE_FAIL] 更新任务集合状态失败 | ExecId: {}", executionId, e);
         }
 
-        if (isTaskRunningLocally(message.getTaskId())) {
-            log.info("[QUEUE_MSG_DUPLICATE] 任务 {} 已在本地运行，自动确认消息", message.getTaskId());
+        if (isTaskRunningLocally(executionId)) {
+            log.info("[QUEUE_MSG_DUPLICATE] 任务实例 {} (Job: {}) 已在本地运行，自动确认消息", executionId, message.getTaskId());
             acknowledge(message);
             return;
         }
@@ -300,27 +317,29 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
         // Do NOT fall back to caller runs to prevent mixing logic in Scheduler/Listener pools.
         while (!Thread.currentThread().isInterrupted()) {
                 try {
+                final String finalExecutionId = executionId;
                 stockTaskExecutor.submit(() -> {
-                    processingMessages.put(message.getTaskId(), System.currentTimeMillis());
+                    processingMessages.put(finalExecutionId, System.currentTimeMillis());
                     try {
-                        log.info("[QUEUE_PROCESS_START] 开始处理任务 | TaskID: {} | TraceId: {}", message.getTaskId(), message.getTraceId());
+                        log.info("[QUEUE_PROCESS_START] 开始处理任务 | Job: {} | ExecId: {} | TraceId: {}",
+                                message.getTaskId(), finalExecutionId, message.getTraceId());
                         messageHandler.handleMessage(message);
 
                         // 执行成功 -> ACK
                         acknowledge(message);
-                        log.info("[QUEUE_PROCESS_SUCCESS] 任务处理完成并确认 | TaskID: {}", message.getTaskId());
+                        log.info("[QUEUE_PROCESS_SUCCESS] 任务处理完成并确认 | Job: {} | ExecId: {}", message.getTaskId(), finalExecutionId);
                     } catch (Exception e) {
-                        log.error("[QUEUE_PROCESS_ERROR] 处理任务异常 | TaskID: {}", message.getTaskId(), e);
+                        log.error("[QUEUE_PROCESS_ERROR] 处理任务异常 | Job: {} | ExecId: {}", message.getTaskId(), finalExecutionId, e);
                         // 执行失败 -> Requeue
                         requeue(message);
                     } finally {
-                        processingMessages.remove(message.getTaskId());
+                        processingMessages.remove(finalExecutionId);
                     }
                 });
                 // Submission successful, break loop
                 break;
             } catch (java.util.concurrent.RejectedExecutionException e) {
-                log.warn("[QUEUE_PROCESS_FULL] 股票任务线程池已满，等待空闲... | TaskID: {}", message.getTaskId());
+                log.warn("[QUEUE_PROCESS_FULL] 股票任务线程池已满，等待空闲... | Job: {}", message.getTaskId());
                 // Backoff wait to prevent CPU spin
                 try {
                     Thread.sleep(100);
@@ -343,13 +362,14 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
         try {
             deleteFromProcessingQueue(message);
 
-            // 任务完成，从 Executing Set 移除
-            redisTemplate.opsForSet().remove(EXECUTING_TASKS_SET, message.getTaskId());
+            // 任务完成，从 Executing Set 移除 (使用 executionId)
+            String executionId = getOrGenerateExecutionId(message);
+            redisTemplate.opsForSet().remove(EXECUTING_TASKS_SET, executionId);
 
             recordRecentTask(message, "SUCCESS");
-            log.debug("[QUEUE_ACK] 消息已确认移除 | TaskID: {}", message.getTaskId());
+            log.debug("[QUEUE_ACK] 消息已确认移除 | Job: {} | ExecId: {}", message.getTaskId(), executionId);
         } catch (Exception e) {
-            log.error("[QUEUE_ACK_ERROR] 确认消息失败 | TaskID: {}", message.getTaskId(), e);
+            log.error("[QUEUE_ACK_ERROR] 确认消息失败 | Job: {}", message.getTaskId(), e);
         }
     }
 
@@ -368,6 +388,7 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
         try {
             Map<String, Object> record = new java.util.HashMap<>();
             record.put("taskId", message.getTaskId());
+            record.put("executionId", message.getExecutionId());
             record.put("targetNode", message.getTargetNode());
             record.put("priority", message.getPriority());
             record.put("traceId", message.getTraceId());
@@ -393,19 +414,21 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
             // 先从 processing 队列移除
             deleteFromProcessingQueue(message);
 
+            String executionId = getOrGenerateExecutionId(message);
+
             // 失败重试，从 Executing Set 移除
-            redisTemplate.opsForSet().remove(EXECUTING_TASKS_SET, message.getTaskId());
+            redisTemplate.opsForSet().remove(EXECUTING_TASKS_SET, executionId);
 
             // 检查最大重试次数
             if (message.getRetryCount() >= quartzProperties.getMaxRetryCount()) {
-                log.error("[QUEUE_RETRY_LIMIT] 任务 {} 超过最大重试次数 ({})，丢弃任务",
-                        message.getTaskId(), quartzProperties.getMaxRetryCount());
+                log.error("[QUEUE_RETRY_LIMIT] 任务 {} (ExecId: {}) 超过最大重试次数 ({})，丢弃任务",
+                        message.getTaskId(), executionId, quartzProperties.getMaxRetryCount());
                 recordRecentTask(message, "FAIL");
                 return;
             }
 
             // 重新标记为 Pending
-            redisTemplate.opsForSet().add(PENDING_TASKS_SET, message.getTaskId());
+            redisTemplate.opsForSet().add(PENDING_TASKS_SET, executionId);
 
             message.setRetryCount(message.getRetryCount() + 1);
             message.setTimestamp(System.currentTimeMillis()); // Update enqueue time for retry
@@ -415,12 +438,13 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
 
             // 重新推入等待队列
             redisTemplate.opsForList().leftPush(queueKey, messageJson);
-            log.info("[QUEUE_REQUEUE] 任务已重新入队 | TaskID: {} | Retry: {}/{}",
-                    message.getTaskId(), message.getRetryCount(), quartzProperties.getMaxRetryCount());
+            log.info("[QUEUE_REQUEUE] 任务已重新入队 | Job: {} | ExecId: {} | Retry: {}/{}",
+                    message.getTaskId(), executionId, message.getRetryCount(), quartzProperties.getMaxRetryCount());
         } catch (Exception e) {
-            log.error("[QUEUE_REQUEUE_ERROR] 重新入队失败 | TaskID: {}", message.getTaskId(), e);
+            log.error("[QUEUE_REQUEUE_ERROR] 重新入队失败 | Job: {}", message.getTaskId(), e);
             // 如果入队失败，尝试回滚 Pending 状态（虽然已经迟了）
-             redisTemplate.opsForSet().remove(PENDING_TASKS_SET, message.getTaskId());
+            String executionId = getOrGenerateExecutionId(message);
+            redisTemplate.opsForSet().remove(PENDING_TASKS_SET, executionId);
         }
     }
 
@@ -448,9 +472,10 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
                 // 检查是否超时
                 if (now - message.getTimestamp() > quartzProperties.getTaskTimeout()) {
                     // 再次确认是否正在本地运行 (避免误杀长任务)
-                    if (!isTaskRunningLocally(message.getTaskId())) {
-                        log.warn("[QUEUE_CLEANUP] 发现超时任务，准备回收 | TaskID: {} | Timeout: {}ms",
-                                message.getTaskId(), now - message.getTimestamp());
+                    String executionId = getOrGenerateExecutionId(message);
+                    if (!isTaskRunningLocally(executionId)) {
+                        log.warn("[QUEUE_CLEANUP] 发现超时任务，准备回收 | Job: {} | ExecId: {} | Timeout: {}ms",
+                                message.getTaskId(), executionId, now - message.getTimestamp());
                         requeue(message);
                         recoveredCount++;
                     }
@@ -506,7 +531,7 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
      */
     public java.util.List<java.util.Map<String, Object>> getAllQueueDetails() {
         java.util.List<java.util.Map<String, Object>> allTasks = new java.util.ArrayList<>();
-        Set<String> visitedTaskIds = new HashSet<>(); // 过滤重复任务ID
+        Set<String> visitedExecIds = new HashSet<>(); // 过滤重复任务(使用executionId)
 
         try {
             // 使用 SCAN 命令查找匹配的 Key
@@ -531,13 +556,17 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
                                 TaskMessage task = JSON.parseObject(msgJson, TaskMessage.class);
                                 java.util.Map<String, Object> taskMap = new java.util.HashMap<>();
                                 String taskId = null;
+                                String executionId = null;
 
                                 // 处理 SysJob 类型的消息 (taskId 为空)
                                 if (task.getTaskId() == null) {
                                     try {
                                         SysJob sysJob = JSON.parseObject(msgJson, SysJob.class);
                                         if (sysJob != null && sysJob.getJobId() != null) {
-                                            taskId = sysJob.getJobId() + "." + sysJob.getJobName();
+                                            taskId = sysJob.getJobId() + "_" + sysJob.getJobName();
+                                            executionId = sysJob.getFireInstanceId();
+                                            if (StringUtils.isEmpty(executionId)) executionId = sysJob.getTraceId();
+
                                             taskMap.put("targetNode", null); // 全局队列中无目标节点
                                             taskMap.put("priority", sysJob.getPriority());
                                             taskMap.put("traceId", sysJob.getTraceId());
@@ -549,6 +578,9 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
                                     }
                                 } else {
                                     taskId = task.getTaskId();
+                                    executionId = task.getExecutionId();
+                                    if (StringUtils.isEmpty(executionId)) executionId = task.getTraceId(); // Fallback
+
                                     taskMap.put("targetNode", task.getTargetNode());
                                     taskMap.put("priority", task.getPriority());
                                     taskMap.put("traceId", task.getTraceId());
@@ -557,7 +589,10 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
                                 }
 
                                 if (taskId == null) continue;
+                                if (executionId == null) executionId = java.util.UUID.randomUUID().toString();
+
                                 taskMap.put("taskId", taskId);
+                                taskMap.put("executionId", executionId);
                                 taskMap.put("queueName", key);
 
                                 // 过滤重复: 如果已经在列表中，跳过
@@ -567,8 +602,8 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
                                     allTasks.add(taskMap);
                                 } else {
                                     taskMap.put("status", "WAITING");
-                                    // Pending tasks: filter duplicates
-                                    if (visitedTaskIds.add(taskId)) {
+                                    // Pending tasks: filter duplicates by executionId
+                                    if (visitedExecIds.add(executionId)) {
                                         allTasks.add(taskMap);
                                     }
                                 }
@@ -676,18 +711,28 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
         }
     }
 
-    public static boolean isMessageProcessing(String taskId) {
-        return processingMessages.containsKey(taskId);
+    public static boolean isMessageProcessing(String executionId) {
+        return processingMessages.containsKey(executionId);
     }
 
-    private boolean isTaskRunningLocally(String taskId) {
-        return processingMessages.containsKey(taskId) ||
-               AbstractQuartzJob.isJobExecuting(taskId) ||
-               TaskExecutionService.isTaskExecuting(taskId);
+    private boolean isTaskRunningLocally(String executionId) {
+        if (executionId == null) return false;
+        return processingMessages.containsKey(executionId) ||
+               TaskExecutionService.isTaskExecuting(executionId);
+    }
+
+    private String getOrGenerateExecutionId(TaskMessage message) {
+        String execId = message.getExecutionId();
+        if (StringUtils.isEmpty(execId)) {
+            // Fallback for legacy messages or missing ID
+            execId = StringUtils.isNotEmpty(message.getTraceId()) ? message.getTraceId() : message.getTaskId();
+        }
+        return execId;
     }
 
     public static class TaskMessage {
         private String taskId;
+        private String executionId; // Unique Execution ID
         private String targetNode;
         private Object jobData;
         private long timestamp;
@@ -701,6 +746,8 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
         // Getters and Setters
         public String getTaskId() { return taskId; }
         public void setTaskId(String taskId) { this.taskId = taskId; }
+        public String getExecutionId() { return executionId; }
+        public void setExecutionId(String executionId) { this.executionId = executionId; }
         public String getTargetNode() { return targetNode; }
         public void setTargetNode(String targetNode) { this.targetNode = targetNode; }
         public Object getJobData() { return jobData; }

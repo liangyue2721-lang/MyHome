@@ -152,7 +152,13 @@ public class TaskDistributor implements org.springframework.context.SmartLifecyc
         try {
             String priority = StringUtils.defaultIfEmpty(sysJob.getPriority(), "NORMAL");
             String traceId = sysJob.getTraceId();
-            String taskId = sysJob.getJobId() + "." + sysJob.getJobName();
+
+            // Task ID defines "What the task is" (Job Definition)
+            // Use underscore as separator
+            String taskId = sysJob.getJobId() + "_" + sysJob.getJobName();
+
+            // Execution ID defines "Which instance this is" (Unique per run)
+            String executionId = sysJob.getFireInstanceId();
 
             // 确保TraceId存在
             if (StringUtils.isEmpty(traceId)) {
@@ -163,19 +169,26 @@ public class TaskDistributor implements org.springframework.context.SmartLifecyc
                 sysJob.setTraceId(traceId);
             }
 
+            // 如果 executionId 为空，使用 traceId 替代
+            if (StringUtils.isEmpty(executionId)) {
+                executionId = traceId;
+            }
+
             // 选择最佳节点
             String targetNode = selectBestNode(sysJob);
 
             if (StringUtils.isNotEmpty(targetNode)) {
-                log.info("[DIST_DECISION] 任务分发决策 | Task: {} | Target: {} | Priority: {} | TraceId: {}",
-                        sysJob.getJobName(), targetNode, priority, traceId);
+                log.info("[DIST_DECISION] 任务分发决策 | Job: {} | ExecId: {} | Target: {} | Priority: {} | TraceId: {}",
+                        taskId, executionId, targetNode, priority, traceId);
 
                 Map<String, Object> payload = JSON.parseObject(JSON.toJSONString(sysJob), Map.class);
 
                 // 发送消息：如果是从GlobalQueue来的，不需要再次检查唯一性(checkUniqueness=false)
                 // 否则(新任务)，需要检查唯一性(checkUniqueness=true)
+                // 传递 executionId 作为去重键
                 redisMessageQueue.sendTaskMessage(
                         taskId,
+                        executionId,
                         targetNode,
                         sysJob,
                         payload,
@@ -188,16 +201,17 @@ public class TaskDistributor implements org.springframework.context.SmartLifecyc
                 // 回退策略：放入全局队列
 
                 // 如果是新任务(!fromGlobalQueue)，需要先尝试添加到Set
+                // 使用 executionId 作为去重键
                 if (!fromGlobalQueue) {
-                    Long added = redisTemplate.opsForSet().add(RedisMessageQueue.PENDING_TASKS_SET, taskId);
+                    Long added = redisTemplate.opsForSet().add(RedisMessageQueue.PENDING_TASKS_SET, executionId);
                     if (added != null && added == 0) {
-                        log.warn("[DIST_DUPLICATE] 任务 {} 已在 Pending 队列中，忽略回退入队", taskId);
+                        log.warn("[DIST_DUPLICATE] 任务实例 {} (Job: {}) 已在 Pending 队列中，忽略回退入队", executionId, taskId);
                         return;
                     }
                 } else {
                     // 如果是从GlobalQueue出来的，它已经在Set里了，或者因为某些原因不在但我们想保留它
                     // 确保它在Set中
-                    redisTemplate.opsForSet().add(RedisMessageQueue.PENDING_TASKS_SET, taskId);
+                    redisTemplate.opsForSet().add(RedisMessageQueue.PENDING_TASKS_SET, executionId);
                 }
 
                 String jobJson = JSON.toJSONString(sysJob);
