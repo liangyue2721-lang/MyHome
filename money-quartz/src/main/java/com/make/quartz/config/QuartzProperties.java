@@ -23,12 +23,12 @@ public class QuartzProperties {
     /**
      * 任务执行器核心线程倍数 (相对于CPU核数)
      */
-    private int executorCoreThreadsMultiple = 2;
+    private int executorCoreThreadsMultiple = 4;
 
     /**
      * 任务执行器最大线程倍数 (相对于CPU核数)
      */
-    private int executorMaxThreadsMultiple = 4;
+    private int executorMaxThreadsMultiple = 8;
 
     /**
      * 任务最大重试次数

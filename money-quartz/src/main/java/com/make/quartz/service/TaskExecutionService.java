@@ -43,19 +43,10 @@ public class TaskExecutionService {
     @Autowired
     private Scheduler scheduler;
     
-    private ThreadPoolExecutor taskExecutor;
-    
     private static final ConcurrentHashMap<String, Long> executingTasks = new ConcurrentHashMap<>();
     
     @PostConstruct
     public void init() {
-        this.taskExecutor = (ThreadPoolExecutor) ThreadPoolUtil.createCustomThreadPool(
-                Runtime.getRuntime().availableProcessors() * 2,
-                Runtime.getRuntime().availableProcessors() * 8,
-                10000,
-                "TaskExecutionThread"
-        );
-        
         String currentNodeId = SchedulerManager.getCurrentNodeId();
         log.info("初始化任务执行服务 | NodeID: {}", currentNodeId);
         
@@ -66,18 +57,6 @@ public class TaskExecutionService {
     public void destroy() {
         log.info("停止任务执行服务");
         RedisMessageQueue.getInstance().stopListening();
-        
-        if (taskExecutor != null && !taskExecutor.isShutdown()) {
-            taskExecutor.shutdown();
-            try {
-                if (!taskExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
-                    taskExecutor.shutdownNow();
-                }
-            } catch (InterruptedException e) {
-                taskExecutor.shutdownNow();
-                Thread.currentThread().interrupt();
-            }
-        }
     }
     
     private void handleTaskMessage(RedisMessageQueue.TaskMessage message) {

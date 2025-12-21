@@ -288,23 +288,40 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
             return;
         }
 
-        taskProcessExecutor.submit(() -> {
-            processingMessages.put(message.getTaskId(), System.currentTimeMillis());
-            try {
-                log.info("[QUEUE_PROCESS_START] 开始处理任务 | TaskID: {} | TraceId: {}", message.getTaskId(), message.getTraceId());
-                messageHandler.handleMessage(message);
-
-                // 执行成功 -> ACK
-                acknowledge(message);
-                log.info("[QUEUE_PROCESS_SUCCESS] 任务处理完成并确认 | TaskID: {}", message.getTaskId());
-            } catch (Exception e) {
-                log.error("[QUEUE_PROCESS_ERROR] 处理任务异常 | TaskID: {}", message.getTaskId(), e);
-                // 执行失败 -> Requeue
-                requeue(message);
-            } finally {
-                processingMessages.remove(message.getTaskId());
+        try {
+            // 监控任务堆积情况
+            if (taskProcessExecutor.getQueue().size() > 8000) {
+                log.warn("[QUEUE_HIGH_LOAD] 任务处理队列积压严重 | QueueSize: {}/10000", taskProcessExecutor.getQueue().size());
             }
-        });
+
+            taskProcessExecutor.submit(() -> {
+                processingMessages.put(message.getTaskId(), System.currentTimeMillis());
+                try {
+                    log.info("[QUEUE_PROCESS_START] 开始处理任务 | TaskID: {} | TraceId: {}", message.getTaskId(), message.getTraceId());
+                    messageHandler.handleMessage(message);
+
+                    // 执行成功 -> ACK
+                    acknowledge(message);
+                    log.info("[QUEUE_PROCESS_SUCCESS] 任务处理完成并确认 | TaskID: {}", message.getTaskId());
+                } catch (Exception e) {
+                    log.error("[QUEUE_PROCESS_ERROR] 处理任务异常 | TaskID: {}", message.getTaskId(), e);
+                    // 执行失败 -> Requeue
+                    requeue(message);
+                } finally {
+                    processingMessages.remove(message.getTaskId());
+                }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            log.error("[QUEUE_PROCESS_REJECT] 任务被线程池拒绝 (Queue Full) | TaskID: {}", message.getTaskId(), e);
+            // 虽然配置了CallerRunsPolicy，但防止任何意外情况，此处进行降级处理
+            try {
+                log.warn("[QUEUE_PROCESS_REJECT] 尝试在当前线程直接执行 (Fallback) | TaskID: {}", message.getTaskId());
+                messageHandler.handleMessage(message);
+                acknowledge(message);
+            } catch (Exception ex) {
+                log.error("[QUEUE_PROCESS_REJECT_FAIL] 降级执行失败，任务可能丢失或需等待超时重试 | TaskID: {}", message.getTaskId(), ex);
+            }
+        }
     }
 
     /**
