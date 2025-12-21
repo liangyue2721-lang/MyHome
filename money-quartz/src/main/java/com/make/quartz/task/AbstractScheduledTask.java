@@ -6,6 +6,7 @@ import com.make.quartz.config.IpBlackListManager;
 import com.make.quartz.config.RedisQuartzSemaphore;
 import com.make.quartz.domain.SysJob;
 import com.make.quartz.domain.SysJobLog;
+import com.make.quartz.mapper.SysJobMapper;
 import com.make.quartz.repository.JobLogRepository;
 import com.make.quartz.service.TaskMonitoringService;
 import com.make.quartz.util.SchedulerManager;
@@ -16,7 +17,9 @@ import org.quartz.JobExecutionException;
 import org.redisson.api.RLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 
+import javax.annotation.Resource;
 import java.util.Date;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -28,6 +31,9 @@ import java.util.concurrent.TimeUnit;
 public abstract class AbstractScheduledTask implements Job {
 
     private static final Logger log = LoggerFactory.getLogger(AbstractScheduledTask.class);
+
+    @Resource
+    private SysJobMapper jobMapper;
 
     /**
      * 用于跟踪正在执行的任务
@@ -199,14 +205,18 @@ public abstract class AbstractScheduledTask implements Job {
      * 从JobExecutionContext创建SysJob对象
      */
     private SysJob createSysJobFromContext(JobExecutionContext context) {
-        SysJob sysJob = new SysJob();
-        // 这里需要根据具体实现填充sysJob对象
-        // 由于这是一个抽象类，具体的实现可能会有所不同
-        return sysJob;
+        String jobKey = context.getJobDetail().getKey().toString();
+        log.info("🔧 创建任务对象: {}", jobKey);
+        // 31_刷新财务数据 → 31
+        String jobIdStr = jobKey.split("_")[0];
+        Long jobId = Long.valueOf(jobIdStr);
+
+        return jobMapper.selectJobById(jobId);
     }
 
     /**
      * 记录跳过的任务到监控系统
+     *
      * @param sysJob 任务信息
      * @param reason 跳过原因
      */
@@ -231,6 +241,7 @@ public abstract class AbstractScheduledTask implements Job {
 
     /**
      * 记录已分发的任务到监控系统
+     *
      * @param sysJob 任务信息
      */
     private void recordDispatchedTask(SysJob sysJob) {
