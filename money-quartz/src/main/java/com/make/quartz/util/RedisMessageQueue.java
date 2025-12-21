@@ -12,10 +12,14 @@ import com.make.quartz.service.TaskExecutionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.scripting.support.ResourceScriptSource;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
+import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -58,9 +62,11 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
     private static final String PROCESSING_QUEUE_SUFFIX = ":processing";
     private static final String RECENT_MONITOR_KEY = "task:monitor:recent";
     public static final String PENDING_TASKS_SET = "task:pending_ids"; // Public for TaskDistributor usage
+    public static final String EXECUTING_TASKS_SET = "task:set:executing"; // New Executing Set
 
     private final RedisTemplate<String, String> redisTemplate;
     private final QuartzProperties quartzProperties;
+    private DefaultRedisScript<Long> atomicEnqueueScript;
 
     private ThreadPoolExecutor executorService;
     private ThreadPoolExecutor taskProcessExecutor;
@@ -108,6 +114,11 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
         this.cleanupScheduler.scheduleAtFixedRate(this::cleanupProcessingTasks, 1, 1, TimeUnit.MINUTES);
         this.cleanupScheduler.scheduleAtFixedRate(this::monitorThreadPools, 60, 60, TimeUnit.SECONDS);
 
+        // Load Lua Script
+        this.atomicEnqueueScript = new DefaultRedisScript<>();
+        this.atomicEnqueueScript.setScriptSource(new ResourceScriptSource(new ClassPathResource("lua/atomic_enqueue.lua")));
+        this.atomicEnqueueScript.setResultType(Long.class);
+
         instance = this;
         log.info("Redis消息队列初始化完成 | Listeners: {} | Executors: {}",
                 executorService.getCorePoolSize(), taskProcessExecutor.getCorePoolSize());
@@ -152,19 +163,6 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
                 return;
             }
 
-            // 唯一性检查
-            if (checkUniqueness) {
-                // 尝试添加到Set，如果返回0表示已存在（重复）
-                Long added = redisTemplate.opsForSet().add(PENDING_TASKS_SET, taskId);
-                if (added != null && added == 0) {
-                    log.warn("[QUEUE_SEND_DUPLICATE] 任务 {} 已在 Pending 队列中，忽略重复发送", taskId);
-                    return;
-                }
-            } else {
-                // 如果是 Transfer 或 Requeue，确保它在 Set 中（防止数据不一致）
-                redisTemplate.opsForSet().add(PENDING_TASKS_SET, taskId);
-            }
-
             TaskMessage message = new TaskMessage();
             message.setTaskId(taskId);
             message.setTargetNode(targetNode);
@@ -178,7 +176,24 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
             String messageJson = JSON.toJSONString(message);
             String queueKey = getQueueKey(targetNode, priority);
 
-            redisTemplate.opsForList().leftPush(queueKey, messageJson);
+            if (checkUniqueness) {
+                // Use Lua script for atomic Enqueue (Check Set -> Add Set -> Push List)
+                // KEYS[1]: PENDING_SET, KEYS[2]: QUEUE_LIST
+                // ARGV[1]: taskId, ARGV[2]: messageJson
+                Long result = redisTemplate.execute(atomicEnqueueScript,
+                        java.util.Arrays.asList(PENDING_TASKS_SET, queueKey),
+                        taskId, messageJson);
+
+                if (result != null && result == 0) {
+                     log.warn("[QUEUE_SEND_DUPLICATE] 任务 {} 已在 Pending 队列中 (Lua)，忽略重复发送", taskId);
+                     return;
+                }
+            } else {
+                // 如果是 Transfer 或 Requeue，确保它在 Set 中（防止数据不一致）
+                redisTemplate.opsForSet().add(PENDING_TASKS_SET, taskId);
+                redisTemplate.opsForList().leftPush(queueKey, messageJson);
+            }
+
             log.info("[QUEUE_ENQUEUE] 任务入队成功 | Queue: {} | TaskID: {} | Priority: {} | TraceId: {}",
                     queueKey, taskId, priority, traceId);
         } catch (Exception e) {
@@ -257,13 +272,14 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
             return;
         }
 
-        // 关键：任务开始处理，从 Pending Set 中移除
-        // 放在这里是因为 rightPopAndLeftPush 已经将任务移到了 Processing Queue
-        // 所以它已经不是 Pending 状态了
+        // 关键：任务开始处理
+        // 1. 从 Pending Set 中移除
+        // 2. 添加到 Executing Set
         try {
             redisTemplate.opsForSet().remove(PENDING_TASKS_SET, message.getTaskId());
+            redisTemplate.opsForSet().add(EXECUTING_TASKS_SET, message.getTaskId());
         } catch (Exception e) {
-            log.warn("[QUEUE_SET_REMOVE_FAIL] 移除Pending状态失败，可能导致任务无法重新入队 | TaskID: {}", message.getTaskId(), e);
+            log.warn("[QUEUE_SET_UPDATE_FAIL] 更新任务集合状态失败 | TaskID: {}", message.getTaskId(), e);
         }
 
         if (isTaskRunningLocally(message.getTaskId())) {
@@ -298,6 +314,10 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
         if (message == null || StringUtils.isEmpty(message.getOriginalJson())) return;
         try {
             deleteFromProcessingQueue(message);
+
+            // 任务完成，从 Executing Set 移除
+            redisTemplate.opsForSet().remove(EXECUTING_TASKS_SET, message.getTaskId());
+
             recordRecentTask(message, "SUCCESS");
             log.debug("[QUEUE_ACK] 消息已确认移除 | TaskID: {}", message.getTaskId());
         } catch (Exception e) {
@@ -344,6 +364,9 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
         try {
             // 先从 processing 队列移除
             deleteFromProcessingQueue(message);
+
+            // 失败重试，从 Executing Set 移除
+            redisTemplate.opsForSet().remove(EXECUTING_TASKS_SET, message.getTaskId());
 
             // 检查最大重试次数
             if (message.getRetryCount() >= quartzProperties.getMaxRetryCount()) {
@@ -439,16 +462,10 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
             Long pendingCount = redisTemplate.opsForSet().size(PENDING_TASKS_SET);
             stats.put("pending", pendingCount != null ? pendingCount : 0L);
 
-            // Executing Count = Sum of processing queues
-            Set<String> keys = redisTemplate.keys(TASK_QUEUE_PREFIX + "*:processing");
-            if (keys != null) {
-                for (String key : keys) {
-                    Long size = redisTemplate.opsForList().size(key);
-                    if (size != null) {
-                        stats.put("executing", stats.get("executing") + size);
-                    }
-                }
-            }
+            // Executing Count = Size of Unique Executing ID Set
+            Long executingCount = redisTemplate.opsForSet().size(EXECUTING_TASKS_SET);
+            stats.put("executing", executingCount != null ? executingCount : 0L);
+
         } catch (Exception e) {
             log.error("获取全局任务统计失败", e);
         }
