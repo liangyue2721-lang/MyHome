@@ -142,22 +142,6 @@ public abstract class AbstractScheduledTask implements Job {
 
             // 标记任务为正在执行
             executingJobs.put(jobKey, System.currentTimeMillis());
-            log.info("🔖 任务【{}】标记为正在执行", jobKey);
-
-            // 检查是否应该在当前节点执行任务（负载均衡）
-            // 使用0.8作为负载阈值，当节点负载超过80%时考虑分发到其他节点
-//            log.info("⚖️ 检查任务 {} 是否应在当前节点执行", jobKey);
-//            if (!taskDistributor.shouldExecuteLocally(jobKey, 0.8)) {
-//                log.info("🔄 任务【{}】将分发到其他节点执行，当前节点跳过", jobKey);
-//                // 分发任务
-//                taskDistributor.distributeTask(sysJob);
-//
-//                // 记录到监控系统，标记为已分发
-//                recordDispatchedTask(sysJob);
-//
-//                // 分发后不再执行后续逻辑，finally块会处理锁释放
-//                return;
-//            }
             log.info("✅ 任务【{}】将在当前节点执行", jobKey);
 
             // 真正执行子类逻辑
