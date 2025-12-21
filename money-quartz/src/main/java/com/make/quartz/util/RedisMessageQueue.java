@@ -69,7 +69,7 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
     private DefaultRedisScript<Long> atomicEnqueueScript;
 
     private ThreadPoolExecutor executorService;
-    private ThreadPoolExecutor taskProcessExecutor;
+    private ThreadPoolExecutor stockTaskExecutor;
     private ScheduledExecutorService cleanupScheduler;
     private static RedisMessageQueue instance;
     private volatile String currentNodeId;
@@ -97,11 +97,11 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
         );
 
         // 任务处理线程池 (Stock Consumer): 负责实际执行任务逻辑
-        this.taskProcessExecutor = (ThreadPoolExecutor) ThreadPoolUtil.createCustomThreadPool(
+        this.stockTaskExecutor = (ThreadPoolExecutor) ThreadPoolUtil.createCustomThreadPool(
                 quartzProperties.getConsumerCoreSize(),
                 quartzProperties.getConsumerMaxSize(),
                 quartzProperties.getConsumerQueueCapacity(),
-                "StockTaskConsumer"
+                "stock-consumer-"
         );
 
         // 清理调度器: 定期回收超时任务
@@ -121,7 +121,7 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
 
         instance = this;
         log.info("Redis消息队列初始化完成 | Listeners: {} | Executors: {}",
-                executorService.getCorePoolSize(), taskProcessExecutor.getCorePoolSize());
+                executorService.getCorePoolSize(), stockTaskExecutor.getCorePoolSize());
     }
 
     public static RedisMessageQueue getInstance() {
@@ -291,38 +291,47 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
         try {
             // 监控任务堆积情况 (80% of ConsumerQueueCapacity)
             int capacity = quartzProperties.getConsumerQueueCapacity();
-            if (taskProcessExecutor.getQueue().size() > (capacity * 0.8)) {
+            if (stockTaskExecutor.getQueue().size() > (capacity * 0.8)) {
                 log.warn("[QUEUE_HIGH_LOAD] 任务处理队列积压严重 | QueueSize: {}/{}",
-                        taskProcessExecutor.getQueue().size(), capacity);
+                        stockTaskExecutor.getQueue().size(), capacity);
             }
 
-            taskProcessExecutor.submit(() -> {
-                processingMessages.put(message.getTaskId(), System.currentTimeMillis());
+        // Enforce Strict Consumer Thread Pool Usage with Blocking Retry
+        // Do NOT fall back to caller runs to prevent mixing logic in Scheduler/Listener pools.
+        while (!Thread.currentThread().isInterrupted()) {
                 try {
-                    log.info("[QUEUE_PROCESS_START] 开始处理任务 | TaskID: {} | TraceId: {}", message.getTaskId(), message.getTraceId());
-                    messageHandler.handleMessage(message);
+                stockTaskExecutor.submit(() -> {
+                    processingMessages.put(message.getTaskId(), System.currentTimeMillis());
+                    try {
+                        log.info("[QUEUE_PROCESS_START] 开始处理任务 | TaskID: {} | TraceId: {}", message.getTaskId(), message.getTraceId());
+                        messageHandler.handleMessage(message);
 
-                    // 执行成功 -> ACK
-                    acknowledge(message);
-                    log.info("[QUEUE_PROCESS_SUCCESS] 任务处理完成并确认 | TaskID: {}", message.getTaskId());
-                } catch (Exception e) {
-                    log.error("[QUEUE_PROCESS_ERROR] 处理任务异常 | TaskID: {}", message.getTaskId(), e);
-                    // 执行失败 -> Requeue
-                    requeue(message);
-                } finally {
-                    processingMessages.remove(message.getTaskId());
+                        // 执行成功 -> ACK
+                        acknowledge(message);
+                        log.info("[QUEUE_PROCESS_SUCCESS] 任务处理完成并确认 | TaskID: {}", message.getTaskId());
+                    } catch (Exception e) {
+                        log.error("[QUEUE_PROCESS_ERROR] 处理任务异常 | TaskID: {}", message.getTaskId(), e);
+                        // 执行失败 -> Requeue
+                        requeue(message);
+                    } finally {
+                        processingMessages.remove(message.getTaskId());
+                    }
+                });
+                // Submission successful, break loop
+                break;
+            } catch (java.util.concurrent.RejectedExecutionException e) {
+                log.warn("[QUEUE_PROCESS_FULL] 股票任务线程池已满，等待空闲... | TaskID: {}", message.getTaskId());
+                // Backoff wait to prevent CPU spin
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
                 }
-            });
-        } catch (java.util.concurrent.RejectedExecutionException e) {
-            log.error("[QUEUE_PROCESS_REJECT] 任务被线程池拒绝 (Queue Full) | TaskID: {}", message.getTaskId(), e);
-            // 虽然配置了CallerRunsPolicy，但防止任何意外情况，此处进行降级处理
-            try {
-                log.warn("[QUEUE_PROCESS_REJECT] 尝试在当前线程直接执行 (Fallback) | TaskID: {}", message.getTaskId());
-                messageHandler.handleMessage(message);
-                acknowledge(message);
-            } catch (Exception ex) {
-                log.error("[QUEUE_PROCESS_REJECT_FAIL] 降级执行失败，任务可能丢失或需等待超时重试 | TaskID: {}", message.getTaskId(), ex);
             }
+        }
+        } catch (Exception e) {
+            log.error("[QUEUE_PROCESS_FATAL] 提交任务失败", e);
         }
     }
 
@@ -605,7 +614,7 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
                 Thread.currentThread().interrupt();
             }
         }
-        if (taskProcessExecutor != null) taskProcessExecutor.shutdownNow();
+        if (stockTaskExecutor != null) stockTaskExecutor.shutdownNow();
         if (cleanupScheduler != null) cleanupScheduler.shutdownNow();
     }
 
@@ -616,8 +625,8 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
             log.info("[MONITOR] Pool: RedisQueueListener | Active: {}/{} | Queue: N/A | RedisQueue: {}",
                     executorService.getActiveCount(), executorService.getCorePoolSize(), queueSize);
 
-            log.info("[MONITOR] Pool: TaskProcessor | Active: {}/{} | Queue: {}",
-                    taskProcessExecutor.getActiveCount(), taskProcessExecutor.getCorePoolSize(), taskProcessExecutor.getQueue().size());
+            log.info("[MONITOR] Pool: StockTaskExecutor | Active: {}/{} | Queue: {}",
+                    stockTaskExecutor.getActiveCount(), stockTaskExecutor.getCorePoolSize(), stockTaskExecutor.getQueue().size());
         } catch (Exception e) {
             log.error("[MONITOR_ERROR] 监控指标采集失败", e);
         }
