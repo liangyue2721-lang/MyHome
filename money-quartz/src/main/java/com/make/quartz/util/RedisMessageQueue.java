@@ -325,8 +325,8 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
                 stockTaskExecutor.submit(() -> {
                     processingMessages.put(finalExecutionId, System.currentTimeMillis());
                     try {
-                        log.info("[QUEUE_PROCESS_START] 开始处理任务 | Job: {} | ExecId: {} | TraceId: {}",
-                                message.getTaskId(), finalExecutionId, message.getTraceId());
+                        log.info("[QUEUE_PROCESS_START] 开始处理任务 | Job: {} | ExecId: {} | TraceId: {} | Node: {}",
+                                message.getTaskId(), finalExecutionId, message.getTraceId(), currentNodeId);
                         messageHandler.handleMessage(message);
 
                         // 执行成功 -> ACK
@@ -442,8 +442,8 @@ public class RedisMessageQueue implements org.springframework.context.SmartLifec
 
             // 重新推入等待队列
             redisTemplate.opsForList().leftPush(queueKey, messageJson);
-            log.info("[QUEUE_REQUEUE] 任务已重新入队 | Job: {} | ExecId: {} | Retry: {}/{}",
-                    message.getTaskId(), executionId, message.getRetryCount(), quartzProperties.getMaxRetryCount());
+            log.info("[QUEUE_REQUEUE] 任务已重新入队 | Job: {} | ExecId: {} | Retry: {}/{} | Queue: {}",
+                    message.getTaskId(), executionId, message.getRetryCount(), quartzProperties.getMaxRetryCount(), queueKey);
         } catch (Exception e) {
             log.error("[QUEUE_REQUEUE_ERROR] 重新入队失败 | Job: {}", message.getTaskId(), e);
             // 如果入队失败，尝试回滚 Pending 状态（虽然已经迟了）

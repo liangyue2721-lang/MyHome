@@ -143,6 +143,10 @@ public class TaskDistributor implements org.springframework.context.SmartLifecyc
     public void distributeTask(SysJob sysJob, boolean fromGlobalQueue) {
         if (sysJob == null) return;
 
+        if (log.isDebugEnabled()) {
+            log.debug("[DIST_ENTRY] 收到任务分发请求 | JobName: {} | FromGlobal: {}", sysJob.getJobName(), fromGlobalQueue);
+        }
+
         // Task ID Format Validation
         if (sysJob.getJobId() == null || StringUtils.isEmpty(sysJob.getJobName())) {
              log.warn("[DIST_INVALID_ID] 任务ID格式无效 (JobId or JobName is empty) | JobName: {}", sysJob.getJobName());
@@ -178,8 +182,8 @@ public class TaskDistributor implements org.springframework.context.SmartLifecyc
             String targetNode = selectBestNode(sysJob);
 
             if (StringUtils.isNotEmpty(targetNode)) {
-                log.info("[DIST_DECISION] 任务分发决策 | Job: {} | ExecId: {} | Target: {} | Priority: {} | TraceId: {}",
-                        taskId, executionId, targetNode, priority, traceId);
+                log.info("[DIST_DECISION] 任务分发决策 | Job: {} | ExecId: {} | Target: {} | Priority: {} | TraceId: {} | FromGlobal: {}",
+                        taskId, executionId, targetNode, priority, traceId, fromGlobalQueue);
 
                 Map<String, Object> payload = JSON.parseObject(JSON.toJSONString(sysJob), Map.class);
 
@@ -197,7 +201,9 @@ public class TaskDistributor implements org.springframework.context.SmartLifecyc
                         !fromGlobalQueue
                 );
             } else {
-                log.warn("[DIST_NO_NODE] 无可用节点分发任务: {}", sysJob.getJobName());
+                log.warn("[DIST_NO_NODE] 无可用节点分发任务，准备回退到全局队列 | Job: {} | ExecId: {} | TraceId: {}",
+                        taskId, executionId, traceId);
+                log.info("[DIST_FALLBACK] 任务回退到全局队列 | Job: {} | ExecId: {}", taskId, executionId);
                 // 回退策略：放入全局队列
 
                 // 如果是新任务(!fromGlobalQueue)，需要先尝试添加到Set

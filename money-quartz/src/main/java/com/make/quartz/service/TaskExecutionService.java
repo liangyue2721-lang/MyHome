@@ -69,9 +69,9 @@ public class TaskExecutionService {
         }
 
         try {
-            if (log.isDebugEnabled()) {
-                log.debug("[EXEC_MSG_RCV] 收到任务 | Job: {} | ExecId: {} | Node: {}",
-                    message.getTaskId(), executionId, message.getTargetNode());
+            if (log.isInfoEnabled()) {
+                log.info("[EXEC_MSG_RCV] 收到任务消息 | Job: {} | ExecId: {} | Node: {} | TraceId: {}",
+                    message.getTaskId(), executionId, message.getTargetNode(), message.getTraceId());
             }
             
             // Check for duplicate execution of the same INSTANCE
@@ -142,16 +142,21 @@ public class TaskExecutionService {
         String jobName = sysJob.getJobName();
         String invokeTarget = sysJob.getInvokeTarget();
 
-        log.info("[TASK_MONITOR] [EXECUTE_START] 开始执行任务 | Job: {} | TraceId: {} | InvokeTarget: {}", jobName, traceId, invokeTarget);
+        String executionId = sysJob.getFireInstanceId();
+
+        log.info("[TASK_MONITOR] [EXECUTE_START] 开始执行任务 | Job: {} | ExecId: {} | TraceId: {} | InvokeTarget: {}",
+                jobName, executionId, traceId, invokeTarget);
 
         try {
             JobInvokeUtil.invokeMethod(sysJob);
             
             long endTime = System.currentTimeMillis();
-            log.info("[TASK_MONITOR] [EXECUTE_END] 任务执行成功 | Job: {} | TraceId: {} | Cost: {}ms", jobName, traceId, (endTime - startTime));
+            log.info("[TASK_MONITOR] [EXECUTE_END] 任务执行成功 | Job: {} | ExecId: {} | TraceId: {} | Cost: {}ms",
+                    jobName, executionId, traceId, (endTime - startTime));
         } catch (Exception e) {
             long endTime = System.currentTimeMillis();
-            log.error("[TASK_MONITOR] [EXECUTE_ERROR] 任务执行失败 | Job: {} | TraceId: {} | Cost: {}ms", jobName, traceId, (endTime - startTime), e);
+            log.error("[TASK_MONITOR] [EXECUTE_ERROR] 任务执行失败 | Job: {} | ExecId: {} | TraceId: {} | Cost: {}ms",
+                    jobName, executionId, traceId, (endTime - startTime), e);
             throw e;
         }
     }
