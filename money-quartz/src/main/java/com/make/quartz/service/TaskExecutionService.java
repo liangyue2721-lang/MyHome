@@ -5,6 +5,7 @@ import com.make.common.utils.StringUtils;
 import com.make.common.utils.ThreadPoolUtil;
 import com.make.common.utils.spring.SpringUtils;
 import com.make.quartz.domain.SysJob;
+import com.make.quartz.mapper.SysJobMapper;
 import com.make.quartz.util.JobInvokeUtil;
 import com.make.quartz.util.RedisMessageQueue;
 import com.make.quartz.util.SchedulerManager;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
+import javax.annotation.Resource;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -38,30 +40,33 @@ import java.util.concurrent.TimeUnit;
  */
 @Service
 public class TaskExecutionService {
-    
+
     private static final Logger log = LoggerFactory.getLogger(TaskExecutionService.class);
-    
+
     @Autowired
     private Scheduler scheduler;
-    
+
+    @Resource
+    private SysJobMapper jobMapper;
+
     // Key: Execution ID (Instance), Value: StartTime
     // Tracks currently executing instances on this node
     private static final ConcurrentHashMap<String, Long> executingTasks = new ConcurrentHashMap<>();
-    
+
     @PostConstruct
     public void init() {
         String currentNodeId = SchedulerManager.getCurrentNodeId();
         log.info("初始化任务执行服务 | NodeID: {}", currentNodeId);
-        
+
         RedisMessageQueue.getInstance().startListening(currentNodeId, this::handleTaskMessage);
     }
-    
+
     @PreDestroy
     public void destroy() {
         log.info("停止任务执行服务");
         RedisMessageQueue.getInstance().stopListening();
     }
-    
+
     private void handleTaskMessage(RedisMessageQueue.TaskMessage message) {
         String executionId = message.getExecutionId();
         if (StringUtils.isEmpty(executionId)) {
@@ -73,7 +78,7 @@ public class TaskExecutionService {
                 log.info("[EXEC_MSG_RCV] 收到任务消息 | Job: {} | ExecId: {} | Node: {} | TraceId: {}",
                     message.getTaskId(), executionId, message.getTargetNode(), message.getTraceId());
             }
-            
+
             // Check for duplicate execution of the same INSTANCE
             if (executingTasks.containsKey(executionId)) {
                 log.warn("[EXEC_SKIP] 任务实例 {} (Job: {}) 已在执行中", executionId, message.getTaskId());
@@ -110,17 +115,19 @@ public class TaskExecutionService {
             } finally {
                 executingTasks.remove(executionId);
             }
-            
+
         } catch (Exception e) {
             log.error("[EXEC_ERROR] 执行任务失败 | Job: {} | ExecId: {}", message.getTaskId(), executionId, e);
             throw e;
         }
     }
-    
+
     private SysJob reconstructSysJob(RedisMessageQueue.TaskMessage message) {
         if (message.getPayload() != null && !message.getPayload().isEmpty()) {
             try {
-                SysJob sysJob = JSON.parseObject(JSON.toJSONString(message.getPayload()), SysJob.class);
+                String jobIdStr = message.getTaskId().split("_")[0];
+                Long jobId = Long.valueOf(jobIdStr);
+                SysJob sysJob = jobMapper.selectJobById(jobId);
                 if (sysJob != null) {
                     sysJob.setTraceId(message.getTraceId());
                     // Ensure JobId and JobName are available if needed
@@ -149,7 +156,7 @@ public class TaskExecutionService {
 
         try {
             JobInvokeUtil.invokeMethod(sysJob);
-            
+
             long endTime = System.currentTimeMillis();
             log.info("[TASK_MONITOR] [EXECUTE_END] 任务执行成功 | Job: {} | ExecId: {} | TraceId: {} | Cost: {}ms",
                     jobName, executionId, traceId, (endTime - startTime));
@@ -232,7 +239,7 @@ public class TaskExecutionService {
             // Swallowing exception to prevent thread pool impact, treating as skipped
         }
     }
-    
+
     private void copyBeanProp(Object dest, Object src) {
         try {
             String json = JSON.toJSONString(src);
@@ -250,7 +257,7 @@ public class TaskExecutionService {
             log.error("复制Bean属性异常", e);
         }
     }
-    
+
     public static boolean isTaskExecuting(String executionId) {
         return executingTasks.containsKey(executionId);
     }
