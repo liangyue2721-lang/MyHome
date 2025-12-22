@@ -1,14 +1,15 @@
 #!/bin/bash
 # ==========================================================
-# Stock Service startup script (Linux / macOS)
+# Stock Service startup script (Production Grade)
 #
 # Features:
-# 1. Bind to a specific Python interpreter
-# 2. Check & auto-install uvicorn / fastapi
-# 3. Prevent duplicate start (port check)
-# 4. Graceful stop with PID file
-# 5. Background run with nohup
-# 6. JSON access log handled by FastAPI middleware
+# 1. Auto-detect & bind venv Python
+# 2. Ensure uvicorn / fastapi / playwright
+# 3. Auto-install Playwright browsers (once)
+# 4. Prevent duplicate start (port + pid)
+# 5. Graceful stop
+# 6. Background run with nohup
+# 7. Playwright-safe for servers / containers
 # ==========================================================
 
 set -euo pipefail
@@ -24,39 +25,42 @@ APP_MODULE="stock_service:app"
 HOST="0.0.0.0"
 PORT="8000"
 
-# Python interpreter (change if using venv)
-PYTHON_BIN="/usr/bin/python3"
+# Preferred venv path
+VENV_PY="$BASE_DIR/.venv/bin/python"
+SYS_PY="/usr/bin/python3"
 
 # -------------------- Init --------------------
 cd "$BASE_DIR"
 mkdir -p "$LOG_DIR"
 
-echo "[INFO] Using Python: $PYTHON_BIN"
-echo "[INFO] Base directory: $BASE_DIR"
-echo "[INFO] Starting Stock Service..."
+# -------------------- Python detection --------------------
+if [ -x "$VENV_PY" ]; then
+    PYTHON_BIN="$VENV_PY"
+    echo "[INFO] Using venv Python: $PYTHON_BIN"
+else
+    PYTHON_BIN="$SYS_PY"
+    echo "[WARN] venv not found, using system Python: $PYTHON_BIN"
+fi
 
-# -------------------- Check Python --------------------
 if [ ! -x "$PYTHON_BIN" ]; then
-    echo "[ERROR] Python not found or not executable: $PYTHON_BIN"
+    echo "[ERROR] Python not found: $PYTHON_BIN"
     exit 1
 fi
 
-# -------------------- Check pip --------------------
+# -------------------- pip check --------------------
 if ! "$PYTHON_BIN" -m pip --version >/dev/null 2>&1; then
-    echo "[ERROR] pip is not available in this Python environment"
+    echo "[ERROR] pip not available in this Python"
     exit 1
 fi
 
-# -------------------- Check & install dependencies --------------------
+# -------------------- Dependency check --------------------
 echo "[INFO] Checking Python dependencies..."
 
 "$PYTHON_BIN" - <<'EOF'
 import importlib.util, sys
 
-missing = []
-for m in ("uvicorn", "fastapi"):
-    if importlib.util.find_spec(m) is None:
-        missing.append(m)
+required = ("uvicorn", "fastapi", "playwright")
+missing = [m for m in required if importlib.util.find_spec(m) is None]
 
 if missing:
     print("Missing:", ", ".join(missing))
@@ -65,20 +69,40 @@ sys.exit(0)
 EOF
 
 if [ $? -ne 0 ]; then
-    echo "[INFO] Installing missing dependencies..."
+    echo "[INFO] Installing missing Python packages..."
     "$PYTHON_BIN" -m pip install --upgrade pip
-    "$PYTHON_BIN" -m pip install uvicorn fastapi
+    "$PYTHON_BIN" -m pip install uvicorn fastapi playwright
+fi
+
+# -------------------- Playwright browser check --------------------
+echo "[INFO] Checking Playwright browser installation..."
+
+"$PYTHON_BIN" - <<'EOF'
+from pathlib import Path
+import os, sys
+
+cache = Path.home() / ".cache" / "ms-playwright"
+if not cache.exists() or not any(cache.iterdir()):
+    sys.exit(1)
+sys.exit(0)
+EOF
+
+if [ $? -ne 0 ]; then
+    echo "[INFO] Installing Playwright Chromium (first run may be slow)..."
+    "$PYTHON_BIN" -m playwright install chromium
+else
+    echo "[INFO] Playwright browsers already installed"
 fi
 
 # -------------------- Port check --------------------
 if command -v ss >/dev/null 2>&1; then
     if ss -lnt | grep -q ":$PORT "; then
-        echo "[WARN] Port $PORT is already in use. Service may already be running."
+        echo "[WARN] Port $PORT already in use. Service may be running."
         exit 0
     fi
 else
     if lsof -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
-        echo "[WARN] Port $PORT is already in use. Service may already be running."
+        echo "[WARN] Port $PORT already in use. Service may be running."
         exit 0
     fi
 fi
@@ -109,7 +133,7 @@ nohup "$PYTHON_BIN" -m uvicorn "$APP_MODULE" \
     >> "$SERVICE_LOG" 2>&1 &
 
 NEW_PID=$!
-sleep 1
+sleep 2
 
 # -------------------- Verify start --------------------
 if ps -p "$NEW_PID" >/dev/null 2>&1; then
@@ -117,7 +141,6 @@ if ps -p "$NEW_PID" >/dev/null 2>&1; then
     echo "[INFO] Stock Service started successfully"
     echo "[INFO] PID        : $NEW_PID"
     echo "[INFO] Service log: $SERVICE_LOG"
-    echo "[INFO] Access log : $LOG_DIR/access.log"
 else
     echo "[ERROR] Failed to start Stock Service"
     exit 1
