@@ -1,7 +1,7 @@
 package com.make.quartz.mapper;
 
 import java.util.List;
-
+import org.apache.ibatis.annotations.Param;
 import com.make.quartz.domain.SysJobRuntime;
 
 /**
@@ -59,4 +59,37 @@ public interface SysJobRuntimeMapper {
      * @return 结果
      */
     public int deleteSysJobRuntimeByIds(Long[] ids);
+
+    /**
+     * 统计指定任务正在运行或等待的数量
+     *
+     * @param jobId 任务ID
+     * @return 数量
+     */
+    int countRunningOrWaiting(@Param("jobId") Long jobId);
+
+    /**
+     * 尝试抢占任务（状态 WAITING -> RUNNING）
+     *
+     * @param executionId 执行ID
+     * @param nodeId 当前节点ID
+     * @return 影响行数（1表示抢占成功）
+     */
+    int updateStatusToRunning(@Param("executionId") String executionId, @Param("nodeId") String nodeId);
+
+    /**
+     * 根据 executionId 删除运行时任务
+     *
+     * @param executionId 执行ID
+     * @return 影响行数
+     */
+    int deleteByExecutionId(@Param("executionId") String executionId);
+
+    /**
+     * 根据 executionId 查询运行时任务
+     *
+     * @param executionId 执行ID
+     * @return 运行时任务
+     */
+    SysJobRuntime selectSysJobRuntimeByExecutionId(@Param("executionId") String executionId);
 }

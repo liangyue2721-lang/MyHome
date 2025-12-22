@@ -15,10 +15,8 @@ import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
-import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.stream.Collectors;
 
 /**
  * Redis 队列调度与消费中心（Redis-only 引擎）
@@ -124,6 +122,33 @@ public class RedisMessageQueue implements SmartLifecycle {
             t.setDaemon(true);
             return t;
         });
+
+        // 启动定时任务：推进 Delayed 消息
+        this.internalScheduler.scheduleWithFixedDelay(() -> {
+            if (running && currentNodeId != null) {
+                try {
+                    String highReady = TASK_QUEUE_PREFIX + currentNodeId + HIGH_PRIORITY_SUFFIX;
+                    String normalReady = TASK_QUEUE_PREFIX + currentNodeId + NORMAL_PRIORITY_SUFFIX;
+                    promoteDueDelayedMessages(currentNodeId, highReady, normalReady);
+                } catch (Exception e) {
+                    log.warn("[RMQ_PROMOTE_ERR] {}", e.getMessage());
+                }
+            }
+        }, 1000, 1000, TimeUnit.MILLISECONDS);
+
+        // 启动定时任务：回补 Processing 超时消息
+        this.internalScheduler.scheduleWithFixedDelay(() -> {
+            if (running && currentNodeId != null) {
+                try {
+                    String processing = TASK_QUEUE_PREFIX + currentNodeId + PROCESSING_QUEUE_SUFFIX;
+                    String highReady = TASK_QUEUE_PREFIX + currentNodeId + HIGH_PRIORITY_SUFFIX;
+                    String normalReady = TASK_QUEUE_PREFIX + currentNodeId + NORMAL_PRIORITY_SUFFIX;
+                    reclaimProcessingTimeout(currentNodeId, processing, highReady, normalReady);
+                } catch (Exception e) {
+                    log.warn("[RMQ_RECLAIM_ERR] {}", e.getMessage());
+                }
+            }
+        }, 10000, 10000, TimeUnit.MILLISECONDS);
 
         log.info("[RMQ_INIT] RedisMessageQueue init done. listenerCore={}, consumerCore={}",
                 listenerExecutor.getCorePoolSize(), consumerExecutor.getCorePoolSize());
@@ -243,14 +268,29 @@ public class RedisMessageQueue implements SmartLifecycle {
      * 对外接口：提交一个“指定时间执行”的 SysJob（会进入 delay zset）
      *
      * @param sysJob            任务
-     * @param targetNode        目标节点（建议由 NodeRegistry/路由策略给出）
+     * @param targetNode        目标节点
      * @param priority          优先级 HIGH/NORMAL
      * @param scheduledAtMillis 计划执行时间（毫秒）
      */
     public void enqueueAt(SysJob sysJob, String targetNode, String priority, long scheduledAtMillis) {
         TaskMessage msg = new TaskMessage();
         msg.setTaskId(String.valueOf(sysJob.getJobId()));
-        msg.setExecutionId(UUID.randomUUID().toString());
+
+        // 优先使用 SysJob 中的 traceId 作为 executionId
+        // 如果是 TRIGGER 类型的消息，这里通常是空的或者需要生成新的
+        if (StringUtils.isNotEmpty(sysJob.getTraceId())) {
+            msg.setExecutionId(sysJob.getTraceId());
+        } else {
+            msg.setExecutionId(UUID.randomUUID().toString());
+        }
+
+        // 判断是否是 TRIGGER 消息 (通过 group 约定)
+        if ("QUARTZ_INTERNAL_TRIGGER".equals(sysJob.getJobGroup())) {
+            msg.setMessageType(TaskMessage.TYPE_TRIGGER);
+        } else {
+            msg.setMessageType(TaskMessage.TYPE_EXECUTE);
+        }
+
         msg.setTargetNode(targetNode);
         msg.setJobData(sysJob);
         msg.setTimestamp(System.currentTimeMillis());
@@ -409,11 +449,19 @@ public class RedisMessageQueue implements SmartLifecycle {
      * 队列消息体（包含 scheduledAt 以支持队列内部定时检查）
      */
     public static class TaskMessage {
+        public static final String TYPE_EXECUTE = "EXECUTE";
+        public static final String TYPE_TRIGGER = "TRIGGER";
+
         private String taskId;
         private String executionId;
         private String targetNode;
         private Object jobData;
         private long timestamp;
+
+        /**
+         * 消息类型：EXECUTE (执行任务) / TRIGGER (触发调度)
+         */
+        private String messageType = TYPE_EXECUTE;
 
         /**
          * 计划执行时间（毫秒）
@@ -514,6 +562,14 @@ public class RedisMessageQueue implements SmartLifecycle {
 
         public void setOriginalJson(String originalJson) {
             this.originalJson = originalJson;
+        }
+
+        public String getMessageType() {
+            return messageType;
+        }
+
+        public void setMessageType(String messageType) {
+            this.messageType = messageType;
         }
     }
 }

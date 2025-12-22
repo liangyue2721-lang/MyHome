@@ -116,4 +116,29 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             #{id}
         </foreach>
     </delete>
+
+    <select id="countRunningOrWaiting" parameterType="Long" resultType="int">
+        select count(1) from sys_job_runtime
+        where job_id = #{jobId}
+        and status in ('WAITING', 'RUNNING')
+    </select>
+
+    <update id="updateStatusToRunning">
+        update sys_job_runtime
+        set status = 'RUNNING',
+            node_id = #{nodeId},
+            start_time = sysdate()
+        where execution_id = #{executionId}
+        and status = 'WAITING'
+    </update>
+
+    <delete id="deleteByExecutionId" parameterType="String">
+        delete from sys_job_runtime where execution_id = #{executionId}
+    </delete>
+
+    <select id="selectSysJobRuntimeByExecutionId" parameterType="String" resultMap="SysJobRuntimeResult">
+        <include refid="selectSysJobRuntimeVo"/>
+        where execution_id = #{executionId}
+    </select>
+
 </mapper>
