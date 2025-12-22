@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.quartz.mapper.SysJobExecutionLogMapper">
+    
+    <resultMap type="SysJobExecutionLog" id="SysJobExecutionLogResult">
+        <result property="id"    column="id"    />
+        <result property="jobId"    column="job_id"    />
+        <result property="jobName"    column="job_name"    />
+        <result property="jobGroup"    column="job_group"    />
+        <result property="executionId"    column="execution_id"    />
+        <result property="status"    column="status"    />
+        <result property="nodeId"    column="node_id"    />
+        <result property="scheduledTime"    column="scheduled_time"    />
+        <result property="startTime"    column="start_time"    />
+        <result property="endTime"    column="end_time"    />
+        <result property="durationMs"    column="duration_ms"    />
+        <result property="retryCount"    column="retry_count"    />
+        <result property="errorMessage"    column="error_message"    />
+        <result property="errorStack"    column="error_stack"    />
+        <result property="payload"    column="payload"    />
+        <result property="createTime"    column="create_time"    />
+    </resultMap>
+
+    <sql id="selectSysJobExecutionLogVo">
+        select id, job_id, job_name, job_group, execution_id, status, node_id, scheduled_time, start_time, end_time, duration_ms, retry_count, error_message, error_stack, payload, create_time from sys_job_execution_log
+    </sql>
+
+    <select id="selectSysJobExecutionLogList" parameterType="SysJobExecutionLog" resultMap="SysJobExecutionLogResult">
+        <include refid="selectSysJobExecutionLogVo"/>
+        <where>  
+            <if test="jobId != null "> and job_id = #{jobId}</if>
+            <if test="jobName != null  and jobName != ''"> and job_name like concat('%', #{jobName}, '%')</if>
+            <if test="jobGroup != null  and jobGroup != ''"> and job_group = #{jobGroup}</if>
+            <if test="executionId != null  and executionId != ''"> and execution_id = #{executionId}</if>
+            <if test="status != null  and status != ''"> and status = #{status}</if>
+            <if test="nodeId != null  and nodeId != ''"> and node_id = #{nodeId}</if>
+            <if test="scheduledTime != null "> and scheduled_time = #{scheduledTime}</if>
+            <if test="startTime != null "> and start_time = #{startTime}</if>
+            <if test="endTime != null "> and end_time = #{endTime}</if>
+            <if test="durationMs != null "> and duration_ms = #{durationMs}</if>
+            <if test="retryCount != null "> and retry_count = #{retryCount}</if>
+            <if test="errorMessage != null  and errorMessage != ''"> and error_message = #{errorMessage}</if>
+            <if test="errorStack != null  and errorStack != ''"> and error_stack = #{errorStack}</if>
+            <if test="payload != null  and payload != ''"> and payload = #{payload}</if>
+        </where>
+    </select>
+    
+    <select id="selectSysJobExecutionLogById" parameterType="Long" resultMap="SysJobExecutionLogResult">
+        <include refid="selectSysJobExecutionLogVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertSysJobExecutionLog" parameterType="SysJobExecutionLog" useGeneratedKeys="true" keyProperty="id">
+        insert into sys_job_execution_log
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="jobId != null">job_id,</if>
+            <if test="jobName != null and jobName != ''">job_name,</if>
+            <if test="jobGroup != null">job_group,</if>
+            <if test="executionId != null and executionId != ''">execution_id,</if>
+            <if test="status != null and status != ''">status,</if>
+            <if test="nodeId != null">node_id,</if>
+            <if test="scheduledTime != null">scheduled_time,</if>
+            <if test="startTime != null">start_time,</if>
+            <if test="endTime != null">end_time,</if>
+            <if test="durationMs != null">duration_ms,</if>
+            <if test="retryCount != null">retry_count,</if>
+            <if test="errorMessage != null">error_message,</if>
+            <if test="errorStack != null">error_stack,</if>
+            <if test="payload != null">payload,</if>
+            <if test="createTime != null">create_time,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="jobId != null">#{jobId},</if>
+            <if test="jobName != null and jobName != ''">#{jobName},</if>
+            <if test="jobGroup != null">#{jobGroup},</if>
+            <if test="executionId != null and executionId != ''">#{executionId},</if>
+            <if test="status != null and status != ''">#{status},</if>
+            <if test="nodeId != null">#{nodeId},</if>
+            <if test="scheduledTime != null">#{scheduledTime},</if>
+            <if test="startTime != null">#{startTime},</if>
+            <if test="endTime != null">#{endTime},</if>
+            <if test="durationMs != null">#{durationMs},</if>
+            <if test="retryCount != null">#{retryCount},</if>
+            <if test="errorMessage != null">#{errorMessage},</if>
+            <if test="errorStack != null">#{errorStack},</if>
+            <if test="payload != null">#{payload},</if>
+            <if test="createTime != null">#{createTime},</if>
+         </trim>
+    </insert>
+
+    <update id="updateSysJobExecutionLog" parameterType="SysJobExecutionLog">
+        update sys_job_execution_log
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="jobId != null">job_id = #{jobId},</if>
+            <if test="jobName != null and jobName != ''">job_name = #{jobName},</if>
+            <if test="jobGroup != null">job_group = #{jobGroup},</if>
+            <if test="executionId != null and executionId != ''">execution_id = #{executionId},</if>
+            <if test="status != null and status != ''">status = #{status},</if>
+            <if test="nodeId != null">node_id = #{nodeId},</if>
+            <if test="scheduledTime != null">scheduled_time = #{scheduledTime},</if>
+            <if test="startTime != null">start_time = #{startTime},</if>
+            <if test="endTime != null">end_time = #{endTime},</if>
+            <if test="durationMs != null">duration_ms = #{durationMs},</if>
+            <if test="retryCount != null">retry_count = #{retryCount},</if>
+            <if test="errorMessage != null">error_message = #{errorMessage},</if>
+            <if test="errorStack != null">error_stack = #{errorStack},</if>
+            <if test="payload != null">payload = #{payload},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteSysJobExecutionLogById" parameterType="Long">
+        delete from sys_job_execution_log where id = #{id}
+    </delete>
+
+    <delete id="deleteSysJobExecutionLogByIds" parameterType="String">
+        delete from sys_job_execution_log where id in 
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>
