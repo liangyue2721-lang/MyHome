@@ -1,102 +1,82 @@
 package com.make.quartz.service;
 
+import com.make.quartz.domain.SysJob;
+
 import java.util.List;
 
-import com.make.quartz.domain.SysJob;
-import org.quartz.SchedulerException;
-import com.make.common.exception.job.TaskException;
-
 /**
- * 定时任务调度信息信息 服务层
+ * 定时任务服务接口（Redis-only 调度模型）
  *
- * @author ruoyi
+ * <p>说明：
+ * - 接口层仍然保留“任务管理”的语义（CRUD / 启停 / 校验）
+ * - 不再暴露 Quartz Scheduler / Trigger 概念
+ * - 所有“调度行为”在实现层通过 Redis 队列完成
  */
 public interface ISysJobService {
-    /**
-     * 获取quartz调度器的计划任务
-     *
-     * @param job 调度信息
-     * @return 调度任务集合
-     */
-    public List<SysJob> selectJobList(SysJob job);
 
     /**
-     * 通过调度任务ID查询调度信息
+     * 查询任务列表
      *
-     * @param jobId 调度任务ID
-     * @return 调度任务对象信息
+     * @param sysJob 查询条件
+     * @return 任务列表
      */
-    public SysJob selectJobById(Long jobId);
+    List<SysJob> selectJobList(SysJob sysJob);
 
     /**
-     * 暂停任务
+     * 查询任务详情
      *
-     * @param job 调度信息
-     * @return 结果
+     * @param jobId 任务ID
+     * @return 任务
      */
-    public int pauseJob(SysJob job) throws SchedulerException;
+    SysJob selectJobById(Long jobId);
 
     /**
-     * 恢复任务
+     * 查询全部任务
      *
-     * @param job 调度信息
-     * @return 结果
+     * @return 全部任务
      */
-    public int resumeJob(SysJob job) throws SchedulerException;
-
-    /**
-     * 删除任务后，所对应的trigger也将被删除
-     *
-     * @param job 调度信息
-     * @return 结果
-     */
-    public int deleteJob(SysJob job) throws SchedulerException;
-
-    /**
-     * 批量删除调度信息
-     *
-     * @param jobIds 需要删除的任务ID
-     * @return 结果
-     */
-    public void deleteJobByIds(Long[] jobIds) throws SchedulerException;
-
-    /**
-     * 任务调度状态修改
-     *
-     * @param job 调度信息
-     * @return 结果
-     */
-    public int changeStatus(SysJob job) throws SchedulerException;
-
-    /**
-     * 立即运行任务
-     *
-     * @param job 调度信息
-     * @return 结果
-     */
-    public boolean run(SysJob job) throws SchedulerException;
+    List<SysJob> selectJobAll();
 
     /**
      * 新增任务
      *
-     * @param job 调度信息
-     * @return 结果
+     * <p>行为：
+     * - 写入数据库
+     * - 若状态为启用（status=0），计算下一次执行时间并入 Redis 延迟队列
      */
-    public int insertJob(SysJob job) throws SchedulerException, TaskException;
+    int insertJob(SysJob job);
 
     /**
      * 更新任务
      *
-     * @param job 调度信息
-     * @return 结果
+     * <p>行为：
+     * - 更新数据库
+     * - 若状态为启用（status=0），重新计算下一次执行时间并入 Redis
      */
-    public int updateJob(SysJob job) throws SchedulerException, TaskException;
+    int updateJob(SysJob job);
 
     /**
-     * 校验cron表达式是否有效
+     * 删除任务
      *
-     * @param cronExpression 表达式
-     * @return 结果
+     * <p>说明：
+     * - 仅删除数据库记录
+     * - Redis 中的历史/待执行消息允许自然过期（幂等）
      */
-    public boolean checkCronExpressionIsValid(String cronExpression);
+    int deleteJob(SysJob job);
+
+    /**
+     * 修改任务状态
+     *
+     * <p>status=0：启用 → 计算下一次执行并入 Redis
+     * <br>status!=0：暂停 → 不再续入队
+     */
+    int changeStatus(SysJob job);
+
+    /**
+     * 校验 Cron 表达式是否合法
+     *
+     * @param cronExpression cron 表达式
+     * @return true-合法；false-非法
+     */
+    boolean checkCronExpressionIsValid(String cronExpression);
 }

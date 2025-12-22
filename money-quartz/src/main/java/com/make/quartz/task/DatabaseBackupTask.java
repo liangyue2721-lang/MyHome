@@ -27,7 +27,11 @@ public class DatabaseBackupTask extends QuartzJobWrapper {
     protected void doExecute(JobExecutionContext context, SysJob sysJob) {
         log.info("[DB-BACKUP] 开始执行数据库备份任务, jobId={}", sysJob.getJobId());
         DatabaseBackupExecutor executor = SpringUtils.getBean(DatabaseBackupExecutor.class);
-        executor.executeBackup();
+        try {
+            executor.executeBackup();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
         log.info("[DB-BACKUP] 数据库备份任务执行完成, jobId={}", sysJob.getJobId());
     }
 }

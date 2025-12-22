@@ -28,42 +28,32 @@ public abstract class RetryableQuartzJob extends QuartzJobWrapper {
      */
     private static final long RETRY_INTERVAL_MS = 5000L;
 
-    /**
-     * 带重试的执行模板
-     *
-     * @param context Quartz 上下文
-     * @param sysJob  任务信息
-     * @throws Exception 执行异常（最终失败时抛出）
-     */
     @Override
-    protected final void doExecute(JobExecutionContext context, SysJob sysJob) throws Exception {
+    protected final void doExecute(JobExecutionContext context, SysJob sysJob) {
         Exception last = null;
 
-        // attempt=0：首次执行；attempt>0：重试
         for (int attempt = 0; attempt <= MAX_RETRY_COUNT; attempt++) {
             try {
                 if (attempt > 0) {
-                    log.warn("任务 {} 第 {} 次重试开始", sysJob.getJobName(), attempt);
                     sleepRespectInterrupt(RETRY_INTERVAL_MS);
                 }
-
                 executeInternal(context, sysJob);
                 return;
             } catch (Exception e) {
                 last = e;
-                log.warn("任务 {} 执行失败，attempt={}/{}，err={}",
-                        sysJob.getJobName(), attempt, MAX_RETRY_COUNT, e.getMessage(), e);
-
                 if (attempt >= MAX_RETRY_COUNT) {
-                    throw new Exception("任务执行失败，已重试 " + MAX_RETRY_COUNT + " 次", e);
+                    throw new RuntimeException(
+                            "任务执行失败，已重试 " + MAX_RETRY_COUNT + " 次", e
+                    );
                 }
             }
         }
 
         if (last != null) {
-            throw last;
+            throw new RuntimeException(last);
         }
     }
+
 
     /**
      * 睡眠并保留线程中断语义

@@ -24,10 +24,14 @@ public class GenericScheduledJob extends QuartzJobWrapper {
      * @param sysJob  任务信息
      */
     @Override
-    protected void doExecute(JobExecutionContext context, SysJob sysJob) throws Exception {
-        log.info("开始执行通用任务: {}[{}]", sysJob.getJobName(), sysJob.getJobId());
-        GenericTaskExecutor executor = SpringUtils.getBean(GenericTaskExecutor.class);
-        executor.execute(sysJob);
-        log.info("通用任务执行完成: {}[{}]", sysJob.getJobName(), sysJob.getJobId());
+    protected void doExecute(JobExecutionContext context, SysJob sysJob) {
+        try {
+            GenericTaskExecutor executor =
+                    SpringUtils.getBean(GenericTaskExecutor.class);
+            executor.execute(sysJob);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
+
 }
