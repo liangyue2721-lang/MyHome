@@ -3,6 +3,7 @@ package com.make.common.utils;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.make.common.config.RedisQuartzSemaphore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,6 +80,49 @@ public class ThreadPoolUtil {
         logThreadPoolStatus("scheduler", SCHEDULER);
         return SCHEDULER;
     }
+    /**
+     * 提交一个“调度生产 + 执行消费”的任务
+     *
+     * 设计说明：
+     * 1. 调度线程只负责 tryAcquire
+     * 2. 真正执行交给 CORE_EXECUTOR
+     * 3. RedisQuartzSemaphore 只绑定执行线程
+     *
+     * @param jobKey   任务唯一标识（分布式互斥）
+     * @param task     实际执行逻辑（消费）
+     */
+    public static void scheduleAndConsume(String jobKey, Runnable task) {
+
+        // 注意：此方法运行在 scheduler 线程中
+        if (!RedisQuartzSemaphore.tryAcquire(jobKey)) {
+            return;
+        }
+
+        try {
+            CORE_EXECUTOR.execute(wrapWithSemaphore(task, jobKey));
+        } catch (RejectedExecutionException e) {
+            // 如果执行线程池拒绝，必须释放信号量
+            RedisQuartzSemaphore.release(jobKey);
+            throw e;
+        }
+    }
+
+    /**
+     * 将任务包装为“不可泄漏信号量”的执行单元
+     */
+    private static Runnable wrapWithSemaphore(Runnable task, String jobKey) {
+        return () -> {
+            try {
+                task.run();
+            } catch (Throwable t) {
+                logger.error("任务执行异常, jobKey={}", jobKey, t);
+                throw t;
+            } finally {
+                RedisQuartzSemaphore.release(jobKey);
+            }
+        };
+    }
+
 
     /**
      * 记录线程池当前状态（JDK 8 版本）

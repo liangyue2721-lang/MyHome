@@ -12,8 +12,14 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  *
  * @author ruoyi
  */
-@SpringBootApplication(exclude = {DataSourceAutoConfiguration.class})
-@EnableScheduling
+@SpringBootApplication(
+        exclude = {
+                DataSourceAutoConfiguration.class,
+                org.springframework.boot.autoconfigure.quartz.QuartzAutoConfiguration.class
+        }
+)
+
+//@EnableScheduling
 public class RuoYiApplication {
 
     /**

@@ -1,264 +1,145 @@
 package com.make.quartz.service;
 
-import com.alibaba.fastjson2.JSON;
 import com.make.common.utils.StringUtils;
-import com.make.common.utils.ThreadPoolUtil;
-import com.make.common.utils.spring.SpringUtils;
 import com.make.quartz.domain.SysJob;
-import com.make.quartz.mapper.SysJobMapper;
 import com.make.quartz.util.JobInvokeUtil;
+import com.make.quartz.util.NodeRegistry;
 import com.make.quartz.util.RedisMessageQueue;
-import com.make.quartz.util.SchedulerManager;
-import org.quartz.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
+import org.springframework.scheduling.support.CronExpression;
+import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
-import javax.annotation.Resource;
-import java.util.Map;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 /**
- * 任务执行服务 (Task Execution Service)
+ * Redis 队列消费执行服务（Redis-only）
  *
- * 职责：
- * 1. 监听 Redis 队列，接收分发到本节点的任务
- * 2. 统一执行入口 `executeSysJob`
- * 3. 管理执行线程池，防止过载
+ * <p>职责：
+ * 1) 启动当前节点的队列监听（每节点消费自己的队列）
+ * 2) 收到消息后执行 SysJob（invokeTarget）
+ * 3) 执行成功后：计算下一次触发时间，并重新入队（实现“定时任务”的循环）
  *
- * 日志前缀说明：
- * - [EXEC_MSG_RCV]: 收到任务消息
- * - [EXEC_SUBMIT]: 提交到本地线程池
- * - [JOB-EXEC-START]: 开始执行业务逻辑
- * - [JOB-EXEC-END]: 业务逻辑执行完成
- * - [JOB-EXEC-ERROR]: 业务逻辑执行异常
+ * <p>注意：
+ * - Scheduled 时间检查已经在 RedisMessageQueue 内通过 delay zset 实现
+ * - 这里仅负责“执行”和“续约下一次”
  */
-@Service
+@Component
 public class TaskExecutionService {
 
     private static final Logger log = LoggerFactory.getLogger(TaskExecutionService.class);
 
-    @Autowired
-    private Scheduler scheduler;
-
-    @Resource
-    private SysJobMapper jobMapper;
-
-    // Key: Execution ID (Instance), Value: StartTime
-    // Tracks currently executing instances on this node
-    private static final ConcurrentHashMap<String, Long> executingTasks = new ConcurrentHashMap<>();
+    /**
+     * 防止同 executionId 重入
+     */
+    private final ConcurrentHashMap<String, Long> executing = new ConcurrentHashMap<>();
 
     @PostConstruct
     public void init() {
-        String currentNodeId = SchedulerManager.getCurrentNodeId();
-        log.info("初始化任务执行服务 | NodeID: {}", currentNodeId);
-
-        RedisMessageQueue.getInstance().startListening(currentNodeId, this::handleTaskMessage);
+        String nodeId = NodeRegistry.getCurrentNodeId();
+        RedisMessageQueue.getInstance().startListening(nodeId, this::handle);
     }
+
 
     @PreDestroy
     public void destroy() {
-        log.info("停止任务执行服务");
         RedisMessageQueue.getInstance().stopListening();
     }
 
-    private void handleTaskMessage(RedisMessageQueue.TaskMessage message) {
-        String executionId = message.getExecutionId();
-        if (StringUtils.isEmpty(executionId)) {
-            executionId = StringUtils.isNotEmpty(message.getTraceId()) ? message.getTraceId() : message.getTaskId();
+    /**
+     * 处理一条队列消息
+     */
+    private void handle(RedisMessageQueue.TaskMessage message) throws Exception {
+        String execId = StringUtils.isEmpty(message.getExecutionId())
+                ? UUID.randomUUID().toString()
+                : message.getExecutionId();
+
+        if (executing.putIfAbsent(execId, System.currentTimeMillis()) != null) {
+            log.warn("[EXEC_SKIP] duplicate execId={}, taskId={}", execId, message.getTaskId());
+            return;
         }
 
         try {
-            if (log.isInfoEnabled()) {
-                log.info("[EXEC_MSG_RCV] 收到任务消息 | Job: {} | ExecId: {} | Node: {} | TraceId: {}",
-                    message.getTaskId(), executionId, message.getTargetNode(), message.getTraceId());
-            }
-
-            // Check for duplicate execution of the same INSTANCE
-            if (executingTasks.containsKey(executionId)) {
-                log.warn("[EXEC_SKIP] 任务实例 {} (Job: {}) 已在执行中", executionId, message.getTaskId());
+            // 时间检查（兜底）：如果还没到 scheduledAt，则直接放回 delay（避免 ready 推进误差）
+            long now = System.currentTimeMillis();
+            if (message.getScheduledAt() > now) {
+                SysJob sj = (SysJob) message.getJobData();
+                if (sj != null) {
+                    RedisMessageQueue.getInstance().enqueueAt(
+                            sj,
+                            message.getTargetNode(),
+                            message.getPriority(),
+                            message.getScheduledAt()
+                    );
+                }
                 return;
             }
 
-            // 同步执行任务，确保任务执行完成后才返回，从而触发外部的ACK
-            try {
-                executingTasks.put(executionId, System.currentTimeMillis());
-
-                SysJob sysJob = null;
-                try {
-                    sysJob = reconstructSysJob(message);
-                } catch (Exception e) {
-                    log.error("[EXEC_RECONSTRUCT_FAIL] SysJob重建失败，跳过任务 | Job: {} | ExecId: {}",
-                        message.getTaskId(), executionId, e);
-                    return; // Return effectively ACKs the message (skipped)
-                }
-
-                if (sysJob != null) {
-                    if (StringUtils.isEmpty(sysJob.getInvokeTarget())) {
-                        log.debug("[EXEC_FILTER] 忽略无效任务消息 (invokeTarget为空) | Job: {}", message.getTaskId());
-                        return;
-                    }
-                    executeSysJob(sysJob);
-                } else {
-                    executeTask(message.getTaskId());
-                }
-
-            } catch (Exception e) {
-                log.error("[EXEC_FAIL] 任务执行异常 | Job: {} | ExecId: {}", message.getTaskId(), executionId, e);
-                // 抛出异常以触发Requeue
-                throw new RuntimeException(e);
-            } finally {
-                executingTasks.remove(executionId);
+            SysJob sysJob = (SysJob) message.getJobData();
+            if (sysJob == null || StringUtils.isEmpty(sysJob.getInvokeTarget())) {
+                log.warn("[EXEC_DROP] invalid message, taskId={}, execId={}", message.getTaskId(), execId);
+                return;
             }
 
-        } catch (Exception e) {
-            log.error("[EXEC_ERROR] 执行任务失败 | Job: {} | ExecId: {}", message.getTaskId(), executionId, e);
-            throw e;
-        }
-    }
+            executeOnce(sysJob);
 
-    private SysJob reconstructSysJob(RedisMessageQueue.TaskMessage message) {
-        if (message.getPayload() != null && !message.getPayload().isEmpty()) {
-            try {
-                String jobIdStr = message.getTaskId().split("_")[0];
-                Long jobId = Long.valueOf(jobIdStr);
-                SysJob sysJob = jobMapper.selectJobById(jobId);
-                if (sysJob != null) {
-                    sysJob.setTraceId(message.getTraceId());
-                    // Ensure JobId and JobName are available if needed
-                    return sysJob;
-                }
-            } catch (Exception e) {
-                log.warn("[EXEC_RECONSTRUCT_FAIL] 从Payload恢复SysJob失败", e);
-            }
+            // 执行成功后，计算下一次并续入队（实现定时）
+            scheduleNextIfNeeded(sysJob, message.getTargetNode(), message.getPriority());
+
+        } finally {
+            executing.remove(execId);
         }
-        return null;
     }
 
     /**
-     * 统一执行入口
+     * 执行一次任务（消费逻辑）
      */
-    public void executeSysJob(SysJob sysJob) throws Exception {
-        long startTime = System.currentTimeMillis();
-        String traceId = sysJob.getTraceId();
-        String jobName = sysJob.getJobName();
-        String invokeTarget = sysJob.getInvokeTarget();
-
-        String executionId = sysJob.getFireInstanceId();
-
-        log.info("[TASK_MONITOR] [EXECUTE_START] 开始执行任务 | Job: {} | ExecId: {} | TraceId: {} | InvokeTarget: {}",
-                jobName, executionId, traceId, invokeTarget);
-
-        try {
-            JobInvokeUtil.invokeMethod(sysJob);
-
-            long endTime = System.currentTimeMillis();
-            log.info("[TASK_MONITOR] [EXECUTE_END] 任务执行成功 | Job: {} | ExecId: {} | TraceId: {} | Cost: {}ms",
-                    jobName, executionId, traceId, (endTime - startTime));
-        } catch (Exception e) {
-            long endTime = System.currentTimeMillis();
-            log.error("[TASK_MONITOR] [EXECUTE_ERROR] 任务执行失败 | Job: {} | ExecId: {} | TraceId: {} | Cost: {}ms",
-                    jobName, executionId, traceId, (endTime - startTime), e);
-            throw e;
-        }
+    private void executeOnce(SysJob sysJob) throws Exception {
+        log.info("[EXEC] start jobId={} name={} target={}", sysJob.getJobId(), sysJob.getJobName(), sysJob.getInvokeTarget());
+        JobInvokeUtil.invokeMethod(sysJob);
+        log.info("[EXEC] success jobId={} name={}", sysJob.getJobId(), sysJob.getJobName());
     }
 
-    private void executeTask(String taskId) throws Exception {
-        log.info("[TASK_MONITOR] [EXEC_LEGACY] 使用旧方式执行任务: {}", taskId);
-
-        if (taskId == null) {
-             log.warn("[EXEC_INVALID_ID] TaskID为空");
-             return;
+    /**
+     * 如果是 cron 任务，计算下一次触发时间并入队（队列内部延迟执行）
+     *
+     * <p>说明：
+     * - 你要求“在队列中嵌入 Scheduled 时间检查”，这里计算 nextAt，
+     * 但真正的“是否到期执行”由 RedisMessageQueue 的 delay zset 推进完成。
+     */
+    private void scheduleNextIfNeeded(SysJob sysJob, String targetNode, String priority) {
+        // status=0 才继续（你项目常用：0正常 1暂停）
+        if (!Objects.equals("0", sysJob.getStatus())) {
+            return;
         }
 
-        // Try to handle both dot and underscore format if legacy
-        String separator = taskId.contains("_") ? "_" : "\\.";
-
-        // Defensive: Strict validation of TaskID format
-        if (!taskId.contains(separator.replace("\\", "")) && !taskId.contains(".")) {
-            // Allow if just jobName or ID? No, safer to require format.
-            // Actually, if separator is not present, splits length < 2
+        String cron = sysJob.getCronExpression();
+        if (StringUtils.isEmpty(cron)) {
+            return;
         }
 
         try {
-            String[] parts = taskId.split(separator, 2);
-            if (parts.length < 2 || parts[0].isEmpty() || parts[1].isEmpty()) {
-                log.warn("[EXEC_INVALID_ID] TaskID解析后格式无效: {}", taskId);
+            CronExpression ce = CronExpression.parse(cron);
+            ZonedDateTime next = ce.next(ZonedDateTime.now(ZoneId.systemDefault()));
+            if (next == null) {
                 return;
             }
 
-            // Assumption: First part is Job ID or Group, Second is Name
-            // Legacy was group.name. New is jobId_jobName.
-            // SysJob needs group/name for logging?
-            // Actually executeTask looks up by JobKey(name, group).
-            // If new format is jobId_jobName, we might fail to find Quartz Job if we treat jobId as Group.
-            // But this method is only a fallback when Payload is missing.
-            // Given new distribution always sends Payload, this is purely legacy support.
+            long nextAt = next.toInstant().toEpochMilli();
 
-            String part1 = parts[0];
-            String part2 = parts[1];
+            // 续入队（延迟）
+            RedisMessageQueue.getInstance().enqueueAt(sysJob, targetNode, priority, nextAt);
 
-            // Try to use part1 as Group and part2 as Name (Old behavior)
-            String jobGroup = part1;
-            String jobName = part2;
-
-            JobKey jobKey = JobKey.jobKey(jobName, jobGroup);
-            JobDetail jobDetail = scheduler.getJobDetail(jobKey);
-
-            if (jobDetail == null) {
-                log.warn("未找到任务详情 (Legacy Lookup): {}.{}", jobGroup, jobName);
-                return;
-            }
-
-            JobDataMap jobDataMap = jobDetail.getJobDataMap();
-            SysJob sysJob = new SysJob();
-            sysJob.setJobName(jobName);
-            sysJob.setJobGroup(jobGroup);
-
-            Object jobProperties = jobDataMap.get("TASK_PROPERTIES");
-            if (jobProperties != null) {
-                copyBeanProp(sysJob, jobProperties);
-            } else {
-                if (jobDataMap.containsKey("invokeTarget")) {
-                    sysJob.setInvokeTarget(jobDataMap.getString("invokeTarget"));
-                }
-            }
-
-            if (sysJob.getInvokeTarget() != null) {
-                executeSysJob(sysJob);
-            } else {
-                 log.error("无法执行任务，invokeTarget为空: {}", taskId);
-            }
+            log.info("[EXEC_NEXT] jobId={} nextAt={}", sysJob.getJobId(), Instant.ofEpochMilli(nextAt));
         } catch (Exception e) {
-            log.error("[EXEC_PARSE_FAIL] 任务参数解析或加载失败 | TaskID: {}", taskId, e);
-            // Swallowing exception to prevent thread pool impact, treating as skipped
+            log.warn("[EXEC_NEXT_ERR] jobId={} cron={}", sysJob.getJobId(), cron, e);
         }
-    }
-
-    private void copyBeanProp(Object dest, Object src) {
-        try {
-            String json = JSON.toJSONString(src);
-            SysJob sourceJob = JSON.parseObject(json, SysJob.class);
-
-            if (dest instanceof SysJob) {
-                SysJob destJob = (SysJob) dest;
-                destJob.setInvokeTarget(sourceJob.getInvokeTarget());
-                destJob.setCronExpression(sourceJob.getCronExpression());
-                destJob.setMisfirePolicy(sourceJob.getMisfirePolicy());
-                destJob.setConcurrent(sourceJob.getConcurrent());
-                destJob.setStatus(sourceJob.getStatus());
-            }
-        } catch (Exception e) {
-            log.error("复制Bean属性异常", e);
-        }
-    }
-
-    public static boolean isTaskExecuting(String executionId) {
-        return executingTasks.containsKey(executionId);
     }
 }

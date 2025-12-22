@@ -6,76 +6,74 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * 带重试机制的定时任务处理类
- * 
- * 该类继承自AbstractQuartzJob，增加了任务执行失败后的重试机制
- * 确保因临时问题未能执行的任务能够得到重试
+ * 带重试机制的 Quartz Job 抽象层
+ *
+ * <p>职责：
+ * <ul>
+ *   <li>为 doExecute(context, sysJob) 增加重试机制</li>
+ *   <li>子类只需要实现 executeInternal(context, sysJob)（一次执行逻辑）</li>
+ * </ul>
  */
-public abstract class RetryableQuartzJob extends AbstractQuartzJob {
-    
+public abstract class RetryableQuartzJob extends QuartzJobWrapper {
+
     private static final Logger log = LoggerFactory.getLogger(RetryableQuartzJob.class);
-    
+
     /**
-     * 最大重试次数
+     * 最大重试次数（不含首次执行）
      */
     private static final int MAX_RETRY_COUNT = 3;
-    
+
     /**
      * 重试间隔（毫秒）
      */
-    private static final long RETRY_INTERVAL = 5000; // 5秒
-    
-    /**
-     * 执行具体的定时任务逻辑，包含重试机制
-     * 
-     * @param context 任务执行上下文
-     * @param sysJob  定时任务信息对象
-     * @throws Exception 执行过程中可能抛出的异常
-     */
+    private static final long RETRY_INTERVAL_MS = 5000L;
+
     @Override
-    protected void doExecute(JobExecutionContext context, SysJob sysJob) throws Exception {
-        int retryCount = 0;
-        Exception lastException = null;
-        
-        while (retryCount <= MAX_RETRY_COUNT) {
+    protected final void doExecute(JobExecutionContext context, SysJob sysJob) {
+        Exception last = null;
+
+        for (int attempt = 0; attempt <= MAX_RETRY_COUNT; attempt++) {
             try {
-                if (retryCount > 0) {
-                    log.info("任务 {} 开始第 {} 次重试", sysJob.getJobName(), retryCount);
-                    // 等待一段时间再重试
-                    Thread.sleep(RETRY_INTERVAL);
+                if (attempt > 0) {
+                    sleepRespectInterrupt(RETRY_INTERVAL_MS);
                 }
-                
-                // 执行实际的任务逻辑
                 executeInternal(context, sysJob);
-                // 执行成功，跳出循环
                 return;
             } catch (Exception e) {
-                retryCount++;
-                lastException = e;
-                log.warn("任务 {} 执行失败，已尝试 {} 次，错误信息: {}", 
-                        sysJob.getJobName(), retryCount, e.getMessage(), e);
-                
-                // 如果达到最大重试次数，则抛出异常
-                if (retryCount > MAX_RETRY_COUNT) {
-                    log.error("任务 {} 已达到最大重试次数 {}，任务执行最终失败", 
-                            sysJob.getJobName(), MAX_RETRY_COUNT, e);
-                    throw new Exception("任务执行失败，已重试 " + MAX_RETRY_COUNT + " 次", e);
+                last = e;
+                if (attempt >= MAX_RETRY_COUNT) {
+                    throw new RuntimeException(
+                            "任务执行失败，已重试 " + MAX_RETRY_COUNT + " 次", e
+                    );
                 }
             }
         }
-        
-        // 如果循环结束仍未成功，则抛出最后一次异常
-        if (lastException != null) {
-            throw lastException;
+
+        if (last != null) {
+            throw new RuntimeException(last);
         }
     }
-    
+
+
     /**
-     * 执行实际的任务逻辑，由子类实现
-     * 
-     * @param context 任务执行上下文
-     * @param sysJob  定时任务信息对象
-     * @throws Exception 执行过程中可能抛出的异常
+     * 睡眠并保留线程中断语义
+     *
+     * @param millis 睡眠毫秒
+     */
+    private void sleepRespectInterrupt(long millis) throws Exception {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new Exception("任务重试等待被中断", ie);
+        }
+    }
+
+    /**
+     * 子类实现的“一次执行”逻辑（不包含重试）
+     *
+     * @param context Quartz 上下文
+     * @param sysJob  任务信息
      */
     protected abstract void executeInternal(JobExecutionContext context, SysJob sysJob) throws Exception;
 }
