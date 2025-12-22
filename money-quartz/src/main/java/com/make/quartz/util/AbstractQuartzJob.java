@@ -1,309 +1,110 @@
 package com.make.quartz.util;
 
-import java.util.Date;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
-
-import com.make.common.util.TraceIdUtil;
-import com.make.common.utils.ip.IpUtils;
-import com.make.quartz.config.IpBlackListManager;
-import com.make.quartz.config.RedisQuartzSemaphore;
-import com.make.quartz.domain.SysJob;
-import com.make.quartz.domain.SysJobLog;
-import com.make.quartz.service.ISysJobLogService;
-import com.make.quartz.service.TaskMonitoringService;
+import com.make.common.config.RedisQuartzSemaphore;
+import com.make.common.utils.ThreadPoolUtil;
 import org.quartz.Job;
 import org.quartz.JobExecutionContext;
-import org.redisson.api.RLock;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import com.make.common.constant.Constants;
-import com.make.common.constant.ScheduleConstants;
-import com.make.common.utils.ExceptionUtil;
-import com.make.common.utils.StringUtils;
-import com.make.common.utils.bean.BeanUtils;
-import com.make.common.utils.spring.SpringUtils;
+import org.quartz.JobExecutionException;
 
 /**
- * 带分布式锁的抽象 Quartz Job
+ * Quartz Job 抽象模板（不可泄漏信号量版本）
+ *
+ * <p>设计目标：
+ * <ul>
+ *   <li>Quartz 触发线程只负责“生产”（抢占互斥信号量 + 投递执行任务）</li>
+ *   <li>真实业务逻辑在业务线程池中“消费”执行</li>
+ *   <li>RedisQuartzSemaphore 的 release 只有一个出口（finally），避免“占锁不执行”</li>
+ * </ul>
  */
 public abstract class AbstractQuartzJob implements Job {
-    private static final Logger log = LoggerFactory.getLogger(AbstractQuartzJob.class);
-    private static ThreadLocal<Date> threadLocal = new ThreadLocal<>();
 
     /**
-     * 用于跟踪正在执行的任务
-     * key: jobKey, value: 执行开始时间
-     * 恢复此Map以保持isJobExecuting的JVM本地语义，解决编译错误
+     * Quartz Job 入口（模板方法，禁止子类覆盖）
+     *
+     * <p>执行流程：
+     * <ol>
+     *   <li>尝试抢占分布式信号量（失败则跳过）</li>
+     *   <li>执行前校验（可选，允许放弃执行）</li>
+     *   <li>投递到执行线程池中消费</li>
+     * </ol>
+     *
+     * <p>不可泄漏保证：
+     * <ul>
+     *   <li>投递失败：catch 中 release</li>
+     *   <li>投递成功：消费线程 finally 中 release（唯一出口）</li>
+     * </ul>
      */
-    private static final ConcurrentHashMap<String, Long> executingJobs = new ConcurrentHashMap<>();
-
-    /**
-     * Redis 分布式锁工具，需要在 Spring 容器中注册
-     */
-    private RedisQuartzSemaphore redisQuartzSemaphore;
-
-    /**
-     * 调度管理器
-     */
-    private SchedulerManager schedulerManager;
-
-    /**
-     * 任务分发器
-     */
-    private TaskDistributor taskDistributor;
-
-    /**
-     * IP黑名单管理器
-     */
-    private IpBlackListManager ipBlackListManager;
-
-    /**
-     * 任务监控服务
-     */
-    private TaskMonitoringService taskMonitoringService;
-
-    /**
-     * 初始化 Beans
-     * 避免在构造函数中直接调用 SpringUtils.getBean，以防止 Spring 容器销毁时抛出 BeanCreationNotAllowedException
-     */
-    private void initBeans() {
-        if (this.redisQuartzSemaphore == null) {
-            this.redisQuartzSemaphore = SpringUtils.getBean(RedisQuartzSemaphore.class);
-        }
-        if (this.schedulerManager == null) {
-            this.schedulerManager = SpringUtils.getBean(SchedulerManager.class);
-        }
-        if (this.taskDistributor == null) {
-            this.taskDistributor = SpringUtils.getBean(TaskDistributor.class);
-        }
-        if (this.ipBlackListManager == null) {
-            this.ipBlackListManager = SpringUtils.getBean(IpBlackListManager.class);
-        }
-        if (this.taskMonitoringService == null) {
-            this.taskMonitoringService = SpringUtils.getBean(TaskMonitoringService.class);
-        }
-    }
-
     @Override
-    public void execute(JobExecutionContext context) {
-        // 生成链路追踪ID并放入MDC
-        String traceId = TraceIdUtil.generateTraceId();
-        TraceIdUtil.putTraceId(traceId);
+    public final void execute(JobExecutionContext context) throws JobExecutionException {
+        final String jobKey = getJobKey(context);
 
-        // 获取Quartz触发实例ID
-        String fireInstanceId = context.getFireInstanceId();
-        org.slf4j.MDC.put("taskInstanceId", fireInstanceId);
-
-        SysJob sysJob = new SysJob();
-        BeanUtils.copyBeanProp(sysJob, context.getMergedJobDataMap().get(ScheduleConstants.TASK_PROPERTIES));
-        // 设置fireInstanceId到SysJob，以便分发时携带
-        sysJob.setFireInstanceId(fireInstanceId);
-
-        String jobKey = sysJob.getJobGroup() + "." + sysJob.getJobName();
-
-        try {
-            initBeans();
-        } catch (Exception e) {
-            log.warn("[TASK_MONITOR] [SKIP] 任务【{}】跳过执行，原因：Spring容器可能正在关闭 ({})", jobKey, e.getMessage());
+        // 1) 调度生产阶段：互斥判断
+        if (!RedisQuartzSemaphore.tryAcquire(jobKey)) {
             return;
         }
 
-        log.info("[TASK_MONITOR] [TRIGGER] Job triggered. Key: {}, TraceId: {}, InstanceId: {}, InvokeTarget: {}",
-                jobKey, traceId, fireInstanceId, sysJob.getInvokeTarget());
-
-        String lockKey = "quartz:lock:" + jobKey;
-        RLock lock = redisQuartzSemaphore.getLock(lockKey);
-        boolean locked = false;
-
         try {
-            before(context, sysJob);
-
-            // 检查当前节点IP是否在黑名单中
-            if (ipBlackListManager.isCurrentNodeIpBlacklisted()) {
-                log.info("[TASK_MONITOR] [SKIP] 当前节点IP {} 在黑名单中，跳过任务【{}】执行",
-                        ipBlackListManager.getCurrentNodeIp(), jobKey);
+            // 2) 调度生产阶段：前置校验
+            if (!beforeExecute(context)) {
+                RedisQuartzSemaphore.release(jobKey);
                 return;
             }
 
-            // 检查是否需要主节点执行
-            String isMasterNode = "0";
-            if (sysJob.getJobId() != null) {
-                isMasterNode = schedulerManager.getJobIsMasterNode(sysJob.getJobId());
-            }
-
-            if ("1".equals(isMasterNode)) {
-                if (!schedulerManager.isMasterNode()) {
-                    log.info("⏭️ 任务【{}】需要主节点执行，当前节点不是主节点", jobKey);
-                    return;
-                }
-            }
-
-            // 尝试获取锁：开启看门狗（不设置leaseTime），等待0秒（立即返回）
-            // 如果已经被锁，说明其他节点或线程正在运行
-            log.debug("[TASK_MONITOR] [LOCK_ATTEMPT] Attempting to acquire lock. Key: {}, Node: {}", jobKey, IpUtils.getHostIp());
-            locked = lock.tryLock(0, TimeUnit.SECONDS);
-            if (!locked) {
-                // 记录日志或指标：跳过执行
-                String currentNodeId = IpUtils.getHostIp(); // 简单使用IP作为节点标识
-                long ttl = lock.remainTimeToLive();
-                log.info("[TASK_MONITOR] [LOCK_SKIPPED] Failed to acquire lock. Key: {}, InstanceId: {}, Node: {}, LockName: {}, TTL: {}ms",
-                        jobKey, fireInstanceId, currentNodeId, lockKey, ttl);
-                return;
-            }
-
-            log.info("[TASK_MONITOR] [LOCK_ACQUIRED] Key: {}, InstanceId: {}, Node: {}", jobKey, fireInstanceId, IpUtils.getHostIp());
-
-            // 记录到本地执行Map，恢复本地执行状态跟踪
-            executingJobs.put(jobKey, System.currentTimeMillis());
-
-            // 获取锁成功，检查是否应该在本地执行
-            boolean executeLocally = taskDistributor.shouldExecuteLocally(jobKey, 0.8);
-            log.debug("[TASK_MONITOR] [DECISION_DEBUG] Task: {}, Local: {}, Threshold: 0.8", jobKey, executeLocally);
-
-            if (executeLocally) {
-                log.info("[TASK_MONITOR] [DECISION] Executing Locally. Key: {}, InstanceId: {}", jobKey, fireInstanceId);
-            } else {
-                log.info("[TASK_MONITOR] [DECISION] Distributing. Key: {}, InstanceId: {}", jobKey, fireInstanceId);
-            }
-
-            if (!executeLocally) {
-                // 负载过高，分发任务
-                log.info("🔄 任务【{}】负载过高，分发到全局队列", jobKey);
-
-                // 设置当前TraceId到SysJob，确保分发后链路不断
-                sysJob.setTraceId(traceId);
-                // 设置入队时间
-                sysJob.setEnqueueTime(System.currentTimeMillis());
-
-                taskDistributor.distributeTask(sysJob);
-
-                // 必须释放锁，以便消费者能获取锁并执行
-                lock.unlock();
-                locked = false;
-                // 分发后也视为本地执行结束
-                executingJobs.remove(jobKey);
-
-                recordDispatchedTask(sysJob);
-                return;
-            }
-
-            // 真正执行子类逻辑
-            log.info("[TASK_MONITOR] [EXECUTE_START] Starting local execution. Key: {}, InstanceId: {}, InvokeTarget: {}",
-                    jobKey, fireInstanceId, sysJob.getInvokeTarget());
-            taskMonitoringService.recordTaskStart(jobKey);
-
-            long start = System.currentTimeMillis();
-            try {
-                doExecute(context, sysJob);
-            } finally {
-                long duration = System.currentTimeMillis() - start;
-                log.info("[TASK_MONITOR] [EXECUTE_END] Local execution finished. Key: {}, InstanceId: {}, Duration: {}ms",
-                        jobKey, fireInstanceId, duration);
-            }
-
-            after(context, sysJob, null);
+            // 3) 投递到消费线程池
+            ThreadPoolUtil.getCoreExecutor().execute(wrapExecute(context, jobKey));
         } catch (Exception e) {
-            log.error("❌ 任务执行异常 - {}", jobKey, e);
-            after(context, sysJob, e);
-        } finally {
-            // 从执行中任务列表中移除
-            executingJobs.remove(jobKey);
-
-            // 释放分布式锁
-            if (locked && lock.isHeldByCurrentThread()) {
-                lock.unlock();
-                log.info("[TASK_MONITOR] [LOCK_RELEASED] Key: {}, InstanceId: {}, Node: {}", jobKey, fireInstanceId, IpUtils.getHostIp());
-            }
-
-            if (locked) { // 只有真正执行完成才记录结束（分发的任务由消费者记录）
-                taskMonitoringService.recordTaskComplete(jobKey);
-            }
-
-            // 清除链路追踪ID
-            TraceIdUtil.clearTraceId();
-            org.slf4j.MDC.remove("taskInstanceId");
+            // 4) 投递失败兜底释放，避免“占锁不执行”
+            RedisQuartzSemaphore.release(jobKey);
+            throw new JobExecutionException(e);
         }
     }
 
     /**
-     * 检查任务是否正在执行（JVM本地检查）
-     * 恢复此方法以解决RedisMessageQueue的编译依赖
-     * @param jobKey 任务键
-     * @return true-正在执行，false-未在执行
-     */
-    public static boolean isJobExecuting(String jobKey) {
-        return executingJobs.containsKey(jobKey);
-    }
-
-    /**
-     * 记录已分发的任务到监控系统
-     */
-    private void recordDispatchedTask(SysJob sysJob) {
-        try {
-            SysJobLog sysJobLog = new SysJobLog();
-            sysJobLog.setJobName(sysJob.getJobName());
-            sysJobLog.setJobGroup(sysJob.getJobGroup());
-            sysJobLog.setInvokeTarget(sysJob.getInvokeTarget());
-            sysJobLog.setStartTime(new Date());
-            sysJobLog.setStopTime(new Date());
-            sysJobLog.setHostIp(IpUtils.getHostIp());
-            sysJobLog.setStatus(Constants.SUCCESS);
-            sysJobLog.setJobMessage("任务已分发到全局队列");
-
-            SpringUtils.getBean(ISysJobLogService.class).addJobLog(sysJobLog);
-        } catch (Exception e) {
-            log.error("记录分发的任务失败: {}", sysJob.getJobName(), e);
-        }
-    }
-
-    /**
-     * 执行前设置开始时间
-     */
-    protected void before(JobExecutionContext context, SysJob sysJob) {
-        threadLocal.set(new Date());
-    }
-
-    /**
-     * 执行后记录日志
-     */
-    protected void after(JobExecutionContext context, SysJob sysJob, Exception e) {
-        Date startTime = threadLocal.get();
-        threadLocal.remove();
-
-        // 避免NPE：如果startTime为空，默认当前时间
-        if (startTime == null) {
-            startTime = new Date();
-        }
-
-        SysJobLog sysJobLog = new SysJobLog();
-        sysJobLog.setJobName(sysJob.getJobName());
-        sysJobLog.setJobGroup(sysJob.getJobGroup());
-        sysJobLog.setInvokeTarget(sysJob.getInvokeTarget());
-        sysJobLog.setStartTime(startTime);
-        sysJobLog.setStopTime(new Date());
-        sysJobLog.setHostIp(IpUtils.getHostIp());
-
-        long runMs = sysJobLog.getStopTime().getTime() - sysJobLog.getStartTime().getTime();
-        sysJobLog.setJobMessage(sysJobLog.getJobName() + " 总共耗时：" + runMs + "毫秒");
-
-        if (e != null) {
-            sysJobLog.setStatus(Constants.FAIL);
-            String err = StringUtils.substring(ExceptionUtil.getExceptionMessage(e), 0, 2000);
-            sysJobLog.setExceptionInfo(err);
-        } else {
-            sysJobLog.setStatus(Constants.SUCCESS);
-        }
-
-        SpringUtils.getBean(ISysJobLogService.class).addJobLog(sysJobLog);
-    }
-
-    /**
-     * 线程池执行器
+     * 包装消费线程执行器
      *
-     * @param context  工作执行上下文对象
-     * @param sysJob 系统计划任务
-     * @throws Exception 执行过程中的异常
+     * <p>保证：
+     * <ul>
+     *   <li>业务异常不会吞掉</li>
+     *   <li>信号量只在 finally 中释放（唯一出口）</li>
+     * </ul>
+     *
+     * @param context Quartz 执行上下文
+     * @param jobKey  任务唯一标识
+     * @return 可提交到线程池的 Runnable
      */
-    protected abstract void doExecute(JobExecutionContext context, SysJob sysJob) throws Exception;
+    private Runnable wrapExecute(JobExecutionContext context, String jobKey) {
+        return () -> {
+            try {
+                doExecute(context);
+            } finally {
+                // 唯一释放点：无论成功/失败/return，必释放
+                RedisQuartzSemaphore.release(jobKey);
+            }
+        };
+    }
+
+    /**
+     * 执行前校验（可选扩展）
+     *
+     * @param context Quartz 执行上下文
+     * @return true-继续执行；false-放弃本次执行
+     */
+    protected boolean beforeExecute(JobExecutionContext context) {
+        return true;
+    }
+
+    /**
+     * 子类实现真实业务逻辑（在执行线程池中运行）
+     *
+     * @param context Quartz 执行上下文
+     */
+    protected abstract void doExecute(JobExecutionContext context);
+
+    /**
+     * 子类提供任务唯一 Key（分布式互斥依据）
+     *
+     * @param context Quartz 执行上下文
+     * @return jobKey（跨实例必须一致）
+     */
+    protected abstract String getJobKey(JobExecutionContext context);
 }

@@ -1,304 +1,99 @@
 package com.make.quartz.task;
 
-import com.make.common.utils.ip.IpUtils;
-import com.make.common.utils.spring.SpringUtils;
-import com.make.quartz.config.IpBlackListManager;
-import com.make.quartz.config.RedisQuartzSemaphore;
-import com.make.quartz.domain.SysJob;
-import com.make.quartz.domain.SysJobLog;
-import com.make.quartz.mapper.SysJobMapper;
-import com.make.quartz.repository.JobLogRepository;
-import com.make.quartz.service.TaskMonitoringService;
-import com.make.quartz.util.SchedulerManager;
-import com.make.quartz.util.TaskDistributor;
-import org.quartz.Job;
-import org.quartz.JobExecutionContext;
-import org.quartz.JobExecutionException;
-import org.redisson.api.RLock;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-
-import javax.annotation.Resource;
-import java.util.Date;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
+import com.make.common.config.RedisQuartzSemaphore;
+import com.make.common.utils.ThreadPoolUtil;
 
 /**
- * 抽象定时任务类
- * 实现统一的任务执行框架，包括分布式锁、日志记录、监控等功能
+ * 抽象调度任务模板（不可泄漏信号量版本）
+ * <p>
+ * 设计目标：
+ * 1. 调度线程只负责“生产调度信号”
+ * 2. 不在调度线程中执行任何耗时逻辑
+ * 3. RedisQuartzSemaphore 只绑定执行线程
+ * 4. 任意 return / 异常都不会造成信号量泄漏
+ * <p>
+ * 使用方式：
+ * - 子类只实现 doExecute()
+ * - 子类只关注业务逻辑
+ * - 不允许子类直接操作线程池或信号量
  */
-public abstract class AbstractScheduledTask implements Job {
-
-    private static final Logger log = LoggerFactory.getLogger(AbstractScheduledTask.class);
-
-    @Resource
-    private SysJobMapper jobMapper;
+public abstract class AbstractScheduledTask {
 
     /**
-     * 用于跟踪正在执行的任务
-     * key: jobKey, value: 执行开始时间
+     * 调度入口（模板方法，禁止子类覆盖）
+     * <p>
+     * 该方法通常由 @Scheduled 或调度线程池触发
      */
-    private static final ConcurrentHashMap<String, Long> executingJobs = new ConcurrentHashMap<>();
+    public final void execute() {
+        String jobKey = getJobKey();
 
-    /**
-     * Redis 分布式锁工具，需要在 Spring 容器中注册
-     */
-    private RedisQuartzSemaphore redisQuartzSemaphore;
-
-    /**
-     * 调度管理器
-     */
-    private SchedulerManager schedulerManager;
-
-    /**
-     * 任务分发器
-     */
-    private TaskDistributor taskDistributor;
-
-    /**
-     * IP黑名单管理器
-     */
-    private IpBlackListManager ipBlackListManager;
-
-    /**
-     * 任务监控服务
-     */
-    private TaskMonitoringService taskMonitoringService;
-
-    /**
-     * 任务日志仓库
-     */
-    private JobLogRepository jobLogRepository;
-
-    @Override
-    public void execute(JobExecutionContext context) throws JobExecutionException {
-        // 初始化依赖的服务
-        initializeServices();
-
-        SysJob sysJob = createSysJobFromContext(context);
-        String jobKey = context.getJobDetail().getKey().toString();
-        String lockKey = "quartz:lock:" + jobKey;
-        RLock lock = redisQuartzSemaphore.getLock(lockKey);
-        boolean locked = false;
+        // ===== 1. 调度线程阶段：仅做分布式互斥判断 =====
+        if (!RedisQuartzSemaphore.tryAcquire(jobKey)) {
+            // 其他实例正在消费，直接返回
+            return;
+        }
 
         try {
-            before(context, sysJob);
-
-            log.info("🚀 开始执行任务: {}, 任务ID: {}", sysJob.getJobName(), jobKey);
-            log.info("📋 任务详细信息 - ID: {}, 名称: {}, 组名: {}, 目标: {}, 状态: {}, 并发: {}, 主节点执行: {}",
-                    sysJob.getJobId(), sysJob.getJobName(), sysJob.getJobGroup(),
-                    sysJob.getInvokeTarget(), sysJob.getStatus(), sysJob.getConcurrent(),
-                    sysJob.getIsMasterNode());
-
-            // 记录任务开始执行
-            taskMonitoringService.recordTaskStart(jobKey);
-
-            // 检查当前节点IP是否在黑名单中
-            if (ipBlackListManager.isCurrentNodeIpBlacklisted()) {
-                log.info("⏭️ 当前节点IP {} 在黑名单中，跳过任务【{}】执行",
-                        ipBlackListManager.getCurrentNodeIp(), jobKey);
+            // ===== 2. 执行前校验（允许放弃执行）=====
+            if (!beforeExecute()) {
+                // 注意：此时还未进入执行线程，必须释放信号量
+                RedisQuartzSemaphore.release(jobKey);
                 return;
             }
 
-            // 检查是否需要主节点执行（通过Redis判断）
-            String isMasterNode = "0"; // 默认值
-            if (sysJob.getJobId() != null) {
-                isMasterNode = schedulerManager.getJobIsMasterNode(sysJob.getJobId());
-            }
-            log.info("📋 任务 {} 的主节点执行要求: {}", jobKey, "1".equals(isMasterNode) ? "是" : "否");
+            // ===== 3. 提交到执行线程池（消费阶段）=====
+            ThreadPoolUtil.getCoreExecutor().execute(
+                    wrapExecute(jobKey)
+            );
 
-            if ("1".equals(isMasterNode)) {
-                // 需要主节点执行的任务
-                if (!schedulerManager.isMasterNode()) {
-                    log.info("⏭️ 任务【{}】需要主节点执行，当前节点不是主节点，跳过执行", jobKey);
-                    return;
-                }
-                log.info("👑 任务【{}】由主节点执行，当前节点是主节点", jobKey);
-            } else {
-                log.info("📝 任务【{}】可在任意节点执行", jobKey);
-            }
-
-            // 检查任务是否正在Redis消息队列中处理
-            if (com.make.quartz.util.RedisMessageQueue.isMessageProcessing(jobKey)) {
-                log.warn("⏭️ 任务【{}】正在Redis消息队列中处理，跳过重复执行", jobKey);
-                // 记录到监控系统，标记为跳过执行
-                recordSkippedTask(sysJob, "任务正在Redis消息队列中处理");
-                return;
-            }
-
-            // 尝试获取锁：开启看门狗（不设置leaseTime），等待0秒（立即返回）
-            log.info("🔐 尝试获取任务分布式锁: {}", lockKey);
-            locked = lock.tryLock(0, TimeUnit.SECONDS);
-            if (!locked) {
-                log.warn("⏭️ 跳过任务【{}】，未获取到分布式锁，可能其他节点正在执行该任务", jobKey);
-                // 记录到监控系统，标记为跳过执行
-                recordSkippedTask(sysJob, "未能获取分布式锁");
-                return;
-            }
-            log.info("✅ 成功获取任务分布式锁: {}", lockKey);
-
-            // 检查任务是否已经在执行（本地检查）
-            if (executingJobs.containsKey(jobKey)) {
-                log.warn("⏭️ 任务【{}】已在执行中，跳过重复执行", jobKey);
-                // 记录到监控系统，标记为跳过执行
-                recordSkippedTask(sysJob, "任务已在执行中");
-                return;
-            }
-
-            // 标记任务为正在执行
-            executingJobs.put(jobKey, System.currentTimeMillis());
-            log.info("✅ 任务【{}】将在当前节点执行", jobKey);
-
-            // 真正执行子类逻辑
-            log.info("🔧 开始执行任务业务逻辑: {}", jobKey);
-            doExecute(context, sysJob);
-            log.info("✅ 任务业务逻辑执行完成: {}", jobKey);
-
-            after(context, sysJob, null);
-            log.info("🏁 任务【{}】执行完成", jobKey);
         } catch (Exception e) {
-            log.error("❌ 任务执行异常 - {}", jobKey, e);
-            after(context, sysJob, e);
-            throw new JobExecutionException(e);
-        } finally {
-            // 从执行中任务列表中移除
-            executingJobs.remove(jobKey);
-            log.info("🧹 任务【{}】已从执行中列表移除", jobKey);
+            // ===== 4. 提交失败兜底释放信号量 =====
+            RedisQuartzSemaphore.release(jobKey);
+            throw e;
+        }
+    }
 
-            // 释放分布式锁
-            if (locked && lock.isHeldByCurrentThread()) {
-                lock.unlock();
-                log.info("🔓 释放Quartz分布式锁: {}", lockKey);
+    /**
+     * 执行线程包装器
+     * <p>
+     * 确保：
+     * - 业务异常不会吞掉
+     * - 信号量一定在 finally 中释放
+     */
+    private Runnable wrapExecute(String jobKey) {
+        return () -> {
+            try {
+                doExecute();
+            } catch (Throwable t) {
+                // 这里建议接入统一日志 / 监控
+                throw t;
+            } finally {
+                // ===== 唯一释放点 =====
+                RedisQuartzSemaphore.release(jobKey);
             }
-
-            // 记录任务执行完成
-            taskMonitoringService.recordTaskComplete(jobKey);
-        }
+        };
     }
 
     /**
-     * 初始化依赖的服务
-     */
-    private void initializeServices() {
-        if (redisQuartzSemaphore == null) {
-            redisQuartzSemaphore = SpringUtils.getBean(RedisQuartzSemaphore.class);
-        }
-        if (schedulerManager == null) {
-            schedulerManager = SpringUtils.getBean(SchedulerManager.class);
-        }
-        if (taskDistributor == null) {
-            taskDistributor = SpringUtils.getBean(TaskDistributor.class);
-        }
-        if (ipBlackListManager == null) {
-            ipBlackListManager = SpringUtils.getBean(IpBlackListManager.class);
-        }
-        if (taskMonitoringService == null) {
-            taskMonitoringService = SpringUtils.getBean(TaskMonitoringService.class);
-        }
-        if (jobLogRepository == null) {
-            jobLogRepository = SpringUtils.getBean(JobLogRepository.class);
-        }
-    }
-
-    /**
-     * 从JobExecutionContext创建SysJob对象
-     */
-    private SysJob createSysJobFromContext(JobExecutionContext context) {
-        String jobKey = context.getJobDetail().getKey().toString();
-        log.info("🔧 创建任务对象: {}", jobKey);
-        // 31_刷新财务数据 → 31
-        String jobIdStr = jobKey.split("_")[0];
-        Long jobId = Long.valueOf(jobIdStr);
-
-        return jobMapper.selectJobById(jobId);
-    }
-
-    /**
-     * 记录跳过的任务到监控系统
+     * 执行前校验（可选）
      *
-     * @param sysJob 任务信息
-     * @param reason 跳过原因
+     * @return false 表示本次调度不执行
      */
-    private void recordSkippedTask(SysJob sysJob, String reason) {
-        try {
-            SysJobLog sysJobLog = new SysJobLog();
-            sysJobLog.setJobName(sysJob.getJobName());
-            sysJobLog.setJobGroup(sysJob.getJobGroup());
-            sysJobLog.setInvokeTarget(sysJob.getInvokeTarget());
-            sysJobLog.setStartTime(new Date());
-            sysJobLog.setStopTime(new Date());
-            sysJobLog.setHostIp(IpUtils.getHostIp());
-            sysJobLog.setStatus(com.make.common.constant.Constants.FAIL);
-            sysJobLog.setJobMessage("任务跳过执行: " + reason);
-            sysJobLog.setExceptionInfo("任务因" + reason + "被跳过执行");
-
-            jobLogRepository.recordFailure(sysJobLog, null);
-        } catch (Exception e) {
-            log.error("记录跳过的任务失败: {}", sysJob.getJobName(), e);
-        }
+    protected boolean beforeExecute() {
+        return true;
     }
 
-    /**
-     * 记录已分发的任务到监控系统
-     *
-     * @param sysJob 任务信息
-     */
-    private void recordDispatchedTask(SysJob sysJob) {
-        try {
-            SysJobLog sysJobLog = new SysJobLog();
-            sysJobLog.setJobName(sysJob.getJobName());
-            sysJobLog.setJobGroup(sysJob.getJobGroup());
-            sysJobLog.setInvokeTarget(sysJob.getInvokeTarget());
-            sysJobLog.setStartTime(new Date());
-            sysJobLog.setStopTime(new Date());
-            sysJobLog.setHostIp(IpUtils.getHostIp());
-            sysJobLog.setStatus(com.make.common.constant.Constants.SUCCESS);
-            sysJobLog.setJobMessage("任务已分发到其他节点执行");
-
-            jobLogRepository.recordSuccess(sysJobLog);
-        } catch (Exception e) {
-            log.error("记录分发的任务失败: {}", sysJob.getJobName(), e);
-        }
-    }
+//    /**
+//     * 子类实现的真实业务逻辑（只写业务）
+//     */
+//    protected abstract void doExecute();
 
     /**
-     * 执行前设置开始时间
+     * 任务唯一标识（用于分布式互斥）
+     * <p>
+     * 要求：
+     * - 同一个任务在所有实例上返回值一致
+     * - 建议使用 jobId / taskCode
      */
-    protected void before(JobExecutionContext context, SysJob sysJob) {
-        // 可以在此处添加前置处理逻辑
-    }
-
-    /**
-     * 执行后记录日志
-     */
-    protected void after(JobExecutionContext context, SysJob sysJob, Exception e) {
-        SysJobLog sysJobLog = new SysJobLog();
-        sysJobLog.setJobName(sysJob.getJobName());
-        sysJobLog.setJobGroup(sysJob.getJobGroup());
-        sysJobLog.setInvokeTarget(sysJob.getInvokeTarget());
-        sysJobLog.setStartTime(new Date());
-        sysJobLog.setStopTime(new Date());
-        sysJobLog.setHostIp(IpUtils.getHostIp());
-
-        long runMs = sysJobLog.getStopTime().getTime() - sysJobLog.getStartTime().getTime();
-        sysJobLog.setJobMessage(sysJobLog.getJobName() + " 总共耗时：" + runMs + "毫秒");
-
-        if (e != null) {
-            sysJobLog.setStatus(com.make.common.constant.Constants.FAIL);
-            String err = com.make.common.utils.StringUtils.substring(com.make.common.utils.ExceptionUtil.getExceptionMessage(e), 0, 2000);
-            sysJobLog.setExceptionInfo(err);
-            log.error("任务执行失败: {}", sysJob.getJobName(), e);
-            jobLogRepository.recordFailure(sysJobLog, e);
-        } else {
-            sysJobLog.setStatus(com.make.common.constant.Constants.SUCCESS);
-            log.info("任务执行成功: {}，耗时: {}ms", sysJob.getJobName(), runMs);
-            jobLogRepository.recordSuccess(sysJobLog);
-        }
-    }
-
-    /**
-     * 抽象方法，由子类实现具体的任务执行逻辑
-     */
-    protected abstract void doExecute(JobExecutionContext context, SysJob sysJob) throws Exception;
+    protected abstract String getJobKey();
 }
