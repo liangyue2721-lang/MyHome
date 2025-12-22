@@ -120,7 +120,8 @@ public class SysJobController extends BaseController {
         }
 
         // 立即执行：通过 Redis 队列投递
-        taskDistributor.distributeNow(dbJob);
+        // 使用 scheduleJob(job, 0) 来立即执行
+        taskDistributor.scheduleJob(dbJob, 0);
 
         return success("任务已提交执行");
     }

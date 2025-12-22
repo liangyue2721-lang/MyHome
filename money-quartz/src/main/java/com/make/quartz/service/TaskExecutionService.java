@@ -10,6 +10,7 @@ import com.make.quartz.mapper.SysJobRuntimeMapper;
 import com.make.quartz.util.JobInvokeUtil;
 import com.make.quartz.util.NodeRegistry;
 import com.make.quartz.util.RedisMessageQueue;
+import com.make.quartz.util.TaskDistributor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -55,7 +56,7 @@ public class TaskExecutionService {
     private RedisTemplate<String, String> redisTemplate;
 
     @Autowired
-    private QuartzSchedulerService quartzSchedulerService;
+    private TaskDistributor taskDistributor;
 
     private static final String DEDUP_KEY_PREFIX = "mq:job:dedup:";
     private static final String RUNTIME_CACHE_PREFIX = "mq:job:runtime:";
@@ -81,22 +82,6 @@ public class TaskExecutionService {
      * 处理一条队列消息
      */
     private void handle(RedisMessageQueue.TaskMessage message) throws Exception {
-        // 0. 特殊处理 TRIGGER 消息
-        // 如果是 TRIGGER 类型，表示这是一个“定时触发信号”，不是直接执行的任务。
-        // 需要调用 QuartzSchedulerService 进行正式调度（三段写）
-        if (RedisMessageQueue.TaskMessage.TYPE_TRIGGER.equals(message.getMessageType())) {
-            SysJob sysJob = (SysJob) message.getJobData();
-            if (sysJob != null) {
-                // 将 jobGroup 还原 (如果之前被临时改了，这里其实拿到的是 JSON 反序列化的副本，不影响配置)
-                // 注意：我们在 scheduleNextIfNeeded 里可能改了 group，这里恢复或者直接用
-                // 更好的方式是依靠 messageType 判断，不依赖 group
-                // 重新调度：生成新 executionId -> Dedup -> DB -> Queue
-                quartzSchedulerService.scheduleJob(sysJob);
-                log.info("[EXEC_TRIGGER] Triggered new schedule for jobId={}", sysJob.getJobId());
-            }
-            return; // 触发完毕，ACK
-        }
-
         // 1. 获取 executionId (优先使用 message 中的, 其次 traceId)
         String execId = message.getExecutionId();
         if (StringUtils.isEmpty(execId)) {
@@ -121,6 +106,7 @@ public class TaskExecutionService {
                 // 视为重复投递，直接 ACK (返回即 ACK)
                 return;
             }
+            log.info("[RUNTIME_RUNNING] jobId={} executionId={} nodeId={}", message.getTaskId(), execId, nodeId);
 
             // 3. 执行任务
             SysJob sysJob = (SysJob) message.getJobData();
@@ -151,7 +137,7 @@ public class TaskExecutionService {
             String errorMsg = null;
 
             try {
-                log.info("[EXEC_START] executionId={} target={}", execId, sysJob.getInvokeTarget());
+                log.info("[EXEC_START] jobId={} executionId={} target={}", sysJob.getJobId(), execId, sysJob.getInvokeTarget());
                 executeOnce(sysJob);
             } catch (Exception e) {
                 status = "FAILED";
@@ -159,6 +145,7 @@ public class TaskExecutionService {
                 log.error("[EXEC_FAIL] executionId={}", execId, e);
             } finally {
                 long duration = System.currentTimeMillis() - startTime;
+                log.info("[EXEC_END] jobId={} executionId={} status={} durationMs={}", sysJob.getJobId(), execId, status, duration);
 
                 // 4. 结束尽力而为清理 (Insert Log -> Delete Runtime -> Delete Redis)
                 handleFinalCleanup(execId, sysJob, status, errorMsg, duration);
@@ -195,7 +182,8 @@ public class TaskExecutionService {
             logEntry.setDurationMs(duration);
             logEntry.setErrorMessage(errorMsg);
 
-            sysJobExecutionLogMapper.insertSysJobExecutionLog(logEntry);
+            int rows = sysJobExecutionLogMapper.insertSysJobExecutionLog(logEntry);
+            log.info("[EXEC_LOG_INSERT] jobId={} executionId={} status={} rows={}", sysJob != null ? sysJob.getJobId() : "?", executionId, status, rows);
 
         } catch (Exception e) {
             log.error("[EXEC_CLEANUP_LOG_FAIL] executionId={}", executionId, e);
@@ -203,7 +191,8 @@ public class TaskExecutionService {
 
         try {
             // 2. 删除 sys_job_runtime
-            sysJobRuntimeMapper.deleteByExecutionId(executionId);
+            int rows = sysJobRuntimeMapper.deleteByExecutionId(executionId);
+            log.info("[RUNTIME_DB_DELETE] jobId={} executionId={} rows={}", sysJob != null ? sysJob.getJobId() : "?", executionId, rows);
         } catch (Exception e) {
             log.error("[EXEC_CLEANUP_DB_FAIL] executionId={}", executionId, e);
         }
@@ -213,6 +202,8 @@ public class TaskExecutionService {
             String jobIdStr = (sysJob != null) ? String.valueOf(sysJob.getJobId()) : "*";
             redisTemplate.delete(RUNTIME_CACHE_PREFIX + executionId);
             redisTemplate.delete(DEDUP_KEY_PREFIX + jobIdStr);
+            log.info("[DEDUP_LOCK_DEL] jobId={}", jobIdStr);
+            log.info("[RUNTIME_CACHE_DEL] executionId={}", executionId);
         } catch (Exception e) {
              log.error("[EXEC_CLEANUP_REDIS_FAIL] executionId={}", executionId, e);
         }
@@ -248,19 +239,9 @@ public class TaskExecutionService {
 
             long nextAt = next.toInstant().toEpochMilli();
 
-            // 构造一个“自触发”消息
-            // 注意：这里我们传入 sysJob，但它会在 RedisMessageQueue 里被设置为 TRIGGER 类型
-            // 我们必须确保 RedisMessageQueue 知道这是一个 TRIGGER。
-            // 我们在 RedisMessageQueue.enqueueAt 里加了逻辑：如果 group 是 "QUARTZ_INTERNAL_TRIGGER"，则设为 TRIGGER。
-            // 所以这里我们必须 clone 并 setGroup。
+            // 走统一 Producer Pipeline
+            taskDistributor.scheduleJob(sysJob, nextAt);
 
-            SysJob nextJob = JSON.parseObject(JSON.toJSONString(sysJob), SysJob.class);
-            nextJob.setJobGroup("QUARTZ_INTERNAL_TRIGGER");
-            nextJob.setTraceId(null); // 清除旧 TraceId，让 RedisQueue 或 Scheduler 生成新的
-
-            RedisMessageQueue.getInstance().enqueueAt(nextJob, targetNode, priority, nextAt);
-
-            log.info("[EXEC_NEXT] jobId={} nextAt={}", sysJob.getJobId(), Instant.ofEpochMilli(nextAt));
         } catch (Exception e) {
             log.warn("[EXEC_NEXT_ERR] jobId={} cron={}", sysJob.getJobId(), cron, e);
         }

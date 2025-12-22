@@ -276,20 +276,15 @@ public class RedisMessageQueue implements SmartLifecycle {
         TaskMessage msg = new TaskMessage();
         msg.setTaskId(String.valueOf(sysJob.getJobId()));
 
-        // 优先使用 SysJob 中的 traceId 作为 executionId
-        // 如果是 TRIGGER 类型的消息，这里通常是空的或者需要生成新的
+        // 优先使用 SysJob 中的 traceId 作为 executionId (由 Producer Pipeline 统一生成)
         if (StringUtils.isNotEmpty(sysJob.getTraceId())) {
             msg.setExecutionId(sysJob.getTraceId());
         } else {
+            // 兜底（理论上 Producer 应必传）
             msg.setExecutionId(UUID.randomUUID().toString());
         }
 
-        // 判断是否是 TRIGGER 消息 (通过 group 约定)
-        if ("QUARTZ_INTERNAL_TRIGGER".equals(sysJob.getJobGroup())) {
-            msg.setMessageType(TaskMessage.TYPE_TRIGGER);
-        } else {
-            msg.setMessageType(TaskMessage.TYPE_EXECUTE);
-        }
+        msg.setMessageType(TaskMessage.TYPE_EXECUTE);
 
         msg.setTargetNode(targetNode);
         msg.setJobData(sysJob);
@@ -450,7 +445,7 @@ public class RedisMessageQueue implements SmartLifecycle {
      */
     public static class TaskMessage {
         public static final String TYPE_EXECUTE = "EXECUTE";
-        public static final String TYPE_TRIGGER = "TRIGGER";
+        // TRIGGER type removed as logic is simplified
 
         private String taskId;
         private String executionId;
@@ -459,7 +454,7 @@ public class RedisMessageQueue implements SmartLifecycle {
         private long timestamp;
 
         /**
-         * 消息类型：EXECUTE (执行任务) / TRIGGER (触发调度)
+         * 消息类型：EXECUTE
          */
         private String messageType = TYPE_EXECUTE;
 

@@ -4,8 +4,7 @@ import com.make.common.utils.StringUtils;
 import com.make.quartz.domain.SysJob;
 import com.make.quartz.mapper.SysJobMapper;
 import com.make.quartz.service.ISysJobService;
-import com.make.quartz.util.NodeRegistry;
-import com.make.quartz.util.RedisMessageQueue;
+import com.make.quartz.util.TaskDistributor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.support.CronExpression;
@@ -31,9 +30,11 @@ public class SysJobServiceImpl implements ISysJobService {
     private static final Logger log = LoggerFactory.getLogger(SysJobServiceImpl.class);
 
     private final SysJobMapper jobMapper;
+    private final TaskDistributor taskDistributor;
 
-    public SysJobServiceImpl(SysJobMapper jobMapper) {
+    public SysJobServiceImpl(SysJobMapper jobMapper, TaskDistributor taskDistributor) {
         this.jobMapper = jobMapper;
+        this.taskDistributor = taskDistributor;
     }
 
     /**
@@ -134,9 +135,7 @@ public class SysJobServiceImpl implements ISysJobService {
     }
 
     /**
-     * 计算下一次执行时间并写入 Redis 延迟队列
-     *
-     * <p>这是“调度生产”的唯一入口
+     * 计算下一次执行时间并调度（走统一 Producer Pipeline）
      */
     private void enqueueNextExecution(SysJob job) {
         String cron = job.getCronExpression();
@@ -154,20 +153,19 @@ public class SysJobServiceImpl implements ISysJobService {
             }
 
             long nextAtMillis = nextTime.toInstant().toEpochMilli();
-            String nodeId = NodeRegistry.getCurrentNodeId();
 
-            RedisMessageQueue.getInstance()
-                    .enqueueAt(job, nodeId, "NORMAL", nextAtMillis);
+            // 使用 TaskDistributor 统一调度
+            taskDistributor.scheduleJob(job, nextAtMillis);
 
             log.info(
-                    "[JOB_ENQUEUE] jobId={} name={} nextAt={}",
+                    "[JOB_SCHEDULE] jobId={} name={} nextAt={}",
                     job.getJobId(),
                     job.getJobName(),
                     nextAtMillis
             );
         } catch (Exception e) {
             log.warn(
-                    "[JOB_ENQUEUE_ERR] jobId={} cron={}",
+                    "[JOB_SCHEDULE_ERR] jobId={} cron={}",
                     job.getJobId(),
                     cron,
                     e
