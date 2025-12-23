@@ -59,11 +59,4 @@ public interface ISysJobExecutionLogService {
      * @return 结果
      */
     public int deleteSysJobExecutionLogById(Long id);
-
-    /**
-     * 查询所有调度日志数量
-     *
-     * @return 数量
-     */
-    public int countAll();
 }

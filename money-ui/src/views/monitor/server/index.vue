@@ -375,16 +375,9 @@
 
 <script>
 import { getServer, getClusterThreadPool, getClusterThreadPoolRedis, getClusterServerRedis } from "@/api/monitor/server";
+import { listRuntime } from "@/api/monitor/jobRuntime";
 import request from '@/utils/request';
 import * as echarts from "echarts";
-
-// API function for queue details
-function getQueueDetails() {
-  return request({
-    url: '/monitor/job/queue/details',
-    method: 'get'
-  })
-}
 
 export default {
   name: "Server",
@@ -671,8 +664,19 @@ export default {
     getQueueInfo() {
       // Avoid spinner flicker on refresh
       // this.queueLoading = true;
-      getQueueDetails().then(response => {
-        this.queueData = response.data || [];
+      listRuntime().then(response => {
+        const rows = response.rows || [];
+        this.queueData = rows.map(job => ({
+          queueName: job.jobGroup,
+          taskId: `${job.jobId}_${job.jobName}`,
+          targetNode: job.nodeId,
+          priority: 'NORMAL',
+          status: job.status,
+          traceId: job.executionId,
+          enqueueTime: job.enqueueTime,
+          completionTime: null,
+          retryCount: job.retryCount
+        }));
         // this.queueLoading = false;
       }).catch(() => {
         // this.queueLoading = false;

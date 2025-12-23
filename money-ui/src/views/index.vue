@@ -110,6 +110,8 @@ import {
   renderLoanRepaymentComparisonChart
 } from "@/api/finance/pieChart";
 import {listUser} from "@/api/stock/dropdown_component";
+import { listRuntime } from "@/api/monitor/jobRuntime";
+import { listJobLog } from "@/api/monitor/jobLog";
 import Cookies from 'js-cookie';
 
 export default {
@@ -174,16 +176,16 @@ export default {
   methods: {
     // --- Task Stats Method ---
     fetchTaskStats() {
-      request({
-        url: '/monitor/job/status-summary',
-        method: 'get'
-      }).then(response => {
-        // Handle various response formats
-        const data = response.data || response;
-        if (data) {
-          // If data is wrapped in 'data' field again (AjaxResult structure)
-          this.taskStats = data.data || data;
-        }
+      Promise.all([
+        listRuntime({ status: 'WAITING', pageSize: 1 }),
+        listRuntime({ status: 'RUNNING', pageSize: 1 }),
+        listJobLog({ pageSize: 1 })
+      ]).then(([pendingRes, executingRes, completedRes]) => {
+        const pending = pendingRes.total || 0;
+        const executing = executingRes.total || 0;
+        const completed = completedRes.total || 0;
+
+        this.taskStats = { pending, executing, completed };
       }).catch(error => {
         console.error("Failed to fetch task stats", error);
       });

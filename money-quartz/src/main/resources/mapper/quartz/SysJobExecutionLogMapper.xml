@@ -122,8 +122,4 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             #{id}
         </foreach>
     </delete>
-
-    <select id="countAll" resultType="int">
-        select count(1) from sys_job_execution_log
-    </select>
 </mapper>
