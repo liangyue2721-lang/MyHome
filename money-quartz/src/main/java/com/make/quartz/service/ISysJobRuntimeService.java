@@ -59,4 +59,6 @@ public interface ISysJobRuntimeService {
      * @return 结果
      */
     public int deleteSysJobRuntimeById(Long id);
+
+    public List<SysJobRuntime> selectActiveJobs();
 }

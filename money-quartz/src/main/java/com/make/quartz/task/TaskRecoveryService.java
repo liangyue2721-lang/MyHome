@@ -5,17 +5,17 @@ import com.make.common.utils.ThreadPoolUtil;
 import com.make.common.utils.StringUtils;
 import com.make.quartz.domain.SysJob;
 import com.make.quartz.domain.SysJobRuntime;
-import com.make.quartz.mapper.SysJobRuntimeMapper;
+import com.make.quartz.service.ISysJobRuntimeService;
 import com.make.quartz.service.TaskExecutionService;
 import com.make.quartz.util.NodeRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
+import javax.annotation.Resource;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -25,18 +25,18 @@ import java.util.concurrent.TimeUnit;
  * <p>定期检查 sys_job_runtime 中的活跃任务，如果 Redis 锁已丢失（Dedup Key missing），
  * 则认为该任务处于“僵死”或“丢失”状态，需要手动提交到线程池恢复执行。
  */
-@Component
+@Component("Task-Recovery-Service")
 public class TaskRecoveryService {
 
     private static final Logger log = LoggerFactory.getLogger(TaskRecoveryService.class);
 
-    @Autowired
-    private SysJobRuntimeMapper sysJobRuntimeMapper;
+    @Resource
+    private ISysJobRuntimeService sysJobRuntimeService;
 
-    @Autowired
+    @Resource
     private RedisTemplate<String, String> redisTemplate;
 
-    @Autowired
+    @Resource
     private TaskExecutionService taskExecutionService;
 
     private static final String DEDUP_KEY_PREFIX = "mq:job:dedup:";
@@ -69,7 +69,7 @@ public class TaskRecoveryService {
             SysJobRuntime query = new SysJobRuntime();
             query.setNodeId(currentNodeId);
             query.setStatus("RUNNING");
-            List<SysJobRuntime> localRunningTasks = sysJobRuntimeMapper.selectSysJobRuntimeList(query);
+            List<SysJobRuntime> localRunningTasks = sysJobRuntimeService.selectSysJobRuntimeList(query);
 
             if (localRunningTasks == null || localRunningTasks.isEmpty()) {
                 return;
@@ -90,7 +90,7 @@ public class TaskRecoveryService {
                     // 2. 重置状态为 WAITING
                     task.setStatus("WAITING");
                     task.setNodeId(null);
-                    sysJobRuntimeMapper.updateSysJobRuntime(task);
+                    sysJobRuntimeService.updateSysJobRuntime(task);
 
                     log.info("[RECOVERY_ZOMBIE_RESET] jobId={} execId={} -> WAITING. Ready for recovery loop.", jobId, execId);
 
@@ -111,7 +111,7 @@ public class TaskRecoveryService {
     public void recoverLostTasks() {
         try {
             // 1. 查询所有活跃任务 (WAITING / RUNNING)
-            List<SysJobRuntime> activeJobs = sysJobRuntimeMapper.selectActiveJobs();
+            List<SysJobRuntime> activeJobs = sysJobRuntimeService.selectActiveJobs();
             if (activeJobs == null || activeJobs.isEmpty()) {
                 return;
             }

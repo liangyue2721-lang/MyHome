@@ -1,12 +1,14 @@
 package com.make.quartz.service.impl;
 
 import java.util.List;
-        import com.make.common.utils.DateUtils;
-import org.springframework.beans.factory.annotation.Autowired;
+
+import com.make.common.utils.DateUtils;
 import org.springframework.stereotype.Service;
 import com.make.quartz.mapper.SysJobRuntimeMapper;
 import com.make.quartz.domain.SysJobRuntime;
 import com.make.quartz.service.ISysJobRuntimeService;
+
+import javax.annotation.Resource;
 
 /**
  * 实时任务（待执行 / 执行中）Service业务层处理
@@ -17,7 +19,7 @@ import com.make.quartz.service.ISysJobRuntimeService;
 @Service
 public class SysJobRuntimeServiceImpl implements ISysJobRuntimeService {
 
-    @Autowired
+    @Resource
     private SysJobRuntimeMapper sysJobRuntimeMapper;
 
     /**
@@ -50,8 +52,8 @@ public class SysJobRuntimeServiceImpl implements ISysJobRuntimeService {
      */
     @Override
     public int insertSysJobRuntime(SysJobRuntime sysJobRuntime) {
-                sysJobRuntime.setCreateTime(DateUtils.getNowDate());
-            return sysJobRuntimeMapper.insertSysJobRuntime(sysJobRuntime);
+        sysJobRuntime.setCreateTime(DateUtils.getNowDate());
+        return sysJobRuntimeMapper.insertSysJobRuntime(sysJobRuntime);
     }
 
     /**
@@ -62,7 +64,7 @@ public class SysJobRuntimeServiceImpl implements ISysJobRuntimeService {
      */
     @Override
     public int updateSysJobRuntime(SysJobRuntime sysJobRuntime) {
-                sysJobRuntime.setUpdateTime(DateUtils.getNowDate());
+        sysJobRuntime.setUpdateTime(DateUtils.getNowDate());
         return sysJobRuntimeMapper.updateSysJobRuntime(sysJobRuntime);
     }
 
@@ -86,5 +88,11 @@ public class SysJobRuntimeServiceImpl implements ISysJobRuntimeService {
     @Override
     public int deleteSysJobRuntimeById(Long id) {
         return sysJobRuntimeMapper.deleteSysJobRuntimeById(id);
+    }
+
+
+    @Override
+    public List<SysJobRuntime> selectActiveJobs() {
+        return sysJobRuntimeMapper.selectActiveJobs();
     }
 }
