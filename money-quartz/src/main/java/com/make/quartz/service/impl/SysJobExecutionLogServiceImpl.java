@@ -86,4 +86,14 @@ public class SysJobExecutionLogServiceImpl implements ISysJobExecutionLogService
     public int deleteSysJobExecutionLogById(Long id) {
         return sysJobExecutionLogMapper.deleteSysJobExecutionLogById(id);
     }
+
+    /**
+     * 查询所有调度日志数量
+     *
+     * @return 数量
+     */
+    @Override
+    public int countAll() {
+        return sysJobExecutionLogMapper.countAll();
+    }
 }

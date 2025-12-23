@@ -99,4 +99,12 @@ public interface SysJobRuntimeMapper {
      * @return 活跃任务列表
      */
     List<SysJobRuntime> selectActiveJobs();
+
+    /**
+     * 根据状态统计任务数量
+     *
+     * @param status 状态
+     * @return 数量
+     */
+    public int countByStatus(String status);
 }
