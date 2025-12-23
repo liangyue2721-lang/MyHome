@@ -95,4 +95,15 @@ public class SysJobRuntimeServiceImpl implements ISysJobRuntimeService {
     public List<SysJobRuntime> selectActiveJobs() {
         return sysJobRuntimeMapper.selectActiveJobs();
     }
+
+    /**
+     * 根据状态统计任务数量
+     *
+     * @param status 状态
+     * @return 数量
+     */
+    @Override
+    public int countByStatus(String status) {
+        return sysJobRuntimeMapper.countByStatus(status);
+    }
 }

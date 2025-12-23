@@ -146,4 +146,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         where status in ('WAITING', 'RUNNING')
     </select>
 
+    <select id="countByStatus" parameterType="String" resultType="int">
+        select count(1) from sys_job_runtime where status = #{status}
+    </select>
+
 </mapper>
