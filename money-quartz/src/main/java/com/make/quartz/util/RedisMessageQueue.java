@@ -11,6 +11,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
@@ -22,14 +24,15 @@ import java.util.concurrent.*;
  * Redis 队列调度与消费中心（Redis-only 引擎）
  *
  * <p>实现目标：
- * 1) 任务统一进入 Redis 队列（不再依赖 Quartz Trigger / @Scheduled 生产）
- * 2) 队列内部嵌入 Scheduled 时间检查：使用 Delay ZSET（score=scheduledAtMillis）
- * 3) 多实例：每个节点监听自己的 ready 队列；delay 推进由每个实例都可做（使用简单竞争即可）
+ * 1) 任务统一进入 Redis 全局队列（Global Queue）
+ * 2) 队列内部嵌入 Scheduled 时间检查：使用 Global Delay ZSET
+ * 3) 多实例竞争：每个节点通过 Lua 脚本原子抢占任务，并标记 Owner
  *
  * <p>结构：
- * - delay zset：TASK_DELAY_ZSET_PREFIX + nodeId
- * - ready list：TASK_QUEUE_PREFIX + nodeId + (HIGH/NORMAL)
- * - processing list：TASK_QUEUE_PREFIX + nodeId + PROCESSING（用于防丢与回补）
+ * - 全局队列：mq:task:global:high / mq:task:global:normal
+ * - 全局 Delay ZSET：mq:delay:global
+ * - 处理中队列（归属）：mq:task:processing:{ownerIp}
+ * - 任务元数据：mq:task:meta:{executionId} (owner, processingAt)
  */
 @Component
 public class RedisMessageQueue implements SmartLifecycle {
@@ -41,18 +44,13 @@ public class RedisMessageQueue implements SmartLifecycle {
     private final RedisTemplate<String, String> redisTemplate;
     private final QuartzProperties quartzProperties;
 
-    /**
-     * 每节点 ready 队列前缀
-     */
-    private static final String TASK_QUEUE_PREFIX = "mq:task:";
-    private static final String HIGH_PRIORITY_SUFFIX = ":high";
-    private static final String NORMAL_PRIORITY_SUFFIX = ":normal";
-    private static final String PROCESSING_QUEUE_SUFFIX = ":processing";
-
-    /**
-     * 每节点 delay zset 前缀
-     */
-    private static final String TASK_DELAY_ZSET_PREFIX = "mq:delay:";
+    // Keys
+    private static final String GLOBAL_QUEUE_HIGH = "mq:task:global:high";
+    private static final String GLOBAL_QUEUE_NORMAL = "mq:task:global:normal";
+    private static final String GLOBAL_DELAY_ZSET = "mq:delay:global";
+    private static final String PROCESSING_PREFIX = "mq:task:processing:";
+    private static final String META_PREFIX = "mq:task:meta:";
+    private static final String RECLAIM_LOCK_PREFIX = "mq:task:reclaim:lock:";
 
     /**
      * 是否运行（生命周期）
@@ -60,7 +58,7 @@ public class RedisMessageQueue implements SmartLifecycle {
     private volatile boolean running = false;
 
     /**
-     * 当前节点（由 TaskExecutionService 传入）
+     * 当前节点 ID (IP)
      */
     private volatile String currentNodeId;
 
@@ -79,13 +77,18 @@ public class RedisMessageQueue implements SmartLifecycle {
      */
     private ScheduledExecutorService internalScheduler;
 
+    // Lua Scripts
+    private DefaultRedisScript<String> pollScript;
+    private DefaultRedisScript<Long> promoteScript;
+    private DefaultRedisScript<Long> reclaimScript;
+
     public RedisMessageQueue(RedisTemplate<String, String> redisTemplate, QuartzProperties quartzProperties) {
         this.redisTemplate = redisTemplate;
         this.quartzProperties = quartzProperties;
     }
 
     /**
-     * 单例获取（兼容你工程里 existing 用法）
+     * 单例获取
      */
     public static RedisMessageQueue getInstance() {
         if (instance == null) {
@@ -94,13 +97,11 @@ public class RedisMessageQueue implements SmartLifecycle {
         return instance;
     }
 
-    /**
-     * 初始化线程池与内部调度器
-     *
-     * <p>注意：队列“是否开始消费”由 startListening 控制（会设置 running=true）。
-     */
     @PostConstruct
     public void init() {
+        // Initialize Lua Scripts
+        initLuaScripts();
+
         int cpu = Runtime.getRuntime().availableProcessors();
 
         this.listenerExecutor = (ThreadPoolExecutor) ThreadPoolUtil.createCustomThreadPool(
@@ -123,170 +124,254 @@ public class RedisMessageQueue implements SmartLifecycle {
             return t;
         });
 
-        // 启动定时任务：推进 Delayed 消息
+        // 1. 启动定时任务：推进 Delayed 消息 (Global)
         this.internalScheduler.scheduleWithFixedDelay(() -> {
-            if (running && currentNodeId != null) {
+            if (running) {
                 try {
-                    String highReady = TASK_QUEUE_PREFIX + currentNodeId + HIGH_PRIORITY_SUFFIX;
-                    String normalReady = TASK_QUEUE_PREFIX + currentNodeId + NORMAL_PRIORITY_SUFFIX;
-                    promoteDueDelayedMessages(currentNodeId, highReady, normalReady);
+                    promoteDueDelayedMessages();
                 } catch (Exception e) {
                     log.warn("[RMQ_PROMOTE_ERR] {}", e.getMessage());
                 }
             }
         }, 1000, 1000, TimeUnit.MILLISECONDS);
 
-        // 启动定时任务：回补 Processing 超时消息
+        // 2. 启动定时任务：全局回补 Processing 超时消息
         this.internalScheduler.scheduleWithFixedDelay(() -> {
-            if (running && currentNodeId != null) {
+            if (running) {
                 try {
-                    String processing = TASK_QUEUE_PREFIX + currentNodeId + PROCESSING_QUEUE_SUFFIX;
-                    String highReady = TASK_QUEUE_PREFIX + currentNodeId + HIGH_PRIORITY_SUFFIX;
-                    String normalReady = TASK_QUEUE_PREFIX + currentNodeId + NORMAL_PRIORITY_SUFFIX;
-                    reclaimProcessingTimeout(currentNodeId, processing, highReady, normalReady);
+                    reclaimGlobalProcessingTimeout();
                 } catch (Exception e) {
                     log.warn("[RMQ_RECLAIM_ERR] {}", e.getMessage());
                 }
             }
         }, 10000, 10000, TimeUnit.MILLISECONDS);
 
-        log.info("[RMQ_INIT] RedisMessageQueue init done. listenerCore={}, consumerCore={}",
+        log.info("[RMQ_INIT] RedisMessageQueue init done (Competitive Mode). listenerCore={}, consumerCore={}",
                 listenerExecutor.getCorePoolSize(), consumerExecutor.getCorePoolSize());
     }
 
+    private void initLuaScripts() {
+        // Script: POLL_TASK
+        // KEYS[1]=GlobalHigh, KEYS[2]=GlobalNormal
+        // ARGV[1]=ownerIp, ARGV[2]=nowMillis, ARGV[3]=metaPrefix, ARGV[4]=processingPrefix
+        String pollLua = "local msg = redis.call('RPOP', KEYS[1])\n" +
+                "local src = 'HIGH'\n" +
+                "if not msg then\n" +
+                "    msg = redis.call('RPOP', KEYS[2])\n" +
+                "    src = 'NORMAL'\n" +
+                "end\n" +
+                "if not msg then return nil end\n" +
+                "\n" +
+                "local p = string.find(msg, \"\\n\")\n" +
+                "if not p then\n" +
+                "    -- Invalid format, move to dead letter queue\n" +
+                "    redis.call('LPUSH', 'mq:task:dead', msg)\n" +
+                "    return nil\n" +
+                "end\n" +
+                "\n" +
+                "local header = string.sub(msg, 1, p-1)\n" +
+                "local executionId = header\n" +
+                "local sep = string.find(header, \"|\")\n" +
+                "if sep then executionId = string.sub(header, 1, sep-1) end\n" +
+                "\n" +
+                "local metaKey = ARGV[3] .. executionId\n" +
+                "local processingKey = ARGV[4] .. ARGV[1]\n" +
+                "\n" +
+                "redis.call('HSET', metaKey, 'owner', ARGV[1], 'processingAt', ARGV[2])\n" +
+                "redis.call('LPUSH', processingKey, msg)\n" +
+                "\n" +
+                "return msg";
+        this.pollScript = new DefaultRedisScript<>(pollLua, String.class);
+
+        // Script: PROMOTE_TASK
+        // KEYS[1]=DelayZSet, KEYS[2]=GlobalHigh, KEYS[3]=GlobalNormal
+        // ARGV[1]=nowMillis, ARGV[2]=batch
+        String promoteLua = "local now = tonumber(ARGV[1])\n" +
+                "local batch = tonumber(ARGV[2])\n" +
+                "local due = redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', now, 'LIMIT', 0, batch)\n" +
+                "if (#due == 0) then return 0 end\n" +
+                "\n" +
+                "local pushed = 0\n" +
+                "for i, msg in ipairs(due) do\n" +
+                "    if redis.call('ZREM', KEYS[1], msg) == 1 then\n" +
+                "        local p = string.find(msg, \"\\n\")\n" +
+                "        local priority = 'NORMAL'\n" +
+                "        if p then\n" +
+                "            local header = string.sub(msg, 1, p-1)\n" +
+                "            local sep = string.find(header, \"|\")\n" +
+                "            if sep then\n" +
+                "                 local pri = string.sub(header, sep+1)\n" +
+                "                 if pri == 'HIGH' then priority = 'HIGH' end\n" +
+                "            end\n" +
+                "        end\n" +
+                "        if priority == 'HIGH' then\n" +
+                "            redis.call('LPUSH', KEYS[2], msg)\n" +
+                "        else\n" +
+                "            redis.call('LPUSH', KEYS[3], msg)\n" +
+                "        end\n" +
+                "        pushed = pushed + 1\n" +
+                "    end\n" +
+                "end\n" +
+                "return pushed";
+        this.promoteScript = new DefaultRedisScript<>(promoteLua, Long.class);
+
+        // Script: RECLAIM_TASK
+        // KEYS[1]=processingQueue, KEYS[2]=metaKey, KEYS[3]=TargetQueue
+        // ARGV[1]=rawMsg
+        String reclaimLua = "local removed = redis.call('LREM', KEYS[1], 1, ARGV[1])\n" +
+                "if removed > 0 then\n" +
+                "    redis.call('DEL', KEYS[2])\n" +
+                "    redis.call('LPUSH', KEYS[3], ARGV[1])\n" +
+                "    return 1\n" +
+                "end\n" +
+                "return 0";
+        this.reclaimScript = new DefaultRedisScript<>(reclaimLua, Long.class);
+    }
+
     /**
-     * 启动对某个节点队列的监听（消费入口）
+     * 启动监听（Global Competition）
      *
-     * @param nodeId  节点ID
+     * @param nodeId  当前节点ID (IP) - 仅作为 Owner 标识
      * @param handler 消息处理器
      */
     public void startListening(String nodeId, MessageHandler handler) {
-
-        // ===== 关键修复点：创建 final 快照 =====
-        final String fixedNodeId = nodeId;
-        final String highReady = TASK_QUEUE_PREFIX + fixedNodeId + HIGH_PRIORITY_SUFFIX;
-        final String normalReady = TASK_QUEUE_PREFIX + fixedNodeId + NORMAL_PRIORITY_SUFFIX;
-        final String processing = TASK_QUEUE_PREFIX + fixedNodeId + PROCESSING_QUEUE_SUFFIX;
-
-        this.currentNodeId = fixedNodeId;
+        this.currentNodeId = nodeId;
         this.running = true;
 
         listenerExecutor.submit(() -> {
+            log.info("[RMQ_START] Started global listening on node={}", currentNodeId);
             while (running && !Thread.currentThread().isInterrupted()) {
                 try {
-                    String msgJson = redisTemplate.opsForList()
-                            .rightPopAndLeftPush(highReady, processing, 2, TimeUnit.SECONDS);
+                    // Lua Poll
+                    String msgRaw = redisTemplate.execute(pollScript,
+                            Arrays.asList(GLOBAL_QUEUE_HIGH, GLOBAL_QUEUE_NORMAL),
+                            currentNodeId, String.valueOf(System.currentTimeMillis()), META_PREFIX, PROCESSING_PREFIX);
 
-                    if (msgJson == null) {
-                        msgJson = redisTemplate.opsForList()
-                                .rightPopAndLeftPush(normalReady, processing, 2, TimeUnit.SECONDS);
-                    }
-
-                    if (msgJson == null) {
+                    if (msgRaw == null) {
+                        // Empty queue, sleep to avoid spin
+                        Thread.sleep(200);
                         continue;
                     }
 
+                    // Parse: <executionId>|<priority>\n<json>
+                    int p = msgRaw.indexOf('\n');
+                    if (p < 0) continue; // Should be handled by Lua (dropped to dead queue)
 
-                    final String finalMsgJson = msgJson;
+                    String header = msgRaw.substring(0, p);
+                    String json = msgRaw.substring(p + 1);
 
-                    TaskMessage msg = JSON.parseObject(finalMsgJson, TaskMessage.class);
-                    msg.setOriginalJson(finalMsgJson);
+                    final String finalMsgRaw = msgRaw; // for ACK/Requeue
+
+                    TaskMessage msg = JSON.parseObject(json, TaskMessage.class);
+                    msg.setOriginalJson(finalMsgRaw); // Store full raw format for consistent remove
+
+                    // Double check executionId from header matches payload
+                    String execIdFromHeader = header.contains("|") ? header.substring(0, header.indexOf('|')) : header;
+                    if (msg.getExecutionId() == null) {
+                        msg.setExecutionId(execIdFromHeader);
+                    }
 
                     // 提交到消费线程池
                     consumerExecutor.execute(() -> {
                         try {
                             handler.handle(msg);
-                            acknowledge(nodeId, processing, finalMsgJson);
+                            acknowledge(msg);
                         } catch (Exception e) {
-                            requeue(nodeId, processing, msg, finalMsgJson, e);
+                            requeue(msg, e);
                         }
                     });
 
-
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
                 } catch (Exception e) {
-                    log.warn("[RMQ_LISTEN_ERR] nodeId={}", fixedNodeId, e);
+                    log.warn("[RMQ_LISTEN_ERR] {}", e.getMessage());
+                    try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
                 }
             }
         });
     }
 
-
-    /**
-     * 停止监听（停止消费）
-     */
     public void stopListening() {
         this.running = false;
     }
 
     /**
-     * ACK：从 processing 中移除消息，代表成功消费
+     * ACK: Remove from local processing queue and clear metadata
      */
-    public void acknowledge(String nodeId, String processingQueueKey, String originalJson) {
+    public void acknowledge(TaskMessage msg) {
         try {
-            redisTemplate.opsForList().remove(processingQueueKey, 1, originalJson);
+            String processingKey = PROCESSING_PREFIX + currentNodeId;
+            // Remove raw message
+            redisTemplate.opsForList().remove(processingKey, 1, msg.getOriginalJson());
+            // Remove metadata
+            String execId = msg.getExecutionId();
+            if (StringUtils.isNotEmpty(execId)) {
+                redisTemplate.delete(META_PREFIX + execId);
+            }
         } catch (Exception e) {
-            log.warn("[RMQ_ACK_ERR] nodeId={}", nodeId, e);
+            log.warn("[RMQ_ACK_ERR] executionId={} {}", msg.getExecutionId(), e.getMessage());
         }
     }
 
     /**
-     * 失败回队列：根据 retryCount 决定是否延迟重试
+     * Requeue: Remove from processing, update retry, delay push back
      */
-    private void requeue(String nodeId, String processingQueueKey, TaskMessage msg, String originalJson, Exception e) {
+    private void requeue(TaskMessage msg, Exception e) {
         try {
-            // 从 processing 移除
-            redisTemplate.opsForList().remove(processingQueueKey, 1, originalJson);
+            String processingKey = PROCESSING_PREFIX + currentNodeId;
+            redisTemplate.opsForList().remove(processingKey, 1, msg.getOriginalJson());
+
+            String execId = msg.getExecutionId();
+            if (StringUtils.isNotEmpty(execId)) {
+                // Delete meta so it can be picked up again cleanly later
+                redisTemplate.delete(META_PREFIX + execId);
+            }
 
             int retry = msg.getRetryCount();
             msg.setRetryCount(retry + 1);
 
             long now = System.currentTimeMillis();
-            long backoff = Math.min(60_000L, 2000L * (long) Math.pow(2, retry)); // 指数退避封顶60s
+            long backoff = Math.min(60_000L, 2000L * (long) Math.pow(2, retry));
             long nextAt = now + backoff;
-
             msg.setScheduledAt(nextAt);
 
-            // 放入 delay zset，等到期再推进
-            String delayKey = TASK_DELAY_ZSET_PREFIX + nodeId;
-            redisTemplate.opsForZSet().add(delayKey, JSON.toJSONString(msg), nextAt);
+            // Re-construct raw format
+            String priority = StringUtils.isEmpty(msg.getPriority()) ? "NORMAL" : msg.getPriority();
+            String newJson = JSON.toJSONString(msg);
+            String newRaw = execId + "|" + priority + "\n" + newJson;
+            msg.setOriginalJson(newRaw);
 
-            log.warn("[RMQ_REQUEUE] nodeId={} taskId={} retry={} nextAt={} err={}",
-                    nodeId, msg.getTaskId(), msg.getRetryCount(), nextAt, e.getMessage());
+            redisTemplate.opsForZSet().add(GLOBAL_DELAY_ZSET, newRaw, nextAt);
+
+            log.warn("[RMQ_REQUEUE] executionId={} retry={} nextAt={} err={}",
+                    execId, msg.getRetryCount(), nextAt, e.getMessage());
         } catch (Exception ex) {
-            log.error("[RMQ_REQUEUE_ERR] nodeId={}", nodeId, ex);
+            log.error("[RMQ_REQUEUE_ERR] executionId={}", msg.getExecutionId(), ex);
         }
     }
 
     /**
-     * 对外接口：提交一个“立即执行”的 SysJob（会进入 ready 队列）
+     * Enqueue Now (Compatible signature, ignores targetNode)
      */
     public void enqueueNow(SysJob sysJob, String targetNode, String priority) {
         enqueueAt(sysJob, targetNode, priority, System.currentTimeMillis());
     }
 
     /**
-     * 对外接口：提交一个“指定时间执行”的 SysJob（会进入 delay zset）
-     *
-     * @param sysJob            任务
-     * @param targetNode        目标节点
-     * @param priority          优先级 HIGH/NORMAL
-     * @param scheduledAtMillis 计划执行时间（毫秒）
+     * Enqueue At (Global, Competitive)
+     * <p>Note: targetNode is ignored in competitive model.
      */
     public void enqueueAt(SysJob sysJob, String targetNode, String priority, long scheduledAtMillis) {
         TaskMessage msg = new TaskMessage();
         msg.setTaskId(String.valueOf(sysJob.getJobId()));
 
-        // 优先使用 SysJob 中的 traceId 作为 executionId (由 Producer Pipeline 统一生成)
-        if (StringUtils.isNotEmpty(sysJob.getTraceId())) {
-            msg.setExecutionId(sysJob.getTraceId());
-        } else {
-            // 兜底（理论上 Producer 应必传）
-            msg.setExecutionId(UUID.randomUUID().toString());
+        String execId = sysJob.getTraceId();
+        if (StringUtils.isEmpty(execId)) {
+            execId = UUID.randomUUID().toString();
         }
-
+        msg.setExecutionId(execId);
         msg.setMessageType(TaskMessage.TYPE_EXECUTE);
-
-        msg.setTargetNode(targetNode);
         msg.setJobData(sysJob);
         msg.setTimestamp(System.currentTimeMillis());
         msg.setTraceId(sysJob.getTraceId());
@@ -294,106 +379,118 @@ public class RedisMessageQueue implements SmartLifecycle {
         msg.setRetryCount(0);
         msg.setScheduledAt(scheduledAtMillis);
 
-        String nodeId = StringUtils.isEmpty(targetNode) ? currentNodeId : targetNode;
-        if (StringUtils.isEmpty(nodeId)) {
-            // 没有 nodeId 时退化为当前节点
-            nodeId = currentNodeId;
-        }
-
-        if (scheduledAtMillis <= System.currentTimeMillis()) {
-            pushToReady(nodeId, msg);
-        } else {
-            String delayKey = TASK_DELAY_ZSET_PREFIX + nodeId;
-            redisTemplate.opsForZSet().add(delayKey, JSON.toJSONString(msg), scheduledAtMillis);
-        }
-    }
-
-    /**
-     * 将消息推送到 ready list（按优先级）
-     */
-    private void pushToReady(String nodeId, TaskMessage msg) {
-        String highReady = TASK_QUEUE_PREFIX + nodeId + HIGH_PRIORITY_SUFFIX;
-        String normalReady = TASK_QUEUE_PREFIX + nodeId + NORMAL_PRIORITY_SUFFIX;
-
+        // Format: <executionId>|<priority>\n<json>
         String json = JSON.toJSONString(msg);
-        if ("HIGH".equalsIgnoreCase(msg.getPriority())) {
-            redisTemplate.opsForList().leftPush(highReady, json);
+        String rawMsg = execId + "|" + msg.getPriority() + "\n" + json;
+        msg.setOriginalJson(rawMsg);
+
+        long now = System.currentTimeMillis();
+        if (scheduledAtMillis <= now) {
+            if ("HIGH".equalsIgnoreCase(priority)) {
+                redisTemplate.opsForList().leftPush(GLOBAL_QUEUE_HIGH, rawMsg);
+            } else {
+                redisTemplate.opsForList().leftPush(GLOBAL_QUEUE_NORMAL, rawMsg);
+            }
         } else {
-            redisTemplate.opsForList().leftPush(normalReady, json);
+            redisTemplate.opsForZSet().add(GLOBAL_DELAY_ZSET, rawMsg, scheduledAtMillis);
         }
     }
 
     /**
-     * 推进 delay zset 到期消息进入 ready 队列
-     *
-     * <p>Scheduled 时间检查嵌入点：队列内部按 scheduledAtMillis(score) 判断是否到期。
+     * Promote Delayed Messages (Global)
      */
-    private void promoteDueDelayedMessages(String nodeId, String highReady, String normalReady) {
-        String delayKey = TASK_DELAY_ZSET_PREFIX + nodeId;
-
+    private void promoteDueDelayedMessages() {
         long now = System.currentTimeMillis();
         int batch = 50;
 
-        Set<String> due = redisTemplate.opsForZSet().rangeByScore(delayKey, 0, now, 0, batch);
-        if (due == null || due.isEmpty()) {
-            return;
-        }
+        // Use Lua for atomicity
+        Long count = redisTemplate.execute(promoteScript,
+                Arrays.asList(GLOBAL_DELAY_ZSET, GLOBAL_QUEUE_HIGH, GLOBAL_QUEUE_NORMAL),
+                String.valueOf(now), String.valueOf(batch));
 
-        // 先 remove 再 push：避免重复推进
-        Long removed = redisTemplate.opsForZSet().remove(delayKey, due.toArray());
-        if (removed == null || removed <= 0) {
-            return;
+        if (count != null && count > 0) {
+            log.debug("[RMQ_PROMOTE] Promoted {} tasks", count);
         }
-
-        for (String json : due) {
-            TaskMessage msg = JSON.parseObject(json, TaskMessage.class);
-            // 到期直接进入 ready
-            if ("HIGH".equalsIgnoreCase(msg.getPriority())) {
-                redisTemplate.opsForList().leftPush(highReady, json);
-            } else {
-                redisTemplate.opsForList().leftPush(normalReady, json);
-            }
-        }
-
-        log.debug("[RMQ_PROMOTE] nodeId={} promoted={}", nodeId, due.size());
     }
 
     /**
-     * processing 超时回补（避免消费者崩溃导致 processing 堵死）
+     * Reclaim Processing Timeout (Global Scan)
+     * Scans all active nodes' processing queues for stuck tasks.
      */
-    private void reclaimProcessingTimeout(String nodeId, String processingQueueKey, String highReady, String normalReady) {
-        // 这里使用一个简化策略：
-        // 1) processing 队列中消息如果存在超过 timeout，则回补到 delay（立即执行）
-        // 2) timeout 由配置决定
-        long timeoutMs = 30_000L;
+    private void reclaimGlobalProcessingTimeout() {
+        // 1. Get all known nodes
+        Set<String> members = redisTemplate.opsForSet().members("mq:nodes:alive");
+        if (members == null) members = Collections.emptySet();
+        Set<String> nodes = new HashSet<>(members);
 
-        Long len = redisTemplate.opsForList().size(processingQueueKey);
-        if (len == null || len <= 0) return;
-
-        // 批量扫描处理（上限）
-        int scan = (int) Math.min(len, 100);
-
-        List<String> items = redisTemplate.opsForList().range(processingQueueKey, -scan, -1);
-        if (items == null || items.isEmpty()) return;
+        // Add current node explicitly just in case
+        if (currentNodeId != null) nodes.add(currentNodeId);
 
         long now = System.currentTimeMillis();
-        for (String json : items) {
+        long timeoutMs = 60_000L; // 60s timeout
+
+        for (String nodeIp : nodes) {
+            String processingKey = PROCESSING_PREFIX + nodeIp;
+            reclaimFromNode(processingKey, now, timeoutMs);
+        }
+    }
+
+    private void reclaimFromNode(String processingKey, long now, long timeoutMs) {
+        // Only peek top items (oldest) to avoid blocking/scanning too much
+        List<String> items = redisTemplate.opsForList().range(processingKey, -50, -1);
+        if (items == null || items.isEmpty()) return;
+
+        for (String rawMsg : items) {
             try {
-                TaskMessage msg = JSON.parseObject(json, TaskMessage.class);
-                // 粗略：timestamp 超时即回补（你也可改为 payload 中写入 processingAt）
-                if (now - msg.getTimestamp() > timeoutMs) {
-                    // 从 processing 移除
-                    redisTemplate.opsForList().remove(processingQueueKey, 1, json);
-                    // 立即回补到 ready
-                    if ("HIGH".equalsIgnoreCase(msg.getPriority())) {
-                        redisTemplate.opsForList().leftPush(highReady, json);
-                    } else {
-                        redisTemplate.opsForList().leftPush(normalReady, json);
+                int p = rawMsg.indexOf('\n');
+                if (p < 0) continue;
+                String header = rawMsg.substring(0, p);
+                String execId = header.contains("|") ? header.substring(0, header.indexOf('|')) : header;
+
+                // Check Meta
+                String metaKey = META_PREFIX + execId;
+                Object processingAtObj = redisTemplate.opsForHash().get(metaKey, "processingAt");
+
+                boolean needReclaim = false;
+                if (processingAtObj == null) {
+                    // Meta missing implies inconsistent state (maybe failed ACK or lost meta), treat as reclaimable
+                    needReclaim = true;
+                } else {
+                    long processingAt = Long.parseLong(processingAtObj.toString());
+                    if (now - processingAt > timeoutMs) {
+                        needReclaim = true;
                     }
-                    log.warn("[RMQ_RECLAIM] nodeId={} taskId={} reclaimed from processing", nodeId, msg.getTaskId());
                 }
-            } catch (Exception ignore) {
-                // ignore parse errors
+
+                if (needReclaim) {
+                    // Try acquire lock to reclaim to avoid contention
+                    String lockKey = RECLAIM_LOCK_PREFIX + execId;
+                    Boolean locked = redisTemplate.opsForValue().setIfAbsent(lockKey, "1", 5, TimeUnit.SECONDS);
+
+                    if (locked != null && locked) {
+                        // Determine Target Queue from header
+                        String priority = "NORMAL";
+                        if (header.contains("|")) {
+                             String pri = header.substring(header.indexOf('|') + 1);
+                             if ("HIGH".equals(pri)) priority = "HIGH";
+                        }
+                        String targetQueue = "HIGH".equals(priority) ? GLOBAL_QUEUE_HIGH : GLOBAL_QUEUE_NORMAL;
+
+                        // Execute Atomic Reclaim Script
+                        Long result = redisTemplate.execute(reclaimScript,
+                                Arrays.asList(processingKey, metaKey, targetQueue),
+                                rawMsg);
+
+                        if (result != null && result > 0) {
+                            log.warn("[RMQ_RECLAIM] Reclaimed stuck task: {} from node={}", execId, processingKey);
+                        }
+
+                        // Clean lock
+                        redisTemplate.delete(lockKey);
+                    }
+                }
+            } catch (Exception e) {
+                // ignore one bad item to continue scanning others
             }
         }
     }
@@ -415,9 +512,6 @@ public class RedisMessageQueue implements SmartLifecycle {
         return this.running;
     }
 
-    /**
-     * 生命周期优先级：尽量早启动
-     */
     @Override
     public int getPhase() {
         return Integer.MIN_VALUE;
@@ -433,36 +527,20 @@ public class RedisMessageQueue implements SmartLifecycle {
 
     // ========= Message Types =========
 
-    /**
-     * 消息处理器接口
-     */
     public interface MessageHandler {
         void handle(TaskMessage message) throws Exception;
     }
 
-    /**
-     * 队列消息体（包含 scheduledAt 以支持队列内部定时检查）
-     */
     public static class TaskMessage {
         public static final String TYPE_EXECUTE = "EXECUTE";
-        // TRIGGER type removed as logic is simplified
 
         private String taskId;
         private String executionId;
         private String targetNode;
         private Object jobData;
         private long timestamp;
-
-        /**
-         * 消息类型：EXECUTE
-         */
         private String messageType = TYPE_EXECUTE;
-
-        /**
-         * 计划执行时间（毫秒）
-         */
         private long scheduledAt;
-
         private Map<String, Object> payload;
         private String traceId;
         private int retryCount = 0;
