@@ -1,5 +1,5 @@
-Application Version: 3.8.9
-Spring Boot Version: 2.5.15
+Application Version: ${make.version}
+Spring Boot Version: ${spring-boot.version}
 Flowable Version: 6.8.0
 Druid Version: 1.2.23
 Bitwalker Version: 1.21
@@ -17,7 +17,7 @@ Logback Version: 1.2.13
 Spring Security Version: 5.7.12
 Spring Framework Version: 5.3.39
 Maven JAR Plugin Version: 3.1.1
-Java Version: 17.0.13
+Java Version: 1.8
 Project Build Source Encoding: UTF-8
 Project Reporting Output Encoding: UTF-8
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
