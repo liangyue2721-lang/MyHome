@@ -19,7 +19,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         }
 )
 
-//@EnableScheduling
+@EnableScheduling
 public class RuoYiApplication {
 
     /**

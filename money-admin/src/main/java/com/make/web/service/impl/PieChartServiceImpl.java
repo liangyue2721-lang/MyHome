@@ -358,16 +358,8 @@ public class PieChartServiceImpl implements IPieChartService {
         dbData.add(new LoanTotalWithInterestRepaymentPieChart("已偿还利息", totalInterest.doubleValue()));
         dbData.add(new LoanTotalWithInterestRepaymentPieChart("未还利息",
                 totalInterestAmount.subtract(totalInterest).setScale(2, RoundingMode.HALF_UP).doubleValue()));
-        if (id.equals(2L)) {
-            dbData.add(new LoanTotalWithInterestRepaymentPieChart("未还本金",
-                    new BigDecimal("660000").subtract(totalPrincipal).setScale(2, RoundingMode.HALF_UP).doubleValue()));
-        } else if (id.equals(3L)) {
-            dbData.add(new LoanTotalWithInterestRepaymentPieChart("未还本金",
-                    new BigDecimal("0").subtract(totalPrincipal).setScale(2, RoundingMode.HALF_UP).doubleValue()));
-        } else {
-            dbData.add(new LoanTotalWithInterestRepaymentPieChart("未还本金",
-                    new BigDecimal("0").subtract(totalPrincipal).setScale(2, RoundingMode.HALF_UP).doubleValue()));
-        }
+
+        dbData.add(new LoanTotalWithInterestRepaymentPieChart("未还本金", 0.00));
 
         // 3.添加累加每月偿还的本金与利息到列表中返回
         if (!CollectionUtils.isEmpty(dbData)) {

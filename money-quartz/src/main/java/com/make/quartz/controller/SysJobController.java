@@ -5,12 +5,18 @@ import com.make.common.core.domain.AjaxResult;
 import com.make.common.core.page.TableDataInfo;
 import com.make.common.utils.StringUtils;
 import com.make.quartz.domain.SysJob;
+import com.make.quartz.domain.SysJobRuntime;
 import com.make.quartz.service.ISysJobService;
+import com.make.quartz.service.ISysJobRuntimeService;
+import com.make.quartz.mapper.SysJobLogMapper;
+import com.make.quartz.domain.SysJobLog;
 import com.make.quartz.util.TaskDistributor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 
 /**
  * 定时任务调度控制器（Redis-only 调度模型）
@@ -29,6 +35,43 @@ public class SysJobController extends BaseController {
 
     @Autowired
     private TaskDistributor taskDistributor;
+
+    @Autowired
+    private ISysJobRuntimeService sysJobRuntimeService;
+
+    @Autowired
+    private SysJobLogMapper sysJobLogMapper;
+
+    /**
+     * 查询任务状态统计（待执行、执行中、已完成）
+     */
+    @GetMapping("/status-summary")
+    public AjaxResult getStatusSummary() {
+        Map<String, Long> summary = new HashMap<>();
+
+        // 1. 获取待执行任务数 (SysJobRuntime status = 'WAITING')
+        SysJobRuntime waitingQuery = new SysJobRuntime();
+        waitingQuery.setStatus("WAITING");
+        List<SysJobRuntime> waitingList = sysJobRuntimeService.selectSysJobRuntimeList(waitingQuery);
+        long pendingCount = waitingList.size();
+
+        // 2. 获取执行中任务数 (SysJobRuntime status = 'RUNNING')
+        SysJobRuntime runningQuery = new SysJobRuntime();
+        runningQuery.setStatus("RUNNING");
+        List<SysJobRuntime> runningList = sysJobRuntimeService.selectSysJobRuntimeList(runningQuery);
+        long executingCount = runningList.size();
+
+        // 3. 获取已完成任务数 (SysJobLog status = '0' 即 SUCCESS)
+        SysJobLog logQuery = new SysJobLog();
+        logQuery.setStatus("0"); // 0=成功
+        long completedCount = sysJobLogMapper.countJobLogList(logQuery);
+
+        summary.put("pending", pendingCount);
+        summary.put("executing", executingCount);
+        summary.put("completed", completedCount);
+
+        return success(summary);
+    }
 
     /**
      * 查询定时任务列表

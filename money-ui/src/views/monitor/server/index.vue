@@ -337,32 +337,26 @@
             </el-button>
           </div>
           <el-table :data="queueData" style="width: 100%" v-loading="queueLoading" stripe border height="400">
-             <el-table-column prop="queueName" label="队列名称" width="250" show-overflow-tooltip></el-table-column>
-             <el-table-column prop="taskId" label="任务ID" width="200" show-overflow-tooltip></el-table-column>
-             <el-table-column prop="targetNode" label="目标节点" width="150" align="center"></el-table-column>
-             <el-table-column prop="priority" label="优先级" width="100" align="center">
-                <template slot-scope="scope">
-                   <el-tag :type="scope.row.priority === 'HIGH' ? 'danger' : 'info'">{{ scope.row.priority }}</el-tag>
-                </template>
-             </el-table-column>
+             <el-table-column prop="jobName" label="任务名称" width="250" show-overflow-tooltip></el-table-column>
+             <el-table-column prop="jobId" label="任务ID" width="100" show-overflow-tooltip></el-table-column>
+             <el-table-column prop="nodeId" label="执行节点" width="150" align="center"></el-table-column>
+             <el-table-column prop="executionId" label="执行ID" show-overflow-tooltip></el-table-column>
              <el-table-column prop="status" label="状态" width="120" align="center">
                 <template slot-scope="scope">
-                   <el-tag v-if="scope.row.status === 'PROCESSING'" type="primary">PROCESSING</el-tag>
+                   <el-tag v-if="scope.row.status === 'RUNNING'" type="primary">RUNNING</el-tag>
                    <el-tag v-else-if="scope.row.status === 'WAITING'" type="warning">WAITING</el-tag>
-                   <el-tag v-else-if="scope.row.status === 'SUCCESS'" type="success">SUCCESS</el-tag>
-                   <el-tag v-else-if="scope.row.status === 'FAIL'" type="danger">FAIL</el-tag>
+                   <el-tag v-else-if="scope.row.status === 'RETRYING'" type="danger">RETRYING</el-tag>
                    <el-tag v-else type="info">{{ scope.row.status }}</el-tag>
                 </template>
              </el-table-column>
-             <el-table-column prop="traceId" label="Trace ID" show-overflow-tooltip></el-table-column>
              <el-table-column label="入队时间" width="160" align="center">
                <template slot-scope="scope">
                   {{ formatDate(scope.row.enqueueTime) }}
                </template>
              </el-table-column>
-             <el-table-column label="完成时间" width="160" align="center">
+             <el-table-column label="开始时间" width="160" align="center">
                 <template slot-scope="scope">
-                   {{ formatDate(scope.row.completionTime) }}
+                   {{ formatDate(scope.row.startTime) }}
                 </template>
              </el-table-column>
              <el-table-column prop="retryCount" label="重试" width="80" align="center"></el-table-column>
@@ -375,16 +369,9 @@
 
 <script>
 import { getServer, getClusterThreadPool, getClusterThreadPoolRedis, getClusterServerRedis } from "@/api/monitor/server";
+import { listRuntime } from "@/api/monitor/jobRuntime";
 import request from '@/utils/request';
 import * as echarts from "echarts";
-
-// API function for queue details
-function getQueueDetails() {
-  return request({
-    url: '/monitor/job/queue/details',
-    method: 'get'
-  })
-}
 
 export default {
   name: "Server",
@@ -671,8 +658,8 @@ export default {
     getQueueInfo() {
       // Avoid spinner flicker on refresh
       // this.queueLoading = true;
-      getQueueDetails().then(response => {
-        this.queueData = response.data || [];
+      listRuntime().then(response => {
+        this.queueData = response.rows || response.data || [];
         // this.queueLoading = false;
       }).catch(() => {
         // this.queueLoading = false;
