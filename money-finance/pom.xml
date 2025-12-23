@@ -87,32 +87,11 @@
             <artifactId>json</artifactId>
             <version>20210307</version> <!-- 使用最新版本 -->
         </dependency>
-        <!-- Jackson 核心库 -->
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-core</artifactId>
-            <version>2.15.0</version>
-        </dependency>
-
-        <!-- Jackson 核心库 -->
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-core</artifactId>
-            <version>2.15.0</version>
-        </dependency>
-
-        <!-- Jackson 数据绑定 -->
+        <!-- Jackson库由父POM的BOM管理 -->
+        <!-- JSON工具类 -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.15.0</version>
-        </dependency>
-
-        <!-- Jackson 注解支持 -->
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-annotations</artifactId>
-            <version>2.15.0</version>
         </dependency>
         <dependency>
             <groupId>com.google.code.gson</groupId>
