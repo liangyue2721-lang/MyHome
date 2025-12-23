@@ -11,7 +11,7 @@ import org.apache.commons.lang3.builder.ToStringStyle;
  * 任务执行历史记录对象 sys_job_execution_log
  *
  * @author erqi
- * @date 2025-12-22
+ * @date 2025-12-23
  */
 public class SysJobExecutionLog extends BaseEntity{
 

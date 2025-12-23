@@ -11,7 +11,7 @@ import org.apache.commons.lang3.builder.ToStringStyle;
  * 实时任务（待执行 / 执行中）对象 sys_job_runtime
  *
  * @author erqi
- * @date 2025-12-22
+ * @date 2025-12-23
  */
 public class SysJobRuntime extends BaseEntity{
 

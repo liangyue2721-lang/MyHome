@@ -2,13 +2,13 @@ package com.make.quartz.service;
 
 import java.util.List;
 
-import com.make.quartz.domain.SysJobRuntime;
+import com.make.quartz.domain .SysJobRuntime;
 
 /**
  * 实时任务（待执行 / 执行中）Service接口
  *
  * @author erqi
- * @date 2025-12-22
+ * @date 2025-12-23
  */
 public interface ISysJobRuntimeService {
 

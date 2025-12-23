@@ -26,7 +26,7 @@ import com.make.common.core.page.TableDataInfo;
  * 任务执行历史记录Controller
  *
  * @author erqi
- * @date 2025-12-22
+ * @date 2025-12-23
  */
 @RestController
 @RequestMapping("/quartz/log")

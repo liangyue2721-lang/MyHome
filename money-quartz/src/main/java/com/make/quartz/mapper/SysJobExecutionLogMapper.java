@@ -8,7 +8,7 @@ import com.make.quartz.domain.SysJobExecutionLog;
  * 任务执行历史记录Mapper接口
  *
  * @author erqi
- * @date 2025-12-22
+ * @date 2025-12-23
  */
 public interface SysJobExecutionLogMapper {
 

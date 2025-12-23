@@ -1,25 +1,23 @@
 package com.make.quartz.service.impl;
 
 import java.util.List;
-
-import com.make.common.utils.DateUtils;
+        import com.make.common.utils.DateUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import com.make.quartz.mapper.SysJobRuntimeMapper;
 import com.make.quartz.domain.SysJobRuntime;
 import com.make.quartz.service.ISysJobRuntimeService;
 
-import javax.annotation.Resource;
-
 /**
  * 实时任务（待执行 / 执行中）Service业务层处理
  *
  * @author erqi
- * @date 2025-12-22
+ * @date 2025-12-23
  */
 @Service
 public class SysJobRuntimeServiceImpl implements ISysJobRuntimeService {
 
-    @Resource
+    @Autowired
     private SysJobRuntimeMapper sysJobRuntimeMapper;
 
     /**
@@ -52,8 +50,8 @@ public class SysJobRuntimeServiceImpl implements ISysJobRuntimeService {
      */
     @Override
     public int insertSysJobRuntime(SysJobRuntime sysJobRuntime) {
-        sysJobRuntime.setCreateTime(DateUtils.getNowDate());
-        return sysJobRuntimeMapper.insertSysJobRuntime(sysJobRuntime);
+                sysJobRuntime.setCreateTime(DateUtils.getNowDate());
+            return sysJobRuntimeMapper.insertSysJobRuntime(sysJobRuntime);
     }
 
     /**
@@ -64,7 +62,7 @@ public class SysJobRuntimeServiceImpl implements ISysJobRuntimeService {
      */
     @Override
     public int updateSysJobRuntime(SysJobRuntime sysJobRuntime) {
-        sysJobRuntime.setUpdateTime(DateUtils.getNowDate());
+                sysJobRuntime.setUpdateTime(DateUtils.getNowDate());
         return sysJobRuntimeMapper.updateSysJobRuntime(sysJobRuntime);
     }
 

@@ -1,14 +1,15 @@
 package com.make.quartz.mapper;
 
 import java.util.List;
-import org.apache.ibatis.annotations.Param;
+
 import com.make.quartz.domain.SysJobRuntime;
+import org.apache.ibatis.annotations.Param;
 
 /**
  * 实时任务（待执行 / 执行中）Mapper接口
  *
  * @author erqi
- * @date 2025-12-22
+ * @date 2025-12-23
  */
 public interface SysJobRuntimeMapper {
 
@@ -72,7 +73,7 @@ public interface SysJobRuntimeMapper {
      * 尝试抢占任务（状态 WAITING -> RUNNING）
      *
      * @param executionId 执行ID
-     * @param nodeId 当前节点ID
+     * @param nodeId      当前节点ID
      * @return 影响行数（1表示抢占成功）
      */
     int updateStatusToRunning(@Param("executionId") String executionId, @Param("nodeId") String nodeId);
