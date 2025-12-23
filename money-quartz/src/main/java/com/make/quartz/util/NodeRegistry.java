@@ -2,19 +2,13 @@ package com.make.quartz.util;
 
 import com.make.common.utils.StringUtils;
 import com.make.common.utils.ip.IpUtils;
-import com.make.common.utils.spring.SpringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
-import org.springframework.web.context.request.RequestAttributes;
-import org.springframework.web.context.request.RequestContextHolder;
 
 import javax.annotation.PostConstruct;
-import java.lang.management.ManagementFactory;
-import java.net.InetAddress;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -50,8 +44,8 @@ public class NodeRegistry implements SmartLifecycle {
      * 获取当前节点 ID
      *
      * <p>规则：
-     * 1. 启动 / 后台线程：使用本机 IP + PID + UUID（不依赖 Servlet）
-     * 2. 有 HTTP 请求上下文时：可读取请求 IP（但不会覆盖已有 nodeId）
+     * 1. 优先使用本机 IP (Requirement 4: 记录执行的当前机器IP)
+     * 2. 如果无法获取，使用兜底逻辑
      */
     public static String getCurrentNodeId() {
         if (CURRENT_NODE_ID != null) {
@@ -63,27 +57,22 @@ public class NodeRegistry implements SmartLifecycle {
                 return CURRENT_NODE_ID;
             }
 
-            // ===== 1️⃣ 尝试从 HTTP 请求上下文获取（如果存在）=====
+            // ===== 1️⃣ 优先使用本机 IP =====
             try {
-                RequestAttributes attrs = RequestContextHolder.getRequestAttributes();
-                if (attrs != null) {
-                    String ip = IpUtils.getIpAddr();
-                    if (StringUtils.isNotEmpty(ip)) {
-                        CURRENT_NODE_ID = ip + "-" + UUID.randomUUID();
-                        return CURRENT_NODE_ID;
-                    }
+                String ip = IpUtils.getHostIp();
+                if (StringUtils.isNotEmpty(ip) && !"127.0.0.1".equals(ip)) {
+                    CURRENT_NODE_ID = ip;
+                } else {
+                     // 尝试其他方式获取非 loopback IP
+                     String ipAddr = IpUtils.getIpAddr();
+                     if (StringUtils.isNotEmpty(ipAddr) && !"unknown".equalsIgnoreCase(ipAddr)) {
+                         CURRENT_NODE_ID = ipAddr;
+                     } else {
+                         CURRENT_NODE_ID = ip; // Fallback to 127.0.0.1
+                     }
                 }
-            } catch (Exception ignore) {
-                // 启动阶段必然失败，直接走兜底
-            }
-
-            // ===== 2️⃣ 启动阶段 / 后台线程兜底方案 =====
-            try {
-                String host = InetAddress.getLocalHost().getHostAddress();
-                String pid = ManagementFactory.getRuntimeMXBean().getName(); // pid@host
-                CURRENT_NODE_ID = host + "-" + pid + "-" + UUID.randomUUID();
             } catch (Exception e) {
-                CURRENT_NODE_ID = "node-" + UUID.randomUUID();
+                CURRENT_NODE_ID = "127.0.0.1";
             }
 
             log.info("[NODE_ID_INIT] nodeId={}", CURRENT_NODE_ID);

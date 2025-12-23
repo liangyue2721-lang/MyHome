@@ -25,6 +25,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Date;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -60,6 +61,7 @@ public class TaskExecutionService {
 
     private static final String DEDUP_KEY_PREFIX = "mq:job:dedup:";
     private static final String RUNTIME_CACHE_PREFIX = "mq:job:runtime:";
+    private static final String TASK_MONITOR_PREFIX = "TASK_MONITOR:"; // Requirement 3
 
     /**
      * 防止同 executionId 重入
@@ -73,9 +75,58 @@ public class TaskExecutionService {
     }
 
 
+    /**
+     * Requirement 3: 服务停止时释放占用任务
+     */
     @PreDestroy
     public void destroy() {
+        log.info("[SHUTDOWN] Starting TaskExecutionService shutdown...");
         RedisMessageQueue.getInstance().stopListening();
+
+        try {
+            String currentNodeId = NodeRegistry.getCurrentNodeId();
+
+            // 1. 查询当前节点正在执行的任务 (status='RUNNING' and node_id=current)
+            SysJobRuntime query = new SysJobRuntime();
+            query.setNodeId(currentNodeId);
+            query.setStatus("RUNNING");
+            List<SysJobRuntime> runningTasks = sysJobRuntimeMapper.selectSysJobRuntimeList(query);
+
+            if (runningTasks != null && !runningTasks.isEmpty()) {
+                log.info("[SHUTDOWN_RELEASE] Found {} running tasks on node={}", runningTasks.size(), currentNodeId);
+
+                for (SysJobRuntime task : runningTasks) {
+                    try {
+                        String execId = task.getExecutionId();
+                        Long jobId = task.getJobId();
+
+                        // 2. 清理 Redis 锁 (Dedup & Runtime & Monitor)
+                        redisTemplate.delete(DEDUP_KEY_PREFIX + jobId);
+                        redisTemplate.delete(RUNTIME_CACHE_PREFIX + execId);
+                        redisTemplate.delete(TASK_MONITOR_PREFIX + jobId); // Clean monitor key
+
+                        // 3. 更新 DB 状态回退为 WAITING (让其他节点可恢复)，并清除 node_id
+                        task.setStatus("WAITING");
+                        task.setNodeId(null); // Clear ownership
+                        // Mybatis update selective 会忽略 null，所以我们需要显式设置为 "" 或者确保 SQL 支持 null
+                        // 查看 Mapper XML，if test="nodeId != null" 才更新。
+                        // 这里我们可能需要一种方式置空 node_id，或者只改状态让 node_id 失效。
+                        // 只要 status=WAITING，TaskRecoveryService 就会认为它是待处理的，node_id 并不影响 active 判定 (countRunningOrWaiting 不看 node_id)
+                        // 但为了干净，最好能置空。Mapper 不支持 update null。
+                        // 暂时只改状态。
+                        sysJobRuntimeMapper.updateSysJobRuntime(task);
+
+                        log.info("TASK_LIFECYCLE|RELEASE|jobId={}|executionId={}|nodeId={}|msg=Shutdown release", jobId, execId, currentNodeId);
+                    } catch (Exception e) {
+                        log.error("[SHUTDOWN_RELEASE_ERR] executionId={} err={}", task.getExecutionId(), e.getMessage());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("[SHUTDOWN_ERR] Error during task release", e);
+        }
+
+        log.info("[SHUTDOWN] TaskExecutionService shutdown complete.");
     }
 
     /**
@@ -132,20 +183,33 @@ public class TaskExecutionService {
                 return;
             }
 
+            // Requirement 2: 消费任务日志
+            log.info("TASK_LIFECYCLE|CONSUME|jobId={}|executionId={}|nodeId={}|target={}",
+                    sysJob.getJobId(), execId, nodeId, sysJob.getInvokeTarget());
+
             long startTime = System.currentTimeMillis();
             String status = "SUCCESS";
             String errorMsg = null;
 
             try {
-                log.info("[EXEC_START] jobId={} executionId={} target={}", sysJob.getJobId(), execId, sysJob.getInvokeTarget());
+                // log.info("[EXEC_START] jobId={} executionId={} target={}", sysJob.getJobId(), execId, sysJob.getInvokeTarget());
                 executeOnce(sysJob);
             } catch (Exception e) {
                 status = "FAILED";
                 errorMsg = StringUtils.substring(e.getMessage(), 0, 500);
                 log.error("[EXEC_FAIL] executionId={}", execId, e);
+                // Requirement 2: 异常日志
+                log.info("TASK_LIFECYCLE|FAIL|jobId={}|executionId={}|nodeId={}|costMs={}|errorMsg={}",
+                        sysJob.getJobId(), execId, nodeId, (System.currentTimeMillis() - startTime), errorMsg);
             } finally {
                 long duration = System.currentTimeMillis() - startTime;
-                log.info("[EXEC_END] jobId={} executionId={} status={} durationMs={}", sysJob.getJobId(), execId, status, duration);
+                // log.info("[EXEC_END] jobId={} executionId={} status={} durationMs={}", sysJob.getJobId(), execId, status, duration);
+
+                if ("SUCCESS".equals(status)) {
+                    // Requirement 2: 完成日志
+                    log.info("TASK_LIFECYCLE|COMPLETE|jobId={}|executionId={}|nodeId={}|costMs={}",
+                            sysJob.getJobId(), execId, nodeId, duration);
+                }
 
                 // 4. 结束尽力而为清理 (Insert Log -> Delete Runtime -> Delete Redis)
                 handleFinalCleanup(execId, sysJob, status, errorMsg, duration);
@@ -224,17 +288,27 @@ public class TaskExecutionService {
         long startTime = System.currentTimeMillis();
         String status = "SUCCESS";
         String errorMsg = null;
+        String nodeId = NodeRegistry.getCurrentNodeId();
 
         try {
-            log.info("[RECOVER_START] jobId={} executionId={} target={}", sysJob.getJobId(), executionId, sysJob.getInvokeTarget());
+            // log.info("[RECOVER_START] jobId={} executionId={} target={}", sysJob.getJobId(), executionId, sysJob.getInvokeTarget());
+            log.info("TASK_LIFECYCLE|CONSUME|jobId={}|executionId={}|nodeId={}|target={}|source=RECOVERY",
+                    sysJob.getJobId(), executionId, nodeId, sysJob.getInvokeTarget());
+
             executeOnce(sysJob);
         } catch (Exception e) {
             status = "FAILED";
             errorMsg = StringUtils.substring(e.getMessage(), 0, 500);
             log.error("[RECOVER_FAIL] executionId={}", executionId, e);
+            log.info("TASK_LIFECYCLE|FAIL|jobId={}|executionId={}|nodeId={}|costMs={}|errorMsg={}|source=RECOVERY",
+                    sysJob.getJobId(), executionId, nodeId, (System.currentTimeMillis() - startTime), errorMsg);
         } finally {
             long duration = System.currentTimeMillis() - startTime;
-            log.info("[RECOVER_END] jobId={} executionId={} status={} durationMs={}", sysJob.getJobId(), executionId, status, duration);
+            // log.info("[RECOVER_END] jobId={} executionId={} status={} durationMs={}", sysJob.getJobId(), executionId, status, duration);
+            if ("SUCCESS".equals(status)) {
+                log.info("TASK_LIFECYCLE|COMPLETE|jobId={}|executionId={}|nodeId={}|costMs={}|source=RECOVERY",
+                        sysJob.getJobId(), executionId, nodeId, duration);
+            }
 
             // 最终清理
             handleFinalCleanup(executionId, sysJob, status, errorMsg, duration);

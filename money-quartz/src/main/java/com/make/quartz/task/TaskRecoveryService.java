@@ -14,6 +14,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import javax.annotation.PostConstruct;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -38,6 +39,15 @@ public class TaskRecoveryService {
     private TaskExecutionService taskExecutionService;
 
     private static final String DEDUP_KEY_PREFIX = "mq:job:dedup:";
+
+    /**
+     * Requirement 1: 启动时立刻执行一次任务恢复扫描
+     */
+    @PostConstruct
+    public void init() {
+        log.info("[RECOVERY_INIT] Starting initial task recovery check...");
+        recoverLostTasks();
+    }
 
     /**
      * 定期检查丢失任务并恢复 (30秒)

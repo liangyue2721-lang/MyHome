@@ -77,7 +77,13 @@ public class JobBootstrapper implements SmartLifecycle {
         for (int i = 1; i <= retryTimes; i++) {
             try {
                 log.info("[JOB_BOOTSTRAP_TRY] nodeId={} attempt={}/{}", nodeId, i, retryTimes);
+                long startTime = System.currentTimeMillis();
                 sysJobService.bootstrapEnqueueEnabledJobs(trigger, false);
+                long costMs = System.currentTimeMillis() - startTime;
+
+                // Requirement 2: 重新加载日志
+                log.info("TASK_LIFECYCLE|RELOAD|nodeId={}|trigger={}|costMs={}", nodeId, trigger, costMs);
+
                 log.info("[JOB_BOOTSTRAP_OK] nodeId={} attempt={}", nodeId, i);
                 return;
             } catch (Exception e) {

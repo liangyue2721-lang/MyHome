@@ -111,6 +111,10 @@ public class TaskDistributor {
     private String performThreeStageWrite(SysJob sysJob, String executionId, long scheduledAt, String dedupKey) {
         String runtimeCacheKey = RUNTIME_CACHE_PREFIX + executionId;
 
+        // Requirement 2: 生产任务日志
+        log.info("TASK_LIFECYCLE|PRODUCE|jobId={}|executionId={}|scheduledAt={}|dedupKey={}|target={}",
+                sysJob.getJobId(), executionId, scheduledAt, dedupKey, sysJob.getInvokeTarget());
+
         // 3.1 写 Redis Runtime Cache (TTL 1 Day)
         SysJobRuntime runtime = new SysJobRuntime();
         runtime.setJobId(sysJob.getJobId());
