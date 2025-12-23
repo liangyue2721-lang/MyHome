@@ -7,6 +7,7 @@ import com.make.quartz.domain.SysJob;
 import com.make.quartz.domain.SysJobRuntime;
 import com.make.quartz.mapper.SysJobRuntimeMapper;
 import com.make.quartz.service.TaskExecutionService;
+import com.make.quartz.util.NodeRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,6 +40,8 @@ public class TaskRecoveryService {
     private TaskExecutionService taskExecutionService;
 
     private static final String DEDUP_KEY_PREFIX = "mq:job:dedup:";
+    private static final String RUNTIME_CACHE_PREFIX = "mq:job:runtime:";
+    private static final String TASK_MONITOR_PREFIX = "TASK_MONITOR:";
 
     /**
      * Requirement 1: 启动时立刻执行一次任务恢复扫描
@@ -46,7 +49,59 @@ public class TaskRecoveryService {
     @PostConstruct
     public void init() {
         log.info("[RECOVERY_INIT] Starting initial task recovery check...");
+        recoverLocalZombieTasks();
         recoverLostTasks();
+    }
+
+    /**
+     * 恢复本地僵尸任务
+     * 处理场景：应用崩溃/非优雅关闭重启后，sys_job_runtime 中仍有 RUNNING 状态且 node_id 为本机的任务
+     */
+    private void recoverLocalZombieTasks() {
+        try {
+            String currentNodeId = NodeRegistry.getCurrentNodeId();
+
+            // 查询所有 active 任务，然后过滤
+            // (Mapper 没有直接支持 where node_id and status，为了稳妥先 selectAllActive 过滤，或者构造 Example 如果支持)
+            // SysJobRuntimeMapper.selectActiveJobs() -> where status in ('WAITING', 'RUNNING')
+
+            // 更精准的做法：使用 selectSysJobRuntimeList
+            SysJobRuntime query = new SysJobRuntime();
+            query.setNodeId(currentNodeId);
+            query.setStatus("RUNNING");
+            List<SysJobRuntime> localRunningTasks = sysJobRuntimeMapper.selectSysJobRuntimeList(query);
+
+            if (localRunningTasks == null || localRunningTasks.isEmpty()) {
+                return;
+            }
+
+            log.info("[RECOVERY_ZOMBIE] Found {} local zombie tasks from previous run. nodeId={}", localRunningTasks.size(), currentNodeId);
+
+            for (SysJobRuntime task : localRunningTasks) {
+                try {
+                    Long jobId = task.getJobId();
+                    String execId = task.getExecutionId();
+
+                    // 1. 清理 Redis 锁，确保 recoverLostTasks 能识别到它（missing key）
+                    redisTemplate.delete(DEDUP_KEY_PREFIX + jobId);
+                    redisTemplate.delete(RUNTIME_CACHE_PREFIX + execId);
+                    redisTemplate.delete(TASK_MONITOR_PREFIX + jobId);
+
+                    // 2. 重置状态为 WAITING
+                    task.setStatus("WAITING");
+                    task.setNodeId(null);
+                    sysJobRuntimeMapper.updateSysJobRuntime(task);
+
+                    log.info("[RECOVERY_ZOMBIE_RESET] jobId={} execId={} -> WAITING. Ready for recovery loop.", jobId, execId);
+
+                } catch (Exception e) {
+                    log.error("[RECOVERY_ZOMBIE_ERR] execId={} err={}", task.getExecutionId(), e.getMessage());
+                }
+            }
+
+        } catch (Exception e) {
+            log.error("[RECOVERY_ZOMBIE_FATAL] Error checking local zombie tasks", e);
+        }
     }
 
     /**
