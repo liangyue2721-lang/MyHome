@@ -89,7 +89,8 @@ public class TaskRecoveryService {
                         ThreadPoolUtil.getWatchStockExecutor().submit(() -> {
                             try {
                                 log.info("[RECOVERY_EXEC] Submitting recovered task to thread pool. jobId={}", jobId);
-                                taskExecutionService.executeRecoveredJob(sysJob, executionId);
+                                // Updated to pass scheduledTime
+                                taskExecutionService.executeRecoveredJob(sysJob, executionId, runtime.getScheduledTime());
                             } catch (Exception e) {
                                 log.error("[RECOVERY_EXEC_ERR] jobId={} executionId={}", jobId, executionId, e);
                             }

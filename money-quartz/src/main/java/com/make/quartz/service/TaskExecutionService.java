@@ -161,6 +161,8 @@ public class TaskExecutionService {
 
             // 3. 执行任务
             SysJob sysJob = (SysJob) message.getJobData();
+            Date scheduledTime = null;
+
             // 如果 message 中只有 ID (符合新规范)，则需要回查 SysJobRuntime
             if (sysJob == null) {
                 // 尝试从 Runtime Cache 或 DB 获取
@@ -168,18 +170,26 @@ public class TaskExecutionService {
                  if (StringUtils.isNotEmpty(runtimeJson)) {
                      SysJobRuntime runtime = JSON.parseObject(runtimeJson, SysJobRuntime.class);
                      sysJob = JSON.parseObject(runtime.getPayload(), SysJob.class);
+                     scheduledTime = runtime.getScheduledTime();
                  } else {
                      SysJobRuntime runtime = sysJobRuntimeMapper.selectSysJobRuntimeByExecutionId(execId);
                      if (runtime != null) {
                          sysJob = JSON.parseObject(runtime.getPayload(), SysJob.class);
+                         scheduledTime = runtime.getScheduledTime();
                      }
                  }
+            }
+
+            // Fallback for scheduledTime
+            if (scheduledTime == null) {
+                // Try to infer from message score if available, or just use now
+                scheduledTime = new Date();
             }
 
             if (sysJob == null || StringUtils.isEmpty(sysJob.getInvokeTarget())) {
                 log.warn("[EXEC_DROP] invalid message/payload missing, executionId={}", execId);
                 // 无法执行，标记失败并清理
-                handleFinalCleanup(execId, null, "FAILED", "Missing payload", 0L);
+                handleFinalCleanup(execId, null, "FAILED", "Missing payload", 0L, scheduledTime);
                 return;
             }
 
@@ -203,7 +213,7 @@ public class TaskExecutionService {
                         sysJob.getJobId(), execId, nodeId, (System.currentTimeMillis() - startTime), errorMsg);
             } finally {
                 long duration = System.currentTimeMillis() - startTime;
-                // log.info("[EXEC_END] jobId={} executionId={} status={} durationMs={}", sysJob.getJobId(), execId, status, duration);
+                // log.info("[EXEC_END] jobId={} executionId={} status={} durationMs={}", sysJob.getJobId(), executionId, status, duration);
 
                 if ("SUCCESS".equals(status)) {
                     // Requirement 2: 完成日志
@@ -212,7 +222,7 @@ public class TaskExecutionService {
                 }
 
                 // 4. 结束尽力而为清理 (Insert Log -> Delete Runtime -> Delete Redis)
-                handleFinalCleanup(execId, sysJob, status, errorMsg, duration);
+                handleFinalCleanup(execId, sysJob, status, errorMsg, duration, scheduledTime);
             }
 
             // 5. 循环任务续约 (仅当执行成功且配置了 cron)
@@ -228,7 +238,7 @@ public class TaskExecutionService {
     /**
      * 最终清理逻辑
      */
-    private void handleFinalCleanup(String executionId, SysJob sysJob, String status, String errorMsg, Long duration) {
+    private void handleFinalCleanup(String executionId, SysJob sysJob, String status, String errorMsg, Long duration, Date scheduledTime) {
         try {
             // 1. 插入 sys_job_execution_log
             SysJobExecutionLog logEntry = new SysJobExecutionLog();
@@ -245,6 +255,8 @@ public class TaskExecutionService {
             logEntry.setEndTime(new Date());
             logEntry.setDurationMs(duration);
             logEntry.setErrorMessage(errorMsg);
+            // Fix: ensure scheduledTime is set
+            logEntry.setScheduledTime(scheduledTime != null ? scheduledTime : logEntry.getStartTime());
 
             int rows = sysJobExecutionLogMapper.insertSysJobExecutionLog(logEntry);
             log.info("[EXEC_LOG_INSERT] jobId={} executionId={} status={} rows={}", sysJob != null ? sysJob.getJobId() : "?", executionId, status, rows);
@@ -279,7 +291,7 @@ public class TaskExecutionService {
      * @param sysJob      恢复的任务
      * @param executionId 执行ID
      */
-    public void executeRecoveredJob(SysJob sysJob, String executionId) {
+    public void executeRecoveredJob(SysJob sysJob, String executionId, Date scheduledTime) {
         if (sysJob == null || StringUtils.isEmpty(executionId)) {
             return;
         }
@@ -311,7 +323,7 @@ public class TaskExecutionService {
             }
 
             // 最终清理
-            handleFinalCleanup(executionId, sysJob, status, errorMsg, duration);
+            handleFinalCleanup(executionId, sysJob, status, errorMsg, duration, scheduledTime != null ? scheduledTime : new Date());
 
             // 恢复任务成功后，也尝试调度下一次（如果它是个周期任务）
             // 这样能保证断链的周期任务继续跑
