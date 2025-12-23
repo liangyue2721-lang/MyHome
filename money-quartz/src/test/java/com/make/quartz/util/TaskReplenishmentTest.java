@@ -1,4 +1,4 @@
-//package com.make.quartz.util;
+package com.make.quartz.util;//package com.make.quartz.util;
 //
 //import com.make.quartz.domain.SysJob;
 //import com.make.quartz.service.ISysJobService;

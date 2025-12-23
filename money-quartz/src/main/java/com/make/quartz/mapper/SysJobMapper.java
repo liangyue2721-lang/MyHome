@@ -3,14 +3,15 @@ package com.make.quartz.mapper;
 import java.util.List;
 
 import com.make.quartz.domain.SysJob;
+import org.apache.ibatis.annotations.Mapper;
 
 /**
  * 调度任务信息 数据层
  *
  * @author ruoyi
  */
-public interface SysJobMapper
-{
+@Mapper
+public interface SysJobMapper {
     /**
      * 查询调度任务日志集合
      *

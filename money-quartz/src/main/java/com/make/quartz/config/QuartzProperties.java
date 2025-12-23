@@ -49,6 +49,36 @@ public class QuartzProperties {
      */
     private int distributorThreads = 2;
 
+    /**
+     * 是否在系统启动后执行任务自恢复（扫描 sys_job 并将 nextTime 写入队列）
+     */
+    private boolean bootstrapEnabled = true;
+
+    /**
+     * 是否使用 Redis 分布式锁，确保多节点只有一个节点执行 bootstrap（推荐开启）
+     */
+    private boolean bootstrapUseRedisLock = true;
+
+    /**
+     * bootstrap 分布式锁 Key
+     */
+    private String bootstrapLockKey = "mq:bootstrap:lock";
+
+    /**
+     * bootstrap 分布式锁 TTL（秒）
+     */
+    private long bootstrapLockTtlSeconds = 60L;
+
+    /**
+     * bootstrap 重试次数（用于等待 Redis/DB 就绪）
+     */
+    private int bootstrapRetryTimes = 10;
+
+    /**
+     * bootstrap 重试间隔（毫秒）
+     */
+    private long bootstrapRetryIntervalMs = 3000L;
+
     public int getListenerCoreThreadsMultiple() {
         return listenerCoreThreadsMultiple;
     }
@@ -105,5 +135,53 @@ public class QuartzProperties {
 
     public void setDistributorThreads(int distributorThreads) {
         this.distributorThreads = distributorThreads;
+    }
+
+    public boolean isBootstrapEnabled() {
+        return bootstrapEnabled;
+    }
+
+    public void setBootstrapEnabled(boolean bootstrapEnabled) {
+        this.bootstrapEnabled = bootstrapEnabled;
+    }
+
+    public boolean isBootstrapUseRedisLock() {
+        return bootstrapUseRedisLock;
+    }
+
+    public void setBootstrapUseRedisLock(boolean bootstrapUseRedisLock) {
+        this.bootstrapUseRedisLock = bootstrapUseRedisLock;
+    }
+
+    public String getBootstrapLockKey() {
+        return bootstrapLockKey;
+    }
+
+    public void setBootstrapLockKey(String bootstrapLockKey) {
+        this.bootstrapLockKey = bootstrapLockKey;
+    }
+
+    public long getBootstrapLockTtlSeconds() {
+        return bootstrapLockTtlSeconds;
+    }
+
+    public void setBootstrapLockTtlSeconds(long bootstrapLockTtlSeconds) {
+        this.bootstrapLockTtlSeconds = bootstrapLockTtlSeconds;
+    }
+
+    public int getBootstrapRetryTimes() {
+        return bootstrapRetryTimes;
+    }
+
+    public void setBootstrapRetryTimes(int bootstrapRetryTimes) {
+        this.bootstrapRetryTimes = bootstrapRetryTimes;
+    }
+
+    public long getBootstrapRetryIntervalMs() {
+        return bootstrapRetryIntervalMs;
+    }
+
+    public void setBootstrapRetryIntervalMs(long bootstrapRetryIntervalMs) {
+        this.bootstrapRetryIntervalMs = bootstrapRetryIntervalMs;
     }
 }

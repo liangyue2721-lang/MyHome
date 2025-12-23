@@ -95,42 +95,13 @@ spring:
         max-wait: 30s
   # Quartz配置
   quartz:
-    enabled: false
-#    # 使用数据库存储任务信息（jdbc模式）
-#    job-store-type: jdbc
-#    # 启动时更新已存在的Jobs
-#    overwrite-existing-jobs: true
-#    # 延迟启动调度器的时间（秒）
-#    startup-delay: 1
-#    # 调度器名称
-#    scheduler-name: MakeScheduler
-#    # Quartz相关属性配置
-#    properties:
-#      org:
-#        quartz:
-#          # 调度器配置
-#          scheduler:
-#            instance-name: MakeScheduler
-#            instance-id: myapp-server
-#
-#          # 线程池配置 从50增加到100
-#          thread-pool:
-#            class: org.quartz.simpl.SimpleThreadPool
-#            thread-count: 1000
-#            thread-priority: 5
-#
-#          # 任务存储配置
-#          job-store:
-#            class: org.springframework.scheduling.quartz.LocalDataSourceJobStore
-#            is-clustered: true
-#            # 集群检查间隔，根据最佳实践调整为15秒
-#            cluster-checkin-interval: 15000
-#            # misfire处理数量，根据最佳实践调整为20
-#            max-misfires-to-handle-at-a-time: 20
-#            tx-isolation-level-serializable: false
-#            # misfire阈值，根据最佳实践调整为60秒
-#            misfire-threshold: 60000
-#            table-prefix: QRTZ_
+    bootstrapEnabled: true
+    bootstrapUseRedisLock: true
+    bootstrapLockKey: "mq:bootstrap:lock"
+    bootstrapLockTtlSeconds: 60
+    bootstrapRetryTimes: 10
+    bootstrapRetryIntervalMs: 3000
+
   autoconfigure:
     exclude:
       - org.springframework.boot.autoconfigure.quartz.QuartzAutoConfiguration

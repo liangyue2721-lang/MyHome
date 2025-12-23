@@ -10,20 +10,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.PostConstruct;
+import javax.annotation.Resource;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-/**
- * 定时任务服务实现（Redis-only 调度）
- *
- * <p>核心原则：
- * - 数据库负责“任务定义”
- * - Redis 队列负责“调度与执行”
- * - 本类不再创建 Quartz Trigger / JobDetail
- */
 @Service
 public class SysJobServiceImpl implements ISysJobService {
 
@@ -32,39 +25,45 @@ public class SysJobServiceImpl implements ISysJobService {
     private final SysJobMapper jobMapper;
     private final TaskDistributor taskDistributor;
 
+    /**
+     * 防止同 JVM 内重复 bootstrap
+     */
+    private final AtomicBoolean bootstrapped = new AtomicBoolean(false);
+
     public SysJobServiceImpl(SysJobMapper jobMapper, TaskDistributor taskDistributor) {
         this.jobMapper = jobMapper;
         this.taskDistributor = taskDistributor;
     }
 
-    /**
-     * 系统启动后：
-     * - 扫描所有启用任务
-     * - 将其“下一次执行时间”统一写入 Redis 延迟队列
-     *
-     * <p>作用：系统重启自恢复
-     */
-    @PostConstruct
-    public void bootstrapEnqueue() {
-        try {
-            List<SysJob> jobs = jobMapper.selectJobAll();
-            if (jobs == null || jobs.isEmpty()) {
-                return;
-            }
+    /* ========================= 启动/恢复入口 ========================= */
 
-            for (SysJob job : jobs) {
-                if (Objects.equals("0", job.getStatus())) {
-                    enqueueNextExecution(job);
-                }
-            }
+    public void bootstrapEnqueueEnabledJobs(String trigger, boolean force) {
+        log.info("SysJobMapper proxy class = {}", jobMapper.getClass());
 
-            log.info("[JOB_BOOTSTRAP] enqueue enabled jobs size={}", jobs.size());
-        } catch (Exception e) {
-            log.warn("[JOB_BOOTSTRAP_ERR]", e);
+        if (!force && !bootstrapped.compareAndSet(false, true)) {
+            log.info("[JOB_BOOTSTRAP_SKIP] trigger={} reason=already_bootstrapped", trigger);
+            return;
         }
+
+        List<SysJob> jobs = jobMapper.selectJobAll();
+        if (jobs == null || jobs.isEmpty()) {
+            log.info("[JOB_BOOTSTRAP_EMPTY] trigger={}", trigger);
+            return;
+        }
+
+        log.info("[JOB_BOOTSTRAP_START] trigger={} total={}", trigger, jobs.size());
+
+        for (SysJob job : jobs) {
+            if (!Objects.equals("0", job.getStatus())) {
+                continue;
+            }
+            enqueueNextExecution(job);
+        }
+
+        log.info("[JOB_BOOTSTRAP_DONE] trigger={}", trigger);
     }
 
-    // ======================= 查询接口 =======================
+    /* ========================= 查询接口 ========================= */
 
     @Override
     public List<SysJob> selectJobList(SysJob sysJob) {
@@ -77,11 +76,21 @@ public class SysJobServiceImpl implements ISysJobService {
     }
 
     @Override
+    public int deleteJob(SysJob job) {
+        if (job == null || job.getJobId() == null) {
+            return 0;
+        }
+
+        return jobMapper.deleteJobByIds(new Long[]{job.getJobId()});
+    }
+
+
+    @Override
     public List<SysJob> selectJobAll() {
         return jobMapper.selectJobAll();
     }
 
-    // ======================= 写接口 =======================
+    /* ========================= 写接口 ========================= */
 
     @Override
     public int insertJob(SysJob job) {
@@ -101,26 +110,26 @@ public class SysJobServiceImpl implements ISysJobService {
         return rows;
     }
 
-    @Override
-    public int deleteJob(SysJob job) {
-        // 只删数据库，Redis 中的历史/待执行消息允许自然过期
-        return jobMapper.deleteJobById(job.getJobId());
-    }
-
+    /**
+     * 启停任务
+     *
+     * <p>注意：Mapper 中没有 changeStatus，
+     * 实际就是一次 updateJob
+     */
     @Override
     public int changeStatus(SysJob job) {
         int rows = jobMapper.updateJob(job);
+
+        // 仅在启用时补充调度
         if (rows > 0 && Objects.equals("0", job.getStatus())) {
             enqueueNextExecution(job);
         }
+
         return rows;
     }
 
-    // ======================= 工具方法 =======================
+    /* ========================= 工具方法 ========================= */
 
-    /**
-     * 校验 cron 表达式是否合法
-     */
     @Override
     public boolean checkCronExpressionIsValid(String cronExpression) {
         if (StringUtils.isEmpty(cronExpression)) {
@@ -134,9 +143,6 @@ public class SysJobServiceImpl implements ISysJobService {
         }
     }
 
-    /**
-     * 计算下一次执行时间并调度（走统一 Producer Pipeline）
-     */
     private void enqueueNextExecution(SysJob job) {
         String cron = job.getCronExpression();
         if (StringUtils.isEmpty(cron)) {
@@ -149,16 +155,20 @@ public class SysJobServiceImpl implements ISysJobService {
                     cronExpression.next(ZonedDateTime.now(ZoneId.systemDefault()));
 
             if (nextTime == null) {
+                log.warn(
+                        "[JOB_SCHEDULE_SKIP] jobId={} jobName={} reason=no_next_time cron={}",
+                        job.getJobId(),
+                        job.getJobName(),
+                        cron
+                );
                 return;
             }
 
             long nextAtMillis = nextTime.toInstant().toEpochMilli();
-
-            // 使用 TaskDistributor 统一调度
             taskDistributor.scheduleJob(job, nextAtMillis);
 
             log.info(
-                    "[JOB_SCHEDULE] jobId={} name={} nextAt={}",
+                    "[JOB_SCHEDULE] jobId={} jobName={} nextAtMillis={}",
                     job.getJobId(),
                     job.getJobName(),
                     nextAtMillis

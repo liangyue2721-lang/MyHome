@@ -133,7 +133,7 @@ public class ReceiveEmailUtil {
 
         // 3. 标记为 DELETED
         for (Message msg : toDelete) {
-            msg.setFlag(javax.mail.Flags.Flag.DELETED, true);
+            msg.setFlag(Flags.Flag.DELETED, true);
         }
 
         // 4. 立即 expunge（关闭时生效）
