@@ -175,7 +175,7 @@ export default {
     // --- Task Stats Method ---
     fetchTaskStats() {
       request({
-        url: '/monitor/job/status-summary',
+        url: '/quartz/job/status-summary',
         method: 'get'
       }).then(response => {
         // Handle various response formats

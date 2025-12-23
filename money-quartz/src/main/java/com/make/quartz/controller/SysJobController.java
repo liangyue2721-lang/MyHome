@@ -13,6 +13,7 @@ import com.make.quartz.domain.SysJobLog;
 import com.make.quartz.util.TaskDistributor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
 import java.util.Map;
@@ -45,6 +46,7 @@ public class SysJobController extends BaseController {
     /**
      * 查询任务状态统计（待执行、执行中、已完成）
      */
+    @PreAuthorize("@ss.hasPermi('monitor:job:list')")
     @GetMapping("/status-summary")
     public AjaxResult getStatusSummary() {
         Map<String, Long> summary = new HashMap<>();
