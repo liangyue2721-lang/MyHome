@@ -92,4 +92,11 @@ public interface SysJobRuntimeMapper {
      * @return 运行时任务
      */
     SysJobRuntime selectSysJobRuntimeByExecutionId(@Param("executionId") String executionId);
+
+    /**
+     * 查询所有活跃任务（状态为 WAITING 或 RUNNING）
+     *
+     * @return 活跃任务列表
+     */
+    List<SysJobRuntime> selectActiveJobs();
 }

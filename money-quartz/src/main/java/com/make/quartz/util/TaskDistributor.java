@@ -67,6 +67,23 @@ public class TaskDistributor {
                 log.info("[DEDUP_LOCK_HIT] jobId={} reason=unfinished", jobId);
                 return null;
             }
+
+            // [NEW] 双重检查：就算拿到了 Redis 锁，也要检查 DB 是否真的没有 active 任务
+            // 防止 Redis 锁丢失（如 crash）导致重复提交
+            try {
+                int count = sysJobRuntimeMapper.countRunningOrWaiting(jobId);
+                if (count > 0) {
+                    log.info("[DEDUP_DB_HIT_AFTER_LOCK] jobId={} count={} -> releasing lock", jobId, count);
+                    redisTemplate.delete(dedupKey);
+                    return null;
+                }
+            } catch (Exception dbEx) {
+                // DB 检查失败，保守策略：释放锁，不提交
+                log.error("[DEDUP_DB_CHECK_ERR] jobId={} ex={}", jobId, dbEx.getMessage());
+                redisTemplate.delete(dedupKey);
+                return null;
+            }
+
             log.info("[DEDUP_LOCK_OK] jobId={} executionId={} ttlSec={}", jobId, executionId, dedupTtlSeconds);
 
         } catch (Exception e) {

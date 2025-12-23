@@ -210,6 +210,46 @@ public class TaskExecutionService {
     }
 
     /**
+     * 执行恢复的任务 (供 TaskRecoveryService 调用)
+     *
+     * @param sysJob      恢复的任务
+     * @param executionId 执行ID
+     */
+    public void executeRecoveredJob(SysJob sysJob, String executionId) {
+        if (sysJob == null || StringUtils.isEmpty(executionId)) {
+            return;
+        }
+
+        MDC.put("traceId", executionId);
+        long startTime = System.currentTimeMillis();
+        String status = "SUCCESS";
+        String errorMsg = null;
+
+        try {
+            log.info("[RECOVER_START] jobId={} executionId={} target={}", sysJob.getJobId(), executionId, sysJob.getInvokeTarget());
+            executeOnce(sysJob);
+        } catch (Exception e) {
+            status = "FAILED";
+            errorMsg = StringUtils.substring(e.getMessage(), 0, 500);
+            log.error("[RECOVER_FAIL] executionId={}", executionId, e);
+        } finally {
+            long duration = System.currentTimeMillis() - startTime;
+            log.info("[RECOVER_END] jobId={} executionId={} status={} durationMs={}", sysJob.getJobId(), executionId, status, duration);
+
+            // 最终清理
+            handleFinalCleanup(executionId, sysJob, status, errorMsg, duration);
+
+            // 恢复任务成功后，也尝试调度下一次（如果它是个周期任务）
+            // 这样能保证断链的周期任务继续跑
+            if ("SUCCESS".equals(status)) {
+                scheduleNextIfNeeded(sysJob, null, StringUtils.isEmpty(sysJob.getPriority()) ? "NORMAL" : sysJob.getPriority());
+            }
+
+            MDC.remove("traceId");
+        }
+    }
+
+    /**
      * 执行一次任务（消费逻辑）
      */
     private void executeOnce(SysJob sysJob) throws Exception {

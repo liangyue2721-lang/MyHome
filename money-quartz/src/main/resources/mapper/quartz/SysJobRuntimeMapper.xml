@@ -141,4 +141,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         where execution_id = #{executionId}
     </select>
 
+    <select id="selectActiveJobs" resultMap="SysJobRuntimeResult">
+        <include refid="selectSysJobRuntimeVo"/>
+        where status in ('WAITING', 'RUNNING')
+    </select>
+
 </mapper>
