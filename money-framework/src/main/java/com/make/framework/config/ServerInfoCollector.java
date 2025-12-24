@@ -170,12 +170,6 @@ public class ServerInfoCollector {
                 String nodeId = entry.getKey();
                 String nodeInfoJson = entry.getValue();
                 
-                // 过滤掉包含127.0.0.1的节点
-                if (nodeId.contains("127.0.0.1")) {
-                    logger.debug("🚫 过滤掉本地节点: {}", nodeId);
-                    continue;
-                }
-                
                 Map<String, Object> nodeInfo = JSON.parseObject(nodeInfoJson, Map.class);
                 result.put(nodeId, nodeInfo);
                 

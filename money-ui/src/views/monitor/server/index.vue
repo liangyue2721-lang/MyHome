@@ -249,20 +249,24 @@
           <div slot="header">
             <span>集群节点资源使用情况</span>
           </div>
-          <el-tabs v-model="activeChartTab">
-            <el-tab-pane label="CPU使用率" name="cpu">
-              <div ref="clusterCpuChart" style="height: 400px;"></div>
-            </el-tab-pane>
-            <el-tab-pane label="内存使用率" name="memory">
-              <div ref="clusterMemoryChart" style="height: 400px;"></div>
-            </el-tab-pane>
-            <el-tab-pane label="活跃线程数" name="threads">
-              <div ref="clusterThreadChart" style="height: 400px;"></div>
-            </el-tab-pane>
-            <el-tab-pane label="网络流量" name="network">
-              <div ref="clusterNetworkChart" style="height: 400px;"></div>
-            </el-tab-pane>
-          </el-tabs>
+          <el-row :gutter="20">
+            <el-col :span="12">
+               <div style="text-align: center; margin-bottom: 10px; font-weight: bold;">CPU使用率</div>
+               <div ref="clusterCpuChart" style="height: 300px;"></div>
+            </el-col>
+            <el-col :span="12">
+               <div style="text-align: center; margin-bottom: 10px; font-weight: bold;">内存使用率</div>
+               <div ref="clusterMemoryChart" style="height: 300px;"></div>
+            </el-col>
+            <el-col :span="12" style="margin-top: 20px;">
+               <div style="text-align: center; margin-bottom: 10px; font-weight: bold;">活跃线程数</div>
+               <div ref="clusterThreadChart" style="height: 300px;"></div>
+            </el-col>
+             <el-col :span="12" style="margin-top: 20px;">
+               <div style="text-align: center; margin-bottom: 10px; font-weight: bold;">网络流量</div>
+               <div ref="clusterNetworkChart" style="height: 300px;"></div>
+            </el-col>
+          </el-row>
         </el-card>
       </el-col>
 
@@ -426,8 +430,6 @@ export default {
       clusterMemoryChart: null,
       clusterThreadChart: null,
       clusterNetworkChart: null,
-      // 当前激活的图表标签
-      activeChartTab: 'cpu',
       // 图表历史数据
       cpuHistory: [],
       memoryHistory: [],
