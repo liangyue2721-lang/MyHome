@@ -9,10 +9,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.lang.management.ManagementFactory;
+import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
@@ -53,6 +53,9 @@ public class ServerInfoCollector {
      * 当前节点ID，格式为IP:UUID
      */
     private final String currentNodeId = getHostIp() + ":" + UUID.randomUUID().toString();
+
+    private volatile boolean running = true;
+    private Thread collectorThread;
     
     /**
      * 获取当前节点ID
@@ -76,12 +79,47 @@ public class ServerInfoCollector {
             return "127.0.0.1";
         }
     }
+
+    @PostConstruct
+    public void init() {
+        collectorThread = new Thread(() -> {
+            logger.info("启动服务器信息收集线程");
+            while (running && !Thread.currentThread().isInterrupted()) {
+                try {
+                    collectAndStoreServerInfo();
+                    Thread.sleep(10000);
+                } catch (InterruptedException e) {
+                    logger.info("服务器信息收集线程被中断");
+                    Thread.currentThread().interrupt();
+                } catch (Exception e) {
+                    logger.error("服务器信息收集线程异常", e);
+                    // 避免死循环狂刷日志
+                    try {
+                        Thread.sleep(10000);
+                    } catch (InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
+            logger.info("服务器信息收集线程已停止");
+        }, "ServerInfoCollector-Thread");
+
+        collectorThread.setDaemon(true);
+        collectorThread.start();
+    }
+
+    @PreDestroy
+    public void destroy() {
+        running = false;
+        if (collectorThread != null) {
+            collectorThread.interrupt();
+        }
+    }
     
     /**
      * 定时收集并存储本节点服务器信息到Redis
      * 每10秒执行一次
      */
-    @Scheduled(fixedRate = 10000)
     public void collectAndStoreServerInfo() {
         try {
             logger.debug("🔄 开始收集并存储本节点服务器信息");

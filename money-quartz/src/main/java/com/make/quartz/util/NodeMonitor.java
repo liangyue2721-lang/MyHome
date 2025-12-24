@@ -4,9 +4,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -34,12 +35,50 @@ public class NodeMonitor {
     
     @Autowired
     private RedisTemplate<String, String> redisTemplate;
+
+    private volatile boolean running = true;
+    private Thread monitorThread;
+
+    @PostConstruct
+    public void init() {
+        monitorThread = new Thread(() -> {
+            log.info("启动节点监控线程");
+            while (running && !Thread.currentThread().isInterrupted()) {
+                try {
+                    checkNodeStatus();
+                    Thread.sleep(30000);
+                } catch (InterruptedException e) {
+                    log.info("节点监控线程被中断");
+                    Thread.currentThread().interrupt();
+                } catch (Exception e) {
+                    log.error("节点监控线程异常", e);
+                    // 避免死循环狂刷日志
+                    try {
+                        Thread.sleep(30000);
+                    } catch (InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
+            log.info("节点监控线程已停止");
+        }, "NodeMonitor-Thread");
+
+        monitorThread.setDaemon(true);
+        monitorThread.start();
+    }
+
+    @PreDestroy
+    public void destroy() {
+        running = false;
+        if (monitorThread != null) {
+            monitorThread.interrupt();
+        }
+    }
     
     /**
      * 定时检查节点状态
      * 每30秒执行一次
      */
-    @Scheduled(fixedRate = 30000)
     public void checkNodeStatus() {
         try {
             log.debug("开始检查节点状态");

@@ -11,10 +11,10 @@ import com.make.quartz.util.NodeRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
 import javax.annotation.Resource;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -43,14 +43,54 @@ public class TaskRecoveryService {
     private static final String RUNTIME_CACHE_PREFIX = "mq:job:runtime:";
     private static final String TASK_MONITOR_PREFIX = "TASK_MONITOR:";
 
+    private volatile boolean running = true;
+    private Thread recoveryThread;
+
     /**
      * Requirement 1: 启动时立刻执行一次任务恢复扫描
      */
     @PostConstruct
     public void init() {
         log.info("[RECOVERY_INIT] Starting initial task recovery check...");
+
+        // 1. 立即执行一次本地恢复
         recoverLocalZombieTasks();
         recoverLostTasks();
+
+        // 2. 启动后台线程定期执行恢复
+        recoveryThread = new Thread(() -> {
+            log.info("[RECOVERY_THREAD] Starting background recovery thread...");
+            while (running && !Thread.currentThread().isInterrupted()) {
+                try {
+                    // 每30秒执行一次
+                    Thread.sleep(30000);
+                    recoverLostTasks();
+                } catch (InterruptedException e) {
+                    log.info("[RECOVERY_THREAD] Thread interrupted, stopping...");
+                    Thread.currentThread().interrupt();
+                } catch (Exception e) {
+                    log.error("[RECOVERY_THREAD] Error in recovery loop", e);
+                    // 避免死循环狂刷日志
+                    try {
+                        Thread.sleep(30000);
+                    } catch (InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
+            log.info("[RECOVERY_THREAD] Thread stopped.");
+        }, "TaskRecovery-Thread");
+
+        recoveryThread.setDaemon(true);
+        recoveryThread.start();
+    }
+
+    @PreDestroy
+    public void destroy() {
+        running = false;
+        if (recoveryThread != null) {
+            recoveryThread.interrupt();
+        }
     }
 
     /**
@@ -107,7 +147,6 @@ public class TaskRecoveryService {
     /**
      * 定期检查丢失任务并恢复 (30秒)
      */
-    @Scheduled(fixedDelay = 30000)
     public void recoverLostTasks() {
         try {
             // 1. 查询所有活跃任务 (WAITING / RUNNING)
