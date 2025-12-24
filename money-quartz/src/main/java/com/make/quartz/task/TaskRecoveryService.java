@@ -149,11 +149,14 @@ public class TaskRecoveryService {
      */
     public void recoverLostTasks() {
         try {
+            log.info("[RECOVERY_LOOP_START] Checking for lost tasks...");
             // 1. 查询所有活跃任务 (WAITING / RUNNING)
             List<SysJobRuntime> activeJobs = sysJobRuntimeService.selectActiveJobs();
             if (activeJobs == null || activeJobs.isEmpty()) {
                 return;
             }
+
+            int recoveredCount = 0;
 
             for (SysJobRuntime runtime : activeJobs) {
                 try {
@@ -165,6 +168,7 @@ public class TaskRecoveryService {
                     // 判定依据：Redis 无，DB 有 (Active)
                     if (Boolean.FALSE.equals(redisTemplate.hasKey(dedupKey))) {
                         log.warn("[RECOVERY_TRIGGER] Found zombie task: jobId={} executionId={}. Redis key missing.", jobId, executionId);
+                        recoveredCount++;
 
                         // 3. 恢复 Redis 锁 (防止重复恢复 & 满足生产去重规则)
                         // 2小时 TTL
@@ -193,6 +197,10 @@ public class TaskRecoveryService {
                 } catch (Exception e) {
                     log.error("[RECOVERY_ITEM_ERR] executionId={} err={}", runtime.getExecutionId(), e.getMessage());
                 }
+            }
+
+            if (recoveredCount > 0) {
+                 log.info("[RECOVERY_SUMMARY] Recovered {} tasks.", recoveredCount);
             }
 
         } catch (Exception e) {

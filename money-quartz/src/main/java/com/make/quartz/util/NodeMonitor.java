@@ -116,7 +116,9 @@ public class NodeMonitor {
     private void handleOfflineNode(String nodeId) {
         try {
             log.info("开始处理失联节点: {}", nodeId);
-            
+            // Requirement 4: 补充节点下线日志
+            log.info("[MONITOR_NODE_OFFLINE] node={}", nodeId);
+
             // 从节点集合中移除
             redisTemplate.opsForSet().remove(SCHEDULER_NODES_KEY, nodeId);
             
@@ -173,6 +175,10 @@ public class NodeMonitor {
 
             // Push back to Global Queue
             String headerLog = (p > 0) ? rawTask.substring(0, p) : "UNKNOWN_HEADER";
+
+            // Requirement 4: 补充任务重分发日志
+            log.info("[MONITOR_TASK_REDISTRIBUTE] header={}", headerLog);
+
             if ("HIGH".equals(priority)) {
                 redisTemplate.opsForList().leftPush(GLOBAL_QUEUE_HIGH, rawTask);
                 log.info("[TASK_MIGRATE] Task migrated to HIGH queue. Header={}", headerLog);

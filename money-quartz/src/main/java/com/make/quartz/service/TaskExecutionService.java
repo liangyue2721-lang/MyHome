@@ -339,7 +339,13 @@ public class TaskExecutionService {
      * 执行一次任务（消费逻辑）
      */
     private void executeOnce(SysJob sysJob) throws Exception {
-        JobInvokeUtil.invokeMethod(sysJob);
+        // Requirement 2: 补充消费时过程日志
+        log.info("[EXEC_INVOKE_START] executionId={} target={}", MDC.get("traceId"), sysJob.getInvokeTarget());
+        try {
+            JobInvokeUtil.invokeMethod(sysJob);
+        } finally {
+            log.info("[EXEC_INVOKE_END] executionId={}", MDC.get("traceId"));
+        }
     }
 
     /**

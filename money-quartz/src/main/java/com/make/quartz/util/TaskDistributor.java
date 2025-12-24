@@ -50,6 +50,9 @@ public class TaskDistributor {
      * @return executionId 若调度成功；null 若被去重或失败
      */
     public String scheduleJob(SysJob sysJob, long scheduledAt) {
+        // Requirement 2: 补充任务生产请求日志
+        log.info("[SCHEDULE_REQ] jobId={} scheduledAt={}", sysJob.getJobId(), scheduledAt);
+
         // 1. 生成 executionId
         String executionId = IdUtils.fastSimpleUUID();
         // 放入 MDC
@@ -249,6 +252,9 @@ public class TaskDistributor {
 
         // 3.3 Redis Enqueue
         try {
+            // Requirement 2: 补充入队开始日志
+            log.info("[MQ_ENQUEUE_START] jobId={} executionId={}", sysJob.getJobId(), executionId);
+
             // 绑定 executionId 到任务对象，以便 Queue 使用
             sysJob.setTraceId(executionId);
 

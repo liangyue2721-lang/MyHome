@@ -116,7 +116,10 @@ public class NodeRegistry implements SmartLifecycle {
                         TimeUnit.SECONDS
                 );
                 // Ensure in Set (in case accidentally removed)
-                redisTemplate.opsForSet().add(NODE_SET_KEY, nodeId);
+                Long added = redisTemplate.opsForSet().add(NODE_SET_KEY, nodeId);
+                if (added != null && added > 0) {
+                    log.info("[NODE_REGISTER_SUCCESS] nodeId={}", nodeId);
+                }
             } catch (Exception e) {
                 // Suppress errors during shutdown or connection failure to avoid noise
                 if (running) {

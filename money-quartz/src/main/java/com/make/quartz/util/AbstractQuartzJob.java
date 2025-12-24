@@ -2,6 +2,8 @@ package com.make.quartz.util;
 
 import com.make.common.config.RedisQuartzSemaphore;
 import com.make.common.utils.ThreadPoolUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.quartz.Job;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
@@ -17,6 +19,8 @@ import org.quartz.JobExecutionException;
  * </ul>
  */
 public abstract class AbstractQuartzJob implements Job {
+
+    private static final Logger log = LoggerFactory.getLogger(AbstractQuartzJob.class);
 
     /**
      * Quartz Job 入口（模板方法，禁止子类覆盖）
@@ -42,6 +46,7 @@ public abstract class AbstractQuartzJob implements Job {
         if (!RedisQuartzSemaphore.tryAcquire(jobKey)) {
             return;
         }
+        log.info("[JOB_SEMAPHORE_ACQUIRED] jobKey={}", jobKey);
 
         try {
             // 2) 调度生产阶段：前置校验
@@ -51,6 +56,7 @@ public abstract class AbstractQuartzJob implements Job {
             }
 
             // 3) 投递到消费线程池
+            log.info("[JOB_SUBMIT_POOL] jobKey={}", jobKey);
             ThreadPoolUtil.getCoreExecutor().execute(wrapExecute(context, jobKey));
         } catch (Exception e) {
             // 4) 投递失败兜底释放，避免“占锁不执行”
@@ -79,6 +85,7 @@ public abstract class AbstractQuartzJob implements Job {
             } finally {
                 // 唯一释放点：无论成功/失败/return，必释放
                 RedisQuartzSemaphore.release(jobKey);
+                log.info("[JOB_SEMAPHORE_RELEASED] jobKey={}", jobKey);
             }
         };
     }
