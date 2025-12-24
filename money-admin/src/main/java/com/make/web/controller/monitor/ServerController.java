@@ -38,7 +38,6 @@ public class ServerController {
     @Autowired
     private ServerInfoCollector serverInfoCollector;
 
-    @PreAuthorize("@ss.hasPermi('monitor:server:list')")
     @GetMapping("/getInfo")
     public AjaxResult getInfo() throws Exception {
         server.copyTo();
