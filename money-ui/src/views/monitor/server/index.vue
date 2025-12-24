@@ -647,11 +647,23 @@ export default {
           }
           history.threads.push(totalActiveThreads);
 
+          // Calculate total network traffic (in + out)
+          let totalNetworkTraffic = 0;
+          if (server.networkTraffic) {
+              // networkTraffic is a List of interfaces in JSON
+              const interfaces = server.networkTraffic;
+              if (Array.isArray(interfaces)) {
+                  totalNetworkTraffic = interfaces.reduce((sum, iface) => sum + (iface.receiveRate || 0) + (iface.sendRate || 0), 0);
+              }
+          }
+          history.network.push(totalNetworkTraffic);
+
           if (history.time.length > 20) {
               history.time.shift();
               history.cpu.shift();
               history.memory.shift();
               history.threads.shift();
+              history.network.shift();
           }
       });
 
@@ -678,8 +690,41 @@ export default {
           series: nodeIds.map(id => ({ name: id, type: 'line', data: this.clusterChartHistory[id].threads }))
       });
 
+      // Update Network Chart
       this.clusterNetworkChart.setOption({
-          title: { text: '网络流量数据暂未实现', left: 'center', top: 'center' }
+          title: { text: '' }, // Clear "Not Implemented" text
+          legend: { data: nodeIds },
+          tooltip: {
+            trigger: 'axis',
+            formatter: function(params) {
+                let result = params[0].name + '<br/>';
+                params.forEach(param => {
+                    let value = param.value;
+                    let unit = 'B/s';
+                    if (value > 1024 * 1024) {
+                        value = (value / (1024 * 1024)).toFixed(2);
+                        unit = 'MB/s';
+                    } else if (value > 1024) {
+                        value = (value / 1024).toFixed(2);
+                        unit = 'KB/s';
+                    }
+                    result += param.marker + param.seriesName + ': ' + value + ' ' + unit + '<br/>';
+                });
+                return result;
+            }
+          },
+          xAxis: { data: times },
+          yAxis: {
+            name: 'Traffic Rate',
+            axisLabel: {
+                formatter: function (value) {
+                    if (value > 1024 * 1024) return (value / (1024 * 1024)).toFixed(1) + ' MB/s';
+                    if (value > 1024) return (value / 1024).toFixed(1) + ' KB/s';
+                    return value + ' B/s';
+                }
+            }
+          },
+          series: nodeIds.map(id => ({ name: id, type: 'line', data: this.clusterChartHistory[id].network }))
       });
     },
     getHighestDiskUsage(sysFiles) {
