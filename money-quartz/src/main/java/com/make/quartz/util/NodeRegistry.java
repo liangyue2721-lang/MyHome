@@ -9,6 +9,8 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -35,6 +37,7 @@ public class NodeRegistry implements SmartLifecycle {
     private final RedisTemplate<String, String> redisTemplate;
 
     private volatile boolean running = false;
+    private ScheduledExecutorService heartbeatScheduler;
 
     public NodeRegistry(RedisTemplate<String, String> redisTemplate) {
         this.redisTemplate = redisTemplate;
@@ -89,25 +92,49 @@ public class NodeRegistry implements SmartLifecycle {
     @Override
     public void start() {
         this.running = true;
-        String nodeId = getCurrentNodeId();
+        startHeartbeat();
+    }
 
-        try {
-            redisTemplate.opsForSet().add(NODE_SET_KEY, nodeId);
-            redisTemplate.opsForValue().set(
-                    NODE_TTL_PREFIX + nodeId,
-                    "1",
-                    30,
-                    TimeUnit.SECONDS
-            );
-            log.info("[NODE_REGISTER] nodeId={} registered", nodeId);
-        } catch (Exception e) {
-            log.warn("[NODE_REGISTER_ERR] nodeId={}", nodeId, e);
+    private void startHeartbeat() {
+        if (heartbeatScheduler == null || heartbeatScheduler.isShutdown()) {
+            heartbeatScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "node-heartbeat-thread");
+                t.setDaemon(true);
+                return t;
+            });
         }
+
+        heartbeatScheduler.scheduleAtFixedRate(() -> {
+            if (!running) return;
+            String nodeId = getCurrentNodeId();
+            try {
+                // Refresh TTL
+                redisTemplate.opsForValue().set(
+                        NODE_TTL_PREFIX + nodeId,
+                        "1",
+                        30,
+                        TimeUnit.SECONDS
+                );
+                // Ensure in Set (in case accidentally removed)
+                redisTemplate.opsForSet().add(NODE_SET_KEY, nodeId);
+            } catch (Exception e) {
+                // Suppress errors during shutdown or connection failure to avoid noise
+                if (running) {
+                    log.warn("[NODE_HEARTBEAT_FAIL] nodeId={} msg={}", nodeId, e.getMessage());
+                }
+            }
+        }, 0, 10, TimeUnit.SECONDS);
+
+        log.info("[NODE_REGISTER] Heartbeat started. nodeId={}", getCurrentNodeId());
     }
 
     @Override
     public void stop() {
         this.running = false;
+        if (heartbeatScheduler != null) {
+            heartbeatScheduler.shutdownNow();
+        }
+        log.info("[NODE_REGISTER] Stopped.");
     }
 
     @Override

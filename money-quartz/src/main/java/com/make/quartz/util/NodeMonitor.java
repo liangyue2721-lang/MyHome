@@ -1,5 +1,6 @@
 package com.make.quartz.util;
 
+import com.make.common.utils.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,17 +22,15 @@ public class NodeMonitor {
     private static final Logger log = LoggerFactory.getLogger(NodeMonitor.class);
     
     /**
-     * Redis key定义
+     * Redis key定义 - 统一对齐 NodeRegistry
      */
-    private static final String SCHEDULER_NODES_KEY = "SCHEDULER_NODES";
-    private static final String SCHEDULER_NODE_PREFIX = "SCHEDULER_NODE:";
-    private static final String SCHEDULER_NODE_HEARTBEAT_SUFFIX = ":HEARTBEAT";
-    private static final String SCHEDULER_TASK_QUEUE = "SCHEDULER_TASK_QUEUE";
-    
-    /**
-     * 节点失联判定时间（毫秒）
-     */
-    private static final long NODE_OFFLINE_THRESHOLD = 120000; // 2分钟
+    private static final String SCHEDULER_NODES_KEY = "mq:nodes:alive";
+    private static final String NODE_TTL_PREFIX = "mq:nodes:ttl:";
+    private static final String PROCESSING_QUEUE_PREFIX = "mq:task:processing:";
+
+    // Global Queues from RedisMessageQueue
+    private static final String GLOBAL_QUEUE_HIGH = "mq:task:global:high";
+    private static final String GLOBAL_QUEUE_NORMAL = "mq:task:global:normal";
     
     @Autowired
     private RedisTemplate<String, String> redisTemplate;
@@ -46,7 +45,7 @@ public class NodeMonitor {
             while (running && !Thread.currentThread().isInterrupted()) {
                 try {
                     checkNodeStatus();
-                    Thread.sleep(30000);
+                    Thread.sleep(10000); // Check every 10s
                 } catch (InterruptedException e) {
                     log.info("节点监控线程被中断");
                     Thread.currentThread().interrupt();
@@ -77,7 +76,6 @@ public class NodeMonitor {
     
     /**
      * 定时检查节点状态
-     * 每30秒执行一次
      */
     public void checkNodeStatus() {
         try {
@@ -90,32 +88,19 @@ public class NodeMonitor {
                 return;
             }
             
-            long currentTime = System.currentTimeMillis();
-            boolean currentNodeIsMaster = false;
-            
             // 检查各节点状态
             for (String node : nodes) {
-                // 获取节点心跳时间
-                String heartbeatKey = SCHEDULER_NODE_PREFIX + node + SCHEDULER_NODE_HEARTBEAT_SUFFIX;
-                String heartbeatStr = redisTemplate.opsForValue().get(heartbeatKey);
+                // Check Liveness via TTL Key existence
+                // NodeRegistry maintains this key with 30s TTL
+                Boolean hasKey = redisTemplate.hasKey(NODE_TTL_PREFIX + node);
                 
-                if (heartbeatStr == null) {
-                    log.warn("节点 {} 无心跳信息", node);
-                    handleOfflineNode(node);
-                    continue;
-                }
-                
-                long heartbeatTime = Long.parseLong(heartbeatStr);
-                if (currentTime - heartbeatTime > NODE_OFFLINE_THRESHOLD) {
-                    log.warn("节点 {} 心跳超时，可能已失联", node);
+                if (Boolean.FALSE.equals(hasKey)) {
+                    log.warn("[NODE_OFFLINE] Node {} TTL key missing, considering offline.", node);
                     handleOfflineNode(node);
                 } else {
-                    log.debug("节点 {} 状态正常", node);
+                    log.debug("Node {} is alive", node);
                 }
             }
-            
-            // 更新节点集合过期时间
-            redisTemplate.expire(SCHEDULER_NODES_KEY, 300, TimeUnit.SECONDS);
             
             log.debug("节点状态检查完成");
         } catch (Exception e) {
@@ -132,60 +117,73 @@ public class NodeMonitor {
         try {
             log.info("开始处理失联节点: {}", nodeId);
             
-            // 清理失联节点相关信息
-            String heartbeatKey = SCHEDULER_NODE_PREFIX + nodeId + SCHEDULER_NODE_HEARTBEAT_SUFFIX;
-            redisTemplate.delete(heartbeatKey);
-            
-            String usageKey = SCHEDULER_NODE_PREFIX + nodeId + ":USAGE";
-            redisTemplate.delete(usageKey);
-            
             // 从节点集合中移除
             redisTemplate.opsForSet().remove(SCHEDULER_NODES_KEY, nodeId);
             
+            // 清理可能残留的 TTL Key
+            redisTemplate.delete(NODE_TTL_PREFIX + nodeId);
+
             // 处理该节点的任务队列
-            String taskQueueKey = SCHEDULER_NODE_PREFIX + nodeId + ":" + SCHEDULER_TASK_QUEUE;
-            while (redisTemplate.opsForList().size(taskQueueKey) != null && 
-                   redisTemplate.opsForList().size(taskQueueKey) > 0) {
-                // 将任务迁移到其他节点
-                String taskId = redisTemplate.opsForList().rightPop(taskQueueKey);
-                if (taskId != null) {
-                    redistributeTask(taskId);
+            String taskQueueKey = PROCESSING_QUEUE_PREFIX + nodeId;
+
+            long count = 0;
+            while (true) {
+                // RightPop - Take from tail
+                String rawTask = redisTemplate.opsForList().rightPop(taskQueueKey);
+                if (rawTask == null) {
+                    break;
                 }
+                redistributeTask(rawTask);
+                count++;
             }
             
-            // 删除任务队列
+            // 删除任务队列 (Should be empty now)
             redisTemplate.delete(taskQueueKey);
             
-            log.info("失联节点 {} 处理完成", nodeId);
+            log.info("失联节点 {} 处理完成. Migrated {} tasks.", nodeId, count);
         } catch (Exception e) {
             log.error("处理失联节点 {} 时发生异常", nodeId, e);
         }
     }
     
     /**
-     * 重新分配任务到其他节点
+     * 重新分配任务到全局队列
      * 
-     * @param taskId 任务ID
+     * @param rawTask 原始任务消息 (<executionId>|<priority>\n<json>)
      */
-    private void redistributeTask(String taskId) {
+    private void redistributeTask(String rawTask) {
         try {
-            log.info("重新分配任务: {}", taskId);
-            
-            // 获取当前所有在线节点
-            Set<String> nodes = redisTemplate.opsForSet().members(SCHEDULER_NODES_KEY);
-            if (nodes == null || nodes.isEmpty()) {
-                log.warn("没有可用节点，任务 {} 暂时无法执行", taskId);
-                return;
+            if (StringUtils.isEmpty(rawTask)) return;
+
+            // Extract Priority from Header
+            String priority = "NORMAL";
+            int p = rawTask.indexOf('\n');
+            if (p > 0) {
+                String header = rawTask.substring(0, p);
+                if (header.contains("|")) {
+                    String[] parts = header.split("\\|");
+                    if (parts.length > 1) {
+                         String pri = parts[1];
+                         if ("HIGH".equalsIgnoreCase(pri)) {
+                             priority = "HIGH";
+                         }
+                    }
+                }
             }
-            
-            // 简单处理：将任务放入任务队列，让在线节点自行获取
-            // 实际应用中可以实现更智能的负载均衡算法
-            redisTemplate.opsForList().leftPush(SCHEDULER_TASK_QUEUE, taskId);
-            redisTemplate.expire(SCHEDULER_TASK_QUEUE, 300, TimeUnit.SECONDS); // 5分钟过期
-            
-            log.info("任务 {} 已放入全局任务队列，等待节点获取", taskId);
+
+            // Push back to Global Queue
+            String headerLog = (p > 0) ? rawTask.substring(0, p) : "UNKNOWN_HEADER";
+            if ("HIGH".equals(priority)) {
+                redisTemplate.opsForList().leftPush(GLOBAL_QUEUE_HIGH, rawTask);
+                log.info("[TASK_MIGRATE] Task migrated to HIGH queue. Header={}", headerLog);
+            } else {
+                redisTemplate.opsForList().leftPush(GLOBAL_QUEUE_NORMAL, rawTask);
+                log.info("[TASK_MIGRATE] Task migrated to NORMAL queue. Header={}", headerLog);
+            }
+
         } catch (Exception e) {
-            log.error("重新分配任务 {} 时发生异常", taskId, e);
+            log.error("重新分配任务时发生异常. RawTask len={}", rawTask.length(), e);
+            // Fallback: push to dead letter? For now just log error.
         }
     }
 }
