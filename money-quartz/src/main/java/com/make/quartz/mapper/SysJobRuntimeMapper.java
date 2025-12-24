@@ -38,6 +38,14 @@ public interface SysJobRuntimeMapper {
     public int insertSysJobRuntime(SysJobRuntime sysJobRuntime);
 
     /**
+     * 批量新增实时任务
+     *
+     * @param list 任务列表
+     * @return 结果
+     */
+    public int insertSysJobRuntimeBatch(List<SysJobRuntime> list);
+
+    /**
      * 修改实时任务（待执行 / 执行中）
      *
      * @param sysJobRuntime 实时任务（待执行 / 执行中）

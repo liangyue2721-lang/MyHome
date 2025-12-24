@@ -50,7 +50,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </select>
 
     <insert id="insertSysJobRuntime" parameterType="SysJobRuntime" useGeneratedKeys="true" keyProperty="id">
-        insert into sys_job_runtime
+        insert ignore into sys_job_runtime
         <trim prefix="(" suffix=")" suffixOverrides=",">
             <if test="jobId != null">job_id,</if>
             <if test="jobName != null and jobName != ''">job_name,</if>
@@ -83,6 +83,20 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="createTime != null">#{createTime},</if>
             <if test="updateTime != null">#{updateTime},</if>
          </trim>
+    </insert>
+
+    <insert id="insertSysJobRuntimeBatch" parameterType="java.util.List">
+        insert ignore into sys_job_runtime (
+            job_id, job_name, job_group, execution_id, status, node_id,
+            scheduled_time, enqueue_time, start_time, retry_count, max_retry, payload, create_time, update_time
+        ) values
+        <foreach collection="list" item="item" index="index" separator=",">
+            (
+                #{item.jobId}, #{item.jobName}, #{item.jobGroup}, #{item.executionId}, #{item.status}, #{item.nodeId},
+                #{item.scheduledTime}, #{item.enqueueTime}, #{item.startTime}, #{item.retryCount}, #{item.maxRetry},
+                #{item.payload}, #{item.createTime}, #{item.updateTime}
+            )
+        </foreach>
     </insert>
 
     <update id="updateSysJobRuntime" parameterType="SysJobRuntime">

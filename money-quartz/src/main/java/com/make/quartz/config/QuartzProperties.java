@@ -21,6 +21,17 @@ public class QuartzProperties {
     private int listenerMaxThreadsMultiple = 2;
 
     /**
+     * 监听器并发数 (同时运行的监听线程数)
+     * 建议设置为 consumerCoreSize 的一半或相等，取决于 Redis 网络延迟
+     */
+    private int listenerConcurrency = 4;
+
+    /**
+     * 背压休眠时间 (当消费者线程池满时，监听器暂停多久)
+     */
+    private long backpressureSleepMs = 50L;
+
+    /**
      * Producer Thread Pool (Scheduler)
      */
     private int producerCoreSize = 4;
@@ -94,6 +105,12 @@ public class QuartzProperties {
     public void setListenerMaxThreadsMultiple(int listenerMaxThreadsMultiple) {
         this.listenerMaxThreadsMultiple = listenerMaxThreadsMultiple;
     }
+
+    public int getListenerConcurrency() { return listenerConcurrency; }
+    public void setListenerConcurrency(int listenerConcurrency) { this.listenerConcurrency = listenerConcurrency; }
+
+    public long getBackpressureSleepMs() { return backpressureSleepMs; }
+    public void setBackpressureSleepMs(long backpressureSleepMs) { this.backpressureSleepMs = backpressureSleepMs; }
 
     public int getProducerCoreSize() { return producerCoreSize; }
     public void setProducerCoreSize(int producerCoreSize) { this.producerCoreSize = producerCoreSize; }

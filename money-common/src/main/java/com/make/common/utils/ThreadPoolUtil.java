@@ -168,10 +168,18 @@ public class ThreadPoolUtil {
     }
 
     /**
-     * 创建一个自定义线程池
+     * 创建一个自定义线程池 (默认 CallerRunsPolicy)
      */
     public static ExecutorService createCustomThreadPool(
             int core, int max, int queueCapacity, String prefix) {
+        return createCustomThreadPool(core, max, queueCapacity, prefix, new ThreadPoolExecutor.CallerRunsPolicy());
+    }
+
+    /**
+     * 创建一个自定义线程池 (指定拒绝策略)
+     */
+    public static ExecutorService createCustomThreadPool(
+            int core, int max, int queueCapacity, String prefix, RejectedExecutionHandler handler) {
 
         return new ThreadPoolExecutor(
                 core,
@@ -179,7 +187,7 @@ public class ThreadPoolUtil {
                 60L, TimeUnit.SECONDS,
                 new LinkedBlockingQueue<>(queueCapacity),
                 createNamedThreadFactory(prefix),
-                new ThreadPoolExecutor.CallerRunsPolicy()
+                handler
         );
     }
 

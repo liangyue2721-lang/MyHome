@@ -115,7 +115,8 @@ public class RedisMessageQueue implements SmartLifecycle {
                 quartzProperties.getConsumerCoreSize(),
                 quartzProperties.getConsumerMaxSize(),
                 quartzProperties.getConsumerQueueCapacity(),
-                "redis-queue-consumer"
+                "redis-queue-consumer",
+                new ThreadPoolExecutor.AbortPolicy() // Use Abort to enable backpressure
         );
 
         this.internalScheduler = Executors.newScheduledThreadPool(2, r -> {
@@ -238,58 +239,87 @@ public class RedisMessageQueue implements SmartLifecycle {
         this.currentNodeId = nodeId;
         this.running = true;
 
-        listenerExecutor.submit(() -> {
-            log.info("[RMQ_START] Started global listening on node={}", currentNodeId);
-            while (running && !Thread.currentThread().isInterrupted()) {
+        int concurrency = quartzProperties.getListenerConcurrency();
+        if (concurrency <= 0) concurrency = 1;
+
+        log.info("[RMQ_START] Starting global listening on node={} concurrency={}", currentNodeId, concurrency);
+
+        for (int i = 0; i < concurrency; i++) {
+            listenerExecutor.submit(() -> runListenerLoop(handler));
+        }
+    }
+
+    private void runListenerLoop(MessageHandler handler) {
+        while (running && !Thread.currentThread().isInterrupted()) {
+            TaskMessage msg = null;
+            try {
+                // Lua Poll
+                String msgRaw = redisTemplate.execute(pollScript,
+                        Arrays.asList(GLOBAL_QUEUE_HIGH, GLOBAL_QUEUE_NORMAL),
+                        currentNodeId, String.valueOf(System.currentTimeMillis()), META_PREFIX, PROCESSING_PREFIX);
+
+                if (msgRaw == null) {
+                    // Empty queue, sleep to avoid spin
+                    Thread.sleep(200);
+                    continue;
+                }
+
+                // Parse: <executionId>|<priority>\n<json>
+                int p = msgRaw.indexOf('\n');
+                if (p < 0) continue; // Should be handled by Lua (dropped to dead queue)
+
+                String header = msgRaw.substring(0, p);
+                String json = msgRaw.substring(p + 1);
+
+                final String finalMsgRaw = msgRaw; // for ACK/Requeue
+
+                msg = JSON.parseObject(json, TaskMessage.class);
+                msg.setOriginalJson(finalMsgRaw); // Store full raw format for consistent remove
+
+                // Double check executionId from header matches payload
+                String execIdFromHeader = header.contains("|") ? header.substring(0, header.indexOf('|')) : header;
+                if (msg.getExecutionId() == null) {
+                    msg.setExecutionId(execIdFromHeader);
+                }
+
+                submitTask(msg, handler);
+
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                break;
+            } catch (Exception e) {
+                log.warn("[RMQ_LISTEN_ERR] {}", e.getMessage());
+                // In case of error (e.g. parse error), if we have msg we might need to ACK or DLQ manually?
+                // For now, pollScript moves it to processing queue. If we crash here, Reclaim will handle it.
+                try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
+            }
+        }
+    }
+
+    private void submitTask(TaskMessage msg, MessageHandler handler) {
+        boolean submitted = false;
+        while (!submitted && running && !Thread.currentThread().isInterrupted()) {
+            try {
+                consumerExecutor.execute(() -> {
+                    try {
+                        handler.handle(msg);
+                        acknowledge(msg);
+                    } catch (Exception e) {
+                        requeue(msg, e);
+                    }
+                });
+                submitted = true;
+            } catch (RejectedExecutionException re) {
+                // Backpressure: Sleep and retry
                 try {
-                    // Lua Poll
-                    String msgRaw = redisTemplate.execute(pollScript,
-                            Arrays.asList(GLOBAL_QUEUE_HIGH, GLOBAL_QUEUE_NORMAL),
-                            currentNodeId, String.valueOf(System.currentTimeMillis()), META_PREFIX, PROCESSING_PREFIX);
-
-                    if (msgRaw == null) {
-                        // Empty queue, sleep to avoid spin
-                        Thread.sleep(200);
-                        continue;
-                    }
-
-                    // Parse: <executionId>|<priority>\n<json>
-                    int p = msgRaw.indexOf('\n');
-                    if (p < 0) continue; // Should be handled by Lua (dropped to dead queue)
-
-                    String header = msgRaw.substring(0, p);
-                    String json = msgRaw.substring(p + 1);
-
-                    final String finalMsgRaw = msgRaw; // for ACK/Requeue
-
-                    TaskMessage msg = JSON.parseObject(json, TaskMessage.class);
-                    msg.setOriginalJson(finalMsgRaw); // Store full raw format for consistent remove
-
-                    // Double check executionId from header matches payload
-                    String execIdFromHeader = header.contains("|") ? header.substring(0, header.indexOf('|')) : header;
-                    if (msg.getExecutionId() == null) {
-                        msg.setExecutionId(execIdFromHeader);
-                    }
-
-                    // 提交到消费线程池
-                    consumerExecutor.execute(() -> {
-                        try {
-                            handler.handle(msg);
-                            acknowledge(msg);
-                        } catch (Exception e) {
-                            requeue(msg, e);
-                        }
-                    });
-
+                    long sleep = quartzProperties.getBackpressureSleepMs();
+                    Thread.sleep(sleep > 0 ? sleep : 50);
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
                     break;
-                } catch (Exception e) {
-                    log.warn("[RMQ_LISTEN_ERR] {}", e.getMessage());
-                    try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
                 }
             }
-        });
+        }
     }
 
     public void stopListening() {
@@ -363,10 +393,22 @@ public class RedisMessageQueue implements SmartLifecycle {
      * <p>Note: targetNode is ignored in competitive model.
      */
     public void enqueueAt(SysJob sysJob, String targetNode, String priority, long scheduledAtMillis) {
+         // Delegate to Pipeline version but run in immediate mode
+        redisTemplate.executePipelined((org.springframework.data.redis.core.RedisCallback<Object>) connection -> {
+            enqueueInPipeline(connection, sysJob, sysJob.getTraceId(), priority, scheduledAtMillis);
+            return null;
+        });
+    }
+
+    /**
+     * Enqueue inside a Pipeline (Connection based)
+     */
+    public void enqueueInPipeline(org.springframework.data.redis.connection.RedisConnection connection,
+                                  SysJob sysJob, String traceId, String priority, long scheduledAtMillis) {
         TaskMessage msg = new TaskMessage();
         msg.setTaskId(String.valueOf(sysJob.getJobId()));
 
-        String execId = sysJob.getTraceId();
+        String execId = traceId;
         if (StringUtils.isEmpty(execId)) {
             execId = UUID.randomUUID().toString();
         }
@@ -374,7 +416,7 @@ public class RedisMessageQueue implements SmartLifecycle {
         msg.setMessageType(TaskMessage.TYPE_EXECUTE);
         msg.setJobData(sysJob);
         msg.setTimestamp(System.currentTimeMillis());
-        msg.setTraceId(sysJob.getTraceId());
+        msg.setTraceId(traceId);
         msg.setPriority(StringUtils.isEmpty(priority) ? "NORMAL" : priority);
         msg.setRetryCount(0);
         msg.setScheduledAt(scheduledAtMillis);
@@ -384,15 +426,17 @@ public class RedisMessageQueue implements SmartLifecycle {
         String rawMsg = execId + "|" + msg.getPriority() + "\n" + json;
         msg.setOriginalJson(rawMsg);
 
+        byte[] rawBytes = rawMsg.getBytes();
+
         long now = System.currentTimeMillis();
         if (scheduledAtMillis <= now) {
             if ("HIGH".equalsIgnoreCase(priority)) {
-                redisTemplate.opsForList().leftPush(GLOBAL_QUEUE_HIGH, rawMsg);
+                connection.lPush(GLOBAL_QUEUE_HIGH.getBytes(), rawBytes);
             } else {
-                redisTemplate.opsForList().leftPush(GLOBAL_QUEUE_NORMAL, rawMsg);
+                connection.lPush(GLOBAL_QUEUE_NORMAL.getBytes(), rawBytes);
             }
         } else {
-            redisTemplate.opsForZSet().add(GLOBAL_DELAY_ZSET, rawMsg, scheduledAtMillis);
+            connection.zAdd(GLOBAL_DELAY_ZSET.getBytes(), scheduledAtMillis, rawBytes);
         }
     }
 
