@@ -16,19 +16,19 @@
               <tbody>
                 <tr>
                   <td class="el-table__cell is-leaf"><div class="cell">核心数</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.cpu">{{ server.cpu.cpuNum }}</div></td>
+                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.cpu">{{ server.cpu.cpuNum || '--' }}</div></td>
                 </tr>
                 <tr>
                   <td class="el-table__cell is-leaf"><div class="cell">用户使用率</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.cpu">{{ server.cpu.used }}%</div></td>
+                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.cpu">{{ server.cpu.used || '--' }}%</div></td>
                 </tr>
                 <tr>
                   <td class="el-table__cell is-leaf"><div class="cell">系统使用率</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.cpu">{{ server.cpu.sys }}%</div></td>
+                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.cpu">{{ server.cpu.sys || '--' }}%</div></td>
                 </tr>
                 <tr>
                   <td class="el-table__cell is-leaf"><div class="cell">当前空闲率</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.cpu">{{ server.cpu.free }}%</div></td>
+                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.cpu">{{ server.cpu.free || '--' }}%</div></td>
                 </tr>
               </tbody>
             </table>
@@ -52,23 +52,23 @@
               <tbody>
                 <tr>
                   <td class="el-table__cell is-leaf"><div class="cell">总内存</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.mem">{{ server.mem.total }}M</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.jvm">{{ server.jvm.total }}M</div></td>
+                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.mem">{{ server.mem.total || '--' }}M</div></td>
+                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.jvm">{{ server.jvm.total || '--' }}M</div></td>
                 </tr>
                 <tr>
                   <td class="el-table__cell is-leaf"><div class="cell">已用内存</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.mem">{{ server.mem.used}}M</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.jvm">{{ server.jvm.used}}M</div></td>
+                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.mem">{{ server.mem.used || '--' }}M</div></td>
+                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.jvm">{{ server.jvm.used || '--' }}M</div></td>
                 </tr>
                 <tr>
                   <td class="el-table__cell is-leaf"><div class="cell">剩余内存</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.mem">{{ server.mem.free }}M</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.jvm">{{ server.jvm.free }}M</div></td>
+                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.mem">{{ server.mem.free || '--' }}M</div></td>
+                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.jvm">{{ server.jvm.free || '--' }}M</div></td>
                 </tr>
                 <tr>
                   <td class="el-table__cell is-leaf"><div class="cell">使用率</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.mem">{{ server.mem.usage }}%</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.jvm">{{ server.jvm.usage }}%</div></td>
+                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.mem">{{ server.mem.usage || '--' }}%</div></td>
+                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.jvm">{{ server.jvm.usage || '--' }}%</div></td>
                 </tr>
               </tbody>
             </table>
@@ -109,15 +109,15 @@
               <tbody>
                 <tr>
                   <td class="el-table__cell is-leaf" style="width: 25%"><div class="cell">服务器名称</div></td>
-                  <td class="el-table__cell is-leaf" style="width: 25%"><div class="cell" v-if="server.sys">{{ server.sys.computerName }}</div></td>
+                  <td class="el-table__cell is-leaf" style="width: 25%"><div class="cell" v-if="server.sys">{{ server.sys.computerName || '--' }}</div></td>
                   <td class="el-table__cell is-leaf" style="width: 25%"><div class="cell">操作系统</div></td>
-                  <td class="el-table__cell is-leaf" style="width: 25%"><div class="cell" v-if="server.sys">{{ server.sys.osName }}</div></td>
+                  <td class="el-table__cell is-leaf" style="width: 25%"><div class="cell" v-if="server.sys">{{ server.sys.osName || '--' }}</div></td>
                 </tr>
                 <tr>
                   <td class="el-table__cell is-leaf"><div class="cell">服务器IP</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.sys">{{ server.sys.computerIp }}</div></td>
+                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.sys">{{ server.sys.computerIp || '--' }}</div></td>
                   <td class="el-table__cell is-leaf"><div class="cell">系统架构</div></td>
-                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.sys">{{ server.sys.osArch }}</div></td>
+                  <td class="el-table__cell is-leaf"><div class="cell" v-if="server.sys">{{ server.sys.osArch || '--' }}</div></td>
                 </tr>
               </tbody>
             </table>
@@ -336,36 +336,40 @@
               刷新
             </el-button>
           </div>
-          <el-table :data="queueData" style="width: 100%" v-loading="queueLoading" stripe border height="400">
-             <el-table-column prop="queueName" label="队列名称" width="250" show-overflow-tooltip></el-table-column>
-             <el-table-column prop="taskId" label="任务ID" width="200" show-overflow-tooltip></el-table-column>
-             <el-table-column prop="targetNode" label="目标节点" width="150" align="center"></el-table-column>
-             <el-table-column prop="priority" label="优先级" width="100" align="center">
+          <el-table :data="queueData" style="width: 100%" v-loading="queueLoading" stripe border height="400" empty-text="暂无任务运行数据">
+             <el-table-column prop="jobId" label="任务ID" width="100" show-overflow-tooltip></el-table-column>
+             <el-table-column prop="jobName" label="任务名称" width="200" show-overflow-tooltip></el-table-column>
+             <el-table-column prop="jobGroup" label="任务分组" width="120" show-overflow-tooltip></el-table-column>
+             <el-table-column prop="executionId" label="执行实例ID" width="280" show-overflow-tooltip></el-table-column>
+             <el-table-column prop="status" label="任务状态" width="120" align="center">
                 <template slot-scope="scope">
-                   <el-tag :type="scope.row.priority === 'HIGH' ? 'danger' : 'info'">{{ scope.row.priority }}</el-tag>
-                </template>
-             </el-table-column>
-             <el-table-column prop="status" label="状态" width="120" align="center">
-                <template slot-scope="scope">
-                   <el-tag v-if="scope.row.status === 'PROCESSING'" type="primary">PROCESSING</el-tag>
+                   <el-tag v-if="scope.row.status === 'RUNNING'" type="primary">RUNNING</el-tag>
                    <el-tag v-else-if="scope.row.status === 'WAITING'" type="warning">WAITING</el-tag>
-                   <el-tag v-else-if="scope.row.status === 'SUCCESS'" type="success">SUCCESS</el-tag>
-                   <el-tag v-else-if="scope.row.status === 'FAIL'" type="danger">FAIL</el-tag>
+                   <el-tag v-else-if="scope.row.status === 'FAILED'" type="danger">FAILED</el-tag>
                    <el-tag v-else type="info">{{ scope.row.status }}</el-tag>
                 </template>
              </el-table-column>
-             <el-table-column prop="traceId" label="Trace ID" show-overflow-tooltip></el-table-column>
+             <el-table-column prop="nodeId" label="执行节点" width="140" align="center"></el-table-column>
+             <el-table-column label="计划执行时间" width="160" align="center">
+               <template slot-scope="scope">
+                  {{ formatDate(scope.row.scheduledTime) }}
+               </template>
+             </el-table-column>
              <el-table-column label="入队时间" width="160" align="center">
                <template slot-scope="scope">
                   {{ formatDate(scope.row.enqueueTime) }}
                </template>
              </el-table-column>
-             <el-table-column label="完成时间" width="160" align="center">
+             <el-table-column label="开始时间" width="160" align="center">
+               <template slot-scope="scope">
+                  {{ formatDate(scope.row.startTime) }}
+               </template>
+             </el-table-column>
+             <el-table-column label="重试次数" width="100" align="center">
                 <template slot-scope="scope">
-                   {{ formatDate(scope.row.completionTime) }}
+                   {{ scope.row.retryCount }} / {{ scope.row.maxRetry }}
                 </template>
              </el-table-column>
-             <el-table-column prop="retryCount" label="重试" width="80" align="center"></el-table-column>
           </el-table>
         </el-card>
       </el-col>
@@ -381,7 +385,7 @@ import * as echarts from "echarts";
 // API function for queue details
 function getQueueDetails() {
   return request({
-    url: '/monitor/job/queue/details',
+    url: '/quartz/runtime/detail',
     method: 'get'
   })
 }
@@ -482,7 +486,7 @@ export default {
   methods: {
     getList() {
       getServer().then(response => {
-        this.server = response.data;
+        this.server = response.data || {};
         this.$modal.closeLoading();
 
         const now = new Date().toLocaleTimeString().substring(3); // HH:mm:ss -> mm:ss
@@ -495,6 +499,16 @@ export default {
             if (this.memoryHistory.length > 20) this.memoryHistory.shift();
         }
         this.updateSingleNodeCharts();
+      }).catch(error => {
+        this.$modal.closeLoading();
+        if (error.response) {
+            if (error.response.status === 404) {
+                 this.$modal.msgError("监控服务未注册或接口不存在");
+            } else if (error.response.status === 500) {
+                 this.$modal.msgError("监控服务异常，请联系管理员");
+            }
+        }
+        this.server = { cpu: {}, mem: {}, jvm: {}, sys: {}, sysFiles: [], threadPoolInfo: { threadPools: [] } };
       });
     },
     getClusterInfo() {
@@ -503,6 +517,9 @@ export default {
         this.clusterThreadPoolInfo = threadPoolResponse.data;
         this.clusterServerInfo = serverResponse.data;
         this.updateClusterCharts();
+      }).catch(() => {
+          // Silent catch for periodic refresh, or log to console
+          console.error("Cluster info refresh failed");
       });
     },
     handleModeChange() {
@@ -672,9 +689,10 @@ export default {
       // Avoid spinner flicker on refresh
       // this.queueLoading = true;
       getQueueDetails().then(response => {
-        this.queueData = response.data || [];
+        this.queueData = response.data || response || [];
         // this.queueLoading = false;
       }).catch(() => {
+        this.queueData = []; // Clear data on error
         // this.queueLoading = false;
       });
     },

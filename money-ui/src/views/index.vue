@@ -175,17 +175,28 @@ export default {
     // --- Task Stats Method ---
     fetchTaskStats() {
       request({
-        url: '/monitor/job/status-summary',
+        url: '/quartz/runtime/overview',
         method: 'get'
       }).then(response => {
-        // Handle various response formats
-        const data = response.data || response;
-        if (data) {
-          // If data is wrapped in 'data' field again (AjaxResult structure)
-          this.taskStats = data.data || data;
+        // Handle various response formats:
+        // Backend returns: AjaxResult.success(data), where data = { taskStats: {...}, executingPercentage: ... }
+        // request interceptor usually returns 'response.data' directly if success
+        const payload = response.data || response;
+
+        if (payload) {
+             if (payload.taskStats) {
+                 this.taskStats = payload.taskStats;
+             }
+             // executingPercentage is calculated in computed property based on taskStats,
+             // but if backend provides it, we could use it too.
+             // The computed property 'executingPercentage' logic below is:
+             // Math.round((this.taskStats.executing / total) * 100);
+             // Backend also returns 'executingPercentage', but computed is safer for reactivity if taskStats updates.
         }
       }).catch(error => {
         console.error("Failed to fetch task stats", error);
+        // Reset to 0 on error
+        this.taskStats = { pending: 0, completed: 0, executing: 0 };
       });
     },
 

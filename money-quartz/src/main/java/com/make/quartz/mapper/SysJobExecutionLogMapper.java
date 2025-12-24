@@ -59,4 +59,11 @@ public interface SysJobExecutionLogMapper {
      * @return 结果
      */
     public int deleteSysJobExecutionLogByIds(Long[] ids);
+
+    /**
+     * 查询所有任务执行历史记录数量
+     *
+     * @return 数量
+     */
+    public int countAll();
 }

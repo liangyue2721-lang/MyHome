@@ -126,7 +126,7 @@ public class SysJobRuntimeController extends BaseController {
         List<SysJobRuntime> list = sysJobRuntimeService.selectSysJobRuntimeList(query);
         // 2. 统计任务状态
         int pending = 0;
-        int completed = sysJobExecutionLogService.selectSysJobExecutionLogList(new SysJobExecutionLog()).size();
+        int completed = sysJobExecutionLogService.countAll();
         int executing = 0;
         for (SysJobRuntime job : list) {
             String status = job.getStatus();
