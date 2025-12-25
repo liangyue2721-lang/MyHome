@@ -141,9 +141,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         update sys_job_runtime
         set status = 'RUNNING',
             node_id = #{nodeId},
-            start_time = sysdate()
+            start_time = now()
         where execution_id = #{executionId}
         and status = 'WAITING'
+    </update>
+
+    <update id="updateEnqueueTime">
+        update sys_job_runtime
+        set enqueue_time = now()
+        where execution_id = #{executionId}
     </update>
 
     <delete id="deleteByExecutionId" parameterType="String">

@@ -270,6 +270,14 @@ public class TaskDistributor {
             // 注：scheduledAt 仅作为记录使用，不再推迟入队
             RedisMessageQueue.getInstance().enqueueNow(sysJob, targetNode, priority);
 
+            // 补充：Redis 入队成功后，更新 DB 入队时间 (使用 DB NOW())
+            try {
+                sysJobRuntimeMapper.updateEnqueueTime(executionId);
+            } catch (Exception ex) {
+                log.warn("[ENQUEUE_TIME_UPDATE_FAIL] executionId={} ex={}", executionId, ex.getMessage());
+                // 不阻断流程，仅记录警告
+            }
+
             log.info("[MQ_ENQUEUE] jobId={} executionId={} scheduledAt={}", sysJob.getJobId(), executionId, scheduledAt);
             return executionId;
 

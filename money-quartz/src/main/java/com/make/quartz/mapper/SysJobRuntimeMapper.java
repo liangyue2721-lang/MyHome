@@ -108,4 +108,12 @@ public interface SysJobRuntimeMapper {
      * @return 活跃任务列表
      */
     List<SysJobRuntime> selectActiveJobs();
+
+    /**
+     * 更新入队时间（使用 DB NOW()）
+     *
+     * @param executionId 执行ID
+     * @return 结果
+     */
+    int updateEnqueueTime(@Param("executionId") String executionId);
 }
