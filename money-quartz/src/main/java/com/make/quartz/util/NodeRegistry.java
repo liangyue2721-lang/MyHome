@@ -52,9 +52,8 @@ public class NodeRegistry implements SmartLifecycle {
      * 获取当前节点 ID
      *
      * <p>规则：
-     * 1. 优先使用配置项 quartz.node.id 或 python.script.nexusStock.nodeId
-     * 2. 其次使用本机 IP
-     * 3. 兜底 127.0.0.1
+     * 1. 强制使用本机 IP (Hosted IP)
+     * 2. 兜底 127.0.0.1
      */
     public static String getCurrentNodeId() {
         if (CURRENT_NODE_ID != null) {
@@ -67,34 +66,23 @@ public class NodeRegistry implements SmartLifecycle {
 
     @PostConstruct
     public void init() {
-        // 1. Try Config
-        String configId = environment.getProperty("quartz.node.id");
-        if (StringUtils.isEmpty(configId)) {
-            configId = environment.getProperty("python.script.nexusStock.nodeId");
-        }
-
-        if (StringUtils.isNotEmpty(configId)) {
-            CURRENT_NODE_ID = configId;
-            log.info("[NODE_ID_INIT] using config id={}", CURRENT_NODE_ID);
-        } else {
-            // 2. Try IP
-            try {
-                String ip = IpUtils.getHostIp();
-                if (StringUtils.isNotEmpty(ip) && !"127.0.0.1".equals(ip)) {
-                    CURRENT_NODE_ID = ip;
+        // Enforce IP-only identity
+        try {
+            String ip = IpUtils.getHostIp();
+            if (StringUtils.isNotEmpty(ip) && !"127.0.0.1".equals(ip)) {
+                CURRENT_NODE_ID = ip;
+            } else {
+                String ipAddr = IpUtils.getIpAddr();
+                if (StringUtils.isNotEmpty(ipAddr) && !"unknown".equalsIgnoreCase(ipAddr)) {
+                    CURRENT_NODE_ID = ipAddr;
                 } else {
-                    String ipAddr = IpUtils.getIpAddr();
-                    if (StringUtils.isNotEmpty(ipAddr) && !"unknown".equalsIgnoreCase(ipAddr)) {
-                        CURRENT_NODE_ID = ipAddr;
-                    } else {
-                        CURRENT_NODE_ID = "127.0.0.1";
-                    }
+                    CURRENT_NODE_ID = "127.0.0.1";
                 }
-            } catch (Exception e) {
-                CURRENT_NODE_ID = "127.0.0.1";
             }
-            log.info("[NODE_ID_INIT] using ip id={}", CURRENT_NODE_ID);
+        } catch (Exception e) {
+            CURRENT_NODE_ID = "127.0.0.1";
         }
+        log.info("[NODE_ID_INIT] using ip id={}", CURRENT_NODE_ID);
     }
 
     @Override
