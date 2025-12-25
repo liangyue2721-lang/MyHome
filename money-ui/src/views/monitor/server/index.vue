@@ -378,11 +378,22 @@
           </el-table>
         </el-card>
       </el-col>
+
+      <!-- Stock Task Monitor Section -->
+      <el-col :span="24" class="card-box">
+        <el-card>
+          <div slot="header">
+            <span><i class="el-icon-s-data"></i> 股票刷新任务监控</span>
+          </div>
+          <stock-task-table />
+        </el-card>
+      </el-col>
     </el-row>
   </div>
 </template>
 
 <script>
+import StockTaskTable from "@/views/monitor/stockTask/StockTaskTable";
 import { getServer, getClusterThreadPool, getClusterThreadPoolRedis, getClusterServerRedis } from "@/api/monitor/server";
 import request from '@/utils/request';
 import * as echarts from "echarts";
@@ -397,6 +408,9 @@ function getQueueDetails() {
 
 export default {
   name: "Server",
+  components: {
+    StockTaskTable
+  },
   data() {
     return {
       // Queue Data
