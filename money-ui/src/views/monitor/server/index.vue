@@ -345,12 +345,13 @@
              <el-table-column prop="jobName" label="任务名称" width="200" show-overflow-tooltip></el-table-column>
              <el-table-column prop="jobGroup" label="任务分组" width="120" show-overflow-tooltip></el-table-column>
              <el-table-column prop="executionId" label="执行实例ID" width="280" show-overflow-tooltip></el-table-column>
-             <el-table-column prop="status" label="任务状态" width="120" align="center">
+             <el-table-column prop="displayStatus" label="任务状态" width="140" align="center">
                 <template slot-scope="scope">
-                   <el-tag v-if="scope.row.status === 'RUNNING'" type="primary">RUNNING</el-tag>
-                   <el-tag v-else-if="scope.row.status === 'WAITING'" type="warning">WAITING</el-tag>
+                   <el-tag v-if="scope.row.displayStatus === 'NOT_ENQUEUED'" type="danger">NOT_ENQUEUED</el-tag>
+                   <el-tag v-else-if="scope.row.displayStatus === 'RUNNING'" type="primary">RUNNING</el-tag>
+                   <el-tag v-else-if="scope.row.displayStatus === 'WAITING'" type="warning">WAITING</el-tag>
                    <el-tag v-else-if="scope.row.status === 'FAILED'" type="danger">FAILED</el-tag>
-                   <el-tag v-else type="info">{{ scope.row.status }}</el-tag>
+                   <el-tag v-else type="info">{{ scope.row.displayStatus || scope.row.status }}</el-tag>
                 </template>
              </el-table-column>
              <el-table-column prop="nodeId" label="执行节点" width="140" align="center"></el-table-column>

@@ -70,6 +70,9 @@ public class SysJobRuntime extends BaseEntity{
     @Excel(name = "任务执行参数", readConverterExp = "J=SON")
     private String payload;
 
+    /** 展示状态（含 Redis 校验结果）：WAITING / RUNNING / NOT_ENQUEUED */
+    private String displayStatus;
+
     public void setId(Long id)
     {
         this.id = id;
@@ -198,6 +201,14 @@ public class SysJobRuntime extends BaseEntity{
     public String getPayload()
     {
         return payload;
+    }
+
+    public void setDisplayStatus(String displayStatus) {
+        this.displayStatus = displayStatus;
+    }
+
+    public String getDisplayStatus() {
+        return displayStatus;
     }
 
     @Override

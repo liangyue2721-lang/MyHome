@@ -144,7 +144,14 @@
       <el-table-column label="任务名称" align="center" prop="jobName"/>
       <el-table-column label="任务分组" align="center" prop="jobGroup"/>
       <el-table-column label="本次执行ID" align="center" prop="executionId"/>
-      <el-table-column label="任务状态：WAITING / RUNNING / RETRYING" align="center" prop="status"/>
+      <el-table-column label="任务状态：WAITING / RUNNING / RETRYING" align="center" prop="displayStatus">
+        <template slot-scope="scope">
+          <el-tag v-if="scope.row.displayStatus === 'NOT_ENQUEUED'" type="danger">NOT_ENQUEUED</el-tag>
+          <el-tag v-else-if="scope.row.displayStatus === 'RUNNING'" type="primary">RUNNING</el-tag>
+          <el-tag v-else-if="scope.row.displayStatus === 'WAITING'" type="warning">WAITING</el-tag>
+          <span v-else>{{ scope.row.displayStatus || scope.row.status }}</span>
+        </template>
+      </el-table-column>
       <el-table-column label="当前执行节点ID" align="center" prop="nodeId"/>
       <el-table-column label="计划执行时间" align="center" prop="scheduledTime" width="180">
         <template slot-scope="scope">

@@ -7,6 +7,8 @@ import javax.servlet.http.HttpServletResponse;
 
 import com.make.quartz.domain.SysJobExecutionLog;
 import com.make.quartz.service.ISysJobExecutionLogService;
+import org.springframework.data.redis.core.RedisCallback;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -43,6 +45,42 @@ public class SysJobRuntimeController extends BaseController {
     @Autowired
     private ISysJobExecutionLogService sysJobExecutionLogService;
 
+    @Autowired
+    private RedisTemplate<String, String> redisTemplate;
+
+    private void populateDisplayStatus(List<SysJobRuntime> list) {
+        if (list == null || list.isEmpty()) {
+            return;
+        }
+
+        // Batch check Redis existence via Pipeline
+        List<Object> results = redisTemplate.executePipelined((RedisCallback<Object>) connection -> {
+            for (SysJobRuntime job : list) {
+                String dedupKey = "mq:job:dedup:" + job.getJobId();
+                connection.exists(dedupKey.getBytes());
+            }
+            return null;
+        });
+
+        // Apply logic
+        for (int i = 0; i < list.size(); i++) {
+            SysJobRuntime job = list.get(i);
+            Object existsObj = results.get(i);
+            boolean exists = false;
+            if (existsObj instanceof Boolean) {
+                exists = (Boolean) existsObj;
+            } else if (existsObj instanceof Long) {
+                exists = ((Long) existsObj) > 0;
+            }
+
+            if ("WAITING".equals(job.getStatus()) && !exists) {
+                job.setDisplayStatus("NOT_ENQUEUED");
+            } else {
+                job.setDisplayStatus(job.getStatus());
+            }
+        }
+    }
+
     /**
      * 查询实时任务（待执行 / 执行中）列表
      */
@@ -51,6 +89,7 @@ public class SysJobRuntimeController extends BaseController {
     public TableDataInfo list(SysJobRuntime sysJobRuntime) {
         startPage();
         List<SysJobRuntime> list = sysJobRuntimeService.selectSysJobRuntimeList(sysJobRuntime);
+        populateDisplayStatus(list);
         return getDataTable(list);
     }
 
@@ -72,7 +111,13 @@ public class SysJobRuntimeController extends BaseController {
     @PreAuthorize("@ss.hasPermi('quartz:runtime:query')")
     @GetMapping(value = "/{id}")
     public AjaxResult getInfo(@PathVariable("id") Long id) {
-        return success(sysJobRuntimeService.selectSysJobRuntimeById(id));
+        SysJobRuntime runtime = sysJobRuntimeService.selectSysJobRuntimeById(id);
+        if (runtime != null) {
+            java.util.List<SysJobRuntime> temp = new java.util.ArrayList<>();
+            temp.add(runtime);
+            populateDisplayStatus(temp);
+        }
+        return success(runtime);
     }
 
     /**
@@ -112,6 +157,7 @@ public class SysJobRuntimeController extends BaseController {
     public List<SysJobRuntime> detail() {
         SysJobRuntime sysJobRuntime = new SysJobRuntime();
         List<SysJobRuntime> list = sysJobRuntimeService.selectSysJobRuntimeList(sysJobRuntime);
+        populateDisplayStatus(list);
         return list;
     }
 
