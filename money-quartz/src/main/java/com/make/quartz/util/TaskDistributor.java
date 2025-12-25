@@ -183,7 +183,8 @@ public class TaskDistributor {
                     // 3.2 Enqueue
                     String priority = StringUtils.isEmpty(job.getPriority()) ? "NORMAL" : job.getPriority();
                     // Use injected instance instead of getInstance() for better testability/pattern
-                    redisMessageQueue.enqueueInPipeline(connection, job, execId, priority, scheduledAt);
+                    // Force immediate enqueue regardless of scheduled time
+                    redisMessageQueue.enqueueInPipeline(connection, job, execId, priority, 0);
                 }
                 return null;
             });
@@ -264,13 +265,10 @@ public class TaskDistributor {
             // 路由策略：目前默认当前节点或由 Queue 内部处理 (targetNode=null)
             String targetNode = null;
 
-            // 区分立即执行还是延迟执行
-            long now = System.currentTimeMillis();
-            if (scheduledAt <= now) {
-                RedisMessageQueue.getInstance().enqueueNow(sysJob, targetNode, priority);
-            } else {
-                RedisMessageQueue.getInstance().enqueueAt(sysJob, targetNode, priority, scheduledAt);
-            }
+            // 修改调度逻辑：所有任务（无论计划时间是否已到）均视为具备执行条件，直接入列
+            // 当节点空闲时，可提前抢占执行 WAITING 状态的任务
+            // 注：scheduledAt 仅作为记录使用，不再推迟入队
+            RedisMessageQueue.getInstance().enqueueNow(sysJob, targetNode, priority);
 
             log.info("[MQ_ENQUEUE] jobId={} executionId={} scheduledAt={}", sysJob.getJobId(), executionId, scheduledAt);
             return executionId;
