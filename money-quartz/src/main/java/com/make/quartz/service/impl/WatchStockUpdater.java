@@ -3,6 +3,7 @@ package com.make.quartz.service.impl;
 import com.make.common.utils.DateUtils;
 import com.make.stock.domain.StockKline;
 import com.make.stock.domain.Watchstock;
+import com.make.stock.domain.dto.StockRealtimeInfo;
 import com.make.stock.service.IStockKlineService;
 import com.make.stock.service.IWatchstockService;
 import org.slf4j.Logger;
@@ -100,6 +101,41 @@ public class WatchStockUpdater {
                 watchStock.getLowPrice(),
                 watchStock.getWeekLow(),
                 watchStock.getYearLow());
+    }
+
+    /**
+     * 从实时数据更新自选股 (Direct from StockRealtimeInfo)
+     *
+     * @param watchstock 自选股对象
+     * @param info       实时行情数据
+     */
+    public void updateFromRealtimeInfo(Watchstock watchstock, StockRealtimeInfo info) {
+        if (watchstock == null || info == null) return;
+
+        watchstock.setNewPrice(BigDecimal.valueOf(info.getPrice()));
+        watchstock.setHighPrice(BigDecimal.valueOf(info.getHighPrice()));
+        watchstock.setLowPrice(BigDecimal.valueOf(info.getLowPrice()));
+        watchstock.setPreviousClose(BigDecimal.valueOf(info.getPrevClose()));
+
+        // 计算涨跌
+        BigDecimal close = watchstock.getNewPrice();
+        BigDecimal preClose = watchstock.getPreviousClose();
+
+        if (preClose != null && preClose.compareTo(BigDecimal.ZERO) != 0) {
+            BigDecimal upsDowns = close.subtract(preClose).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal upsDownsRate = upsDowns.divide(preClose, 4, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100))
+                    .setScale(2, RoundingMode.HALF_UP);
+
+            watchstock.setUpsDowns(upsDowns);
+            watchstock.setChangeRate(upsDownsRate);
+        }
+
+        // 周高低逻辑
+        updateWeekHighLowIfNeeded(watchstock);
+
+        // 更新时间
+        watchstock.setUpdateTime(DateUtils.getNowDate());
     }
 
     /**

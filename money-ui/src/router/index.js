@@ -266,6 +266,20 @@ export const dynamicRoutes = [
       }
     ]
   },
+  // 新增：股票刷新任务监控路由
+  {
+    path: '/monitor/stock-task',
+    component: Layout,
+    permissions: ['monitor:job:list'], // Reuse job permission or add new one
+    children: [
+      {
+        path: 'index',
+        component: () => import('@/views/monitor/stockTask/index'),
+        name: 'StockTaskMonitor',
+        meta: {title: '股票刷新监控', icon: 'list'}
+      }
+    ]
+  },
   {
     path: '/monitor/threadPool',
     component: Layout,
