@@ -292,8 +292,9 @@ async def fetch_json_with_browser(url: str, max_retry=3) -> Optional[Dict[str, A
             page = await context.new_page()
 
             for attempt in range(1, max_retry + 1):
+                t_start = time.time()
                 try:
-                    # logger.info(f"[FETCH] {attempt}/{max_retry} {url}")
+                    logger.info(f"[FETCH_START] attempt={attempt}/{max_retry} url={url}")
                     await page.goto(url, timeout=20000, wait_until="domcontentloaded")
 
                     # innerText is robust for JSON responses rendered in browser
@@ -303,20 +304,27 @@ async def fetch_json_with_browser(url: str, max_retry=3) -> Optional[Dict[str, A
                     if not text:
                         raise Exception("Empty response body")
                     if text.startswith("<"):
-                        raise Exception("HTML content detected (likely error page)")
+                        # Log snippet for debugging
+                        snippet = text[:100].replace("\n", " ")
+                        raise Exception(f"HTML content detected: {snippet}")
 
                     parsed = parse_json_or_jsonp(text)
                     if parsed is None:
                         raise Exception("JSON parse failed")
 
+                    duration = int((time.time() - t_start) * 1000)
+                    data_size = len(str(parsed))
+                    logger.info(f"[FETCH_SUCCESS] attempt={attempt} costMs={duration} size={data_size} url={url}")
+
                     return parsed
 
                 except Exception as e:
-                    # logger.warning(f"Fetch attempt {attempt} failed: {e}")
+                    duration = int((time.time() - t_start) * 1000)
+                    logger.warning(f"[FETCH_FAIL] attempt={attempt} costMs={duration} error={str(e)} url={url}")
                     if attempt < max_retry:
                         await asyncio.sleep(0.5 + random.random())
                     else:
-                        logger.error(f"All fetch attempts failed for {url}: {e}")
+                        logger.error(f"[FETCH_GIVEUP] All attempts failed for {url}: {e}")
 
             return None
 

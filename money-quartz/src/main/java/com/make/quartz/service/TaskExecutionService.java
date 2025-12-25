@@ -340,11 +340,16 @@ public class TaskExecutionService {
      */
     private void executeOnce(SysJob sysJob) throws Exception {
         // Requirement 2: 补充消费时过程日志
-        log.info("[EXEC_INVOKE_START] executionId={} target={}", MDC.get("traceId"), sysJob.getInvokeTarget());
+        String traceId = MDC.get("traceId");
+        String threadName = Thread.currentThread().getName();
+        long t1 = System.currentTimeMillis();
+
+        log.info("[EXEC_INVOKE_START] Thread={} executionId={} target={}", threadName, traceId, sysJob.getInvokeTarget());
         try {
             JobInvokeUtil.invokeMethod(sysJob);
         } finally {
-            log.info("[EXEC_INVOKE_END] executionId={}", MDC.get("traceId"));
+            long cost = System.currentTimeMillis() - t1;
+            log.info("[EXEC_INVOKE_END] Thread={} executionId={} costMs={}", threadName, traceId, cost);
         }
     }
 

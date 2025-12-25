@@ -4,7 +4,9 @@ import com.make.common.utils.StringUtils;
 import com.make.common.utils.ip.IpUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.SmartLifecycle;
+import org.springframework.core.env.Environment;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -17,8 +19,8 @@ import java.util.concurrent.TimeUnit;
  * 节点注册中心（安全版）
  *
  * <p>设计原则：
- * - 启动阶段：不依赖 HTTP 请求上下文
- * - 运行阶段：如有请求上下文，可使用请求 IP（可选）
+ * - 启动阶段：优先读取配置ID，无配置则自动探测IP
+ * - 运行阶段：保持ID稳定
  * - nodeId 在进程生命周期内保持稳定
  */
 @Component
@@ -36,6 +38,9 @@ public class NodeRegistry implements SmartLifecycle {
 
     private final RedisTemplate<String, String> redisTemplate;
 
+    @Autowired
+    private Environment environment;
+
     private volatile boolean running = false;
     private ScheduledExecutorService heartbeatScheduler;
 
@@ -47,46 +52,49 @@ public class NodeRegistry implements SmartLifecycle {
      * 获取当前节点 ID
      *
      * <p>规则：
-     * 1. 优先使用本机 IP (Requirement 4: 记录执行的当前机器IP)
-     * 2. 如果无法获取，使用兜底逻辑
+     * 1. 优先使用配置项 quartz.node.id 或 python.script.nexusStock.nodeId
+     * 2. 其次使用本机 IP
+     * 3. 兜底 127.0.0.1
      */
     public static String getCurrentNodeId() {
         if (CURRENT_NODE_ID != null) {
             return CURRENT_NODE_ID;
         }
+        // Initializing early might miss Spring Context injection if called statically before init
+        // But the init() method below ensures it is set.
+        return "UNKNOWN";
+    }
 
-        synchronized (NodeRegistry.class) {
-            if (CURRENT_NODE_ID != null) {
-                return CURRENT_NODE_ID;
-            }
+    @PostConstruct
+    public void init() {
+        // 1. Try Config
+        String configId = environment.getProperty("quartz.node.id");
+        if (StringUtils.isEmpty(configId)) {
+            configId = environment.getProperty("python.script.nexusStock.nodeId");
+        }
 
-            // ===== 1️⃣ 优先使用本机 IP =====
+        if (StringUtils.isNotEmpty(configId)) {
+            CURRENT_NODE_ID = configId;
+            log.info("[NODE_ID_INIT] using config id={}", CURRENT_NODE_ID);
+        } else {
+            // 2. Try IP
             try {
                 String ip = IpUtils.getHostIp();
                 if (StringUtils.isNotEmpty(ip) && !"127.0.0.1".equals(ip)) {
                     CURRENT_NODE_ID = ip;
                 } else {
-                     // 尝试其他方式获取非 loopback IP
-                     String ipAddr = IpUtils.getIpAddr();
-                     if (StringUtils.isNotEmpty(ipAddr) && !"unknown".equalsIgnoreCase(ipAddr)) {
-                         CURRENT_NODE_ID = ipAddr;
-                     } else {
-                         CURRENT_NODE_ID = ip; // Fallback to 127.0.0.1
-                     }
+                    String ipAddr = IpUtils.getIpAddr();
+                    if (StringUtils.isNotEmpty(ipAddr) && !"unknown".equalsIgnoreCase(ipAddr)) {
+                        CURRENT_NODE_ID = ipAddr;
+                    } else {
+                        CURRENT_NODE_ID = "127.0.0.1";
+                    }
                 }
             } catch (Exception e) {
                 CURRENT_NODE_ID = "127.0.0.1";
             }
-
-            log.info("[NODE_ID_INIT] nodeId={}", CURRENT_NODE_ID);
-            return CURRENT_NODE_ID;
+            log.info("[NODE_ID_INIT] using ip id={}", CURRENT_NODE_ID);
         }
-    }
-
-    @PostConstruct
-    public void init() {
-        // 初始化 nodeId（确保启动阶段就确定）
-        getCurrentNodeId();
     }
 
     @Override
@@ -107,6 +115,12 @@ public class NodeRegistry implements SmartLifecycle {
         heartbeatScheduler.scheduleAtFixedRate(() -> {
             if (!running) return;
             String nodeId = getCurrentNodeId();
+            if ("UNKNOWN".equals(nodeId)) {
+                 // Retry init if still unknown (unlikely if @PostConstruct ran)
+                 init();
+                 nodeId = getCurrentNodeId();
+            }
+
             try {
                 // Refresh TTL
                 redisTemplate.opsForValue().set(
