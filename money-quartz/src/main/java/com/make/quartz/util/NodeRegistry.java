@@ -119,6 +119,9 @@ public class NodeRegistry implements SmartLifecycle {
                  // Retry init if still unknown (unlikely if @PostConstruct ran)
                  init();
                  nodeId = getCurrentNodeId();
+                 if ("UNKNOWN".equals(nodeId)) {
+                     log.warn("[NODE_ID_UNKNOWN] Still unable to determine nodeId.");
+                 }
             }
 
             try {
@@ -131,13 +134,17 @@ public class NodeRegistry implements SmartLifecycle {
                 );
                 // Ensure in Set (in case accidentally removed)
                 Long added = redisTemplate.opsForSet().add(NODE_SET_KEY, nodeId);
-                if (added != null && added > 0) {
-                    log.info("[NODE_REGISTER_SUCCESS] nodeId={}", nodeId);
+                if (added != null) {
+                    if (added > 0) {
+                        log.info("[NODE_REGISTER_SUCCESS] nodeId={}", nodeId);
+                    } else if (log.isDebugEnabled()) {
+                        log.debug("[NODE_REFRESH] nodeId={} refreshed.", nodeId);
+                    }
                 }
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 // Suppress errors during shutdown or connection failure to avoid noise
                 if (running) {
-                    log.warn("[NODE_HEARTBEAT_FAIL] nodeId={} msg={}", nodeId, e.getMessage());
+                    log.warn("[NODE_HEARTBEAT_FAIL] nodeId={} msg={}", nodeId, e.getMessage(), e);
                 }
             }
         }, 0, 10, TimeUnit.SECONDS);

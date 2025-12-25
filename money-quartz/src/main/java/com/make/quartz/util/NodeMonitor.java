@@ -83,13 +83,20 @@ public class NodeMonitor {
             
             // 获取所有注册的节点
             Set<String> nodes = redisTemplate.opsForSet().members(SCHEDULER_NODES_KEY);
+            int nodeCount = (nodes == null) ? 0 : nodes.size();
+            log.debug("Current active nodes count: {}", nodeCount);
+
             if (nodes == null || nodes.isEmpty()) {
                 log.debug("没有注册的节点");
                 return;
             }
             
             // 检查各节点状态
+            int processedCount = 0;
             for (String node : nodes) {
+                if (StringUtils.isEmpty(node)) continue;
+                processedCount++;
+
                 // Check Liveness via TTL Key existence
                 // NodeRegistry maintains this key with 30s TTL
                 Boolean hasKey = redisTemplate.hasKey(NODE_TTL_PREFIX + node);
@@ -100,6 +107,10 @@ public class NodeMonitor {
                 } else {
                     log.debug("Node {} is alive", node);
                 }
+            }
+
+            if (processedCount == 0) {
+                 log.warn("[NODE_MONITOR_WARN] Loop finished but 0 nodes processed (size was {}).", nodes.size());
             }
             
             log.debug("节点状态检查完成");
