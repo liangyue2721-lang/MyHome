@@ -5,6 +5,8 @@ import com.make.common.utils.ip.IpUtils;
 import com.make.quartz.domain.StockRefreshTask;
 import com.make.quartz.domain.StockTaskStatus;
 import com.make.quartz.service.impl.WatchStockUpdater;
+import com.make.quartz.domain.StockRefreshExecuteRecord;
+import com.make.quartz.service.IStockRefreshExecuteRecordService;
 import com.make.quartz.service.stock.queue.StockTaskQueueService;
 import com.make.stock.domain.Watchstock;
 import com.make.stock.domain.dto.StockRealtimeInfo;
@@ -18,6 +20,7 @@ import org.springframework.stereotype.Component;
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import javax.annotation.Resource;
+import java.util.Date;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
@@ -38,6 +41,9 @@ public class StockTaskConsumer implements SmartLifecycle {
 
     @Resource
     private IWatchstockService watchstockService;
+
+    @Resource
+    private IStockRefreshExecuteRecordService recordService;
 
     private volatile boolean running = false;
     private ThreadPoolExecutor consumerExecutor;
@@ -108,6 +114,11 @@ public class StockTaskConsumer implements SmartLifecycle {
             return;
         }
 
+        // Variables for DB record
+        String dbStatus = "FAILED";
+        String dbResult = "";
+        String stockName = null;
+
         long start = System.currentTimeMillis();
         try {
             updateStatus(stockCode, StockTaskStatus.STATUS_RUNNING, null, traceId);
@@ -115,13 +126,18 @@ public class StockTaskConsumer implements SmartLifecycle {
             // 2. Load WatchStock info (need API url)
             Watchstock ws = watchstockService.getWatchStockByCode(stockCode);
             if (ws == null) {
-                updateStatus(stockCode, StockTaskStatus.STATUS_FAILED, "Stock not found in DB", traceId);
+                dbResult = "Stock not found in DB";
+                dbStatus = "FAILED";
+                updateStatus(stockCode, StockTaskStatus.STATUS_FAILED, dbResult, traceId);
                 return;
             }
+            stockName = ws.getName();
 
             // 2.1 Validate URL (Prevent 'Fetch returned null' due to bad inputs)
             if (ws.getStockApi() == null || ws.getStockApi().contains("secid=null.")) {
-                updateStatus(stockCode, StockTaskStatus.STATUS_FAILED, "INVALID_URL", traceId);
+                dbResult = "INVALID_URL";
+                dbStatus = "FAILED";
+                updateStatus(stockCode, StockTaskStatus.STATUS_FAILED, dbResult, traceId);
                 return;
             }
 
@@ -133,18 +149,42 @@ public class StockTaskConsumer implements SmartLifecycle {
                 // 5. Save
                 watchstockService.updateWatchstock(ws);
 
-                updateStatus(stockCode, StockTaskStatus.STATUS_SUCCESS, "Price: " + info.getPrice(), traceId);
+                dbResult = "Price: " + info.getPrice();
+                dbStatus = "SUCCESS";
+                updateStatus(stockCode, StockTaskStatus.STATUS_SUCCESS, dbResult, traceId);
             } else {
-                updateStatus(stockCode, StockTaskStatus.STATUS_FAILED, "Fetch returned null", traceId);
+                dbResult = "Fetch returned null";
+                dbStatus = "FAILED";
+                updateStatus(stockCode, StockTaskStatus.STATUS_FAILED, dbResult, traceId);
             }
 
         } catch (Exception e) {
             log.error("Task failed: {}", stockCode, e);
-            updateStatus(stockCode, StockTaskStatus.STATUS_FAILED, e.getMessage(), traceId);
+            dbResult = e.getMessage();
+            dbStatus = "FAILED";
+            updateStatus(stockCode, StockTaskStatus.STATUS_FAILED, dbResult, traceId);
         } finally {
             // 6. Release Lock
             queueService.releaseLock(stockCode, currentNodeId);
-            // Log cost?
+
+            // 7. Save Record to DB
+            saveExecutionRecord(stockCode, stockName, dbStatus, dbResult, traceId);
+        }
+    }
+
+    private void saveExecutionRecord(String stockCode, String stockName, String status, String result, String traceId) {
+        try {
+            StockRefreshExecuteRecord record = new StockRefreshExecuteRecord();
+            record.setStockCode(stockCode);
+            record.setStockName(stockName);
+            record.setStatus(status);
+            record.setExecuteResult(result);
+            record.setNodeIp(currentNodeId);
+            record.setExecuteTime(new Date());
+            record.setTraceId(traceId);
+            recordService.insertStockRefreshExecuteRecord(record);
+        } catch (Exception e) {
+            log.error("Failed to save execution record for {}", stockCode, e);
         }
     }
 
