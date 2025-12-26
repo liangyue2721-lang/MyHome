@@ -13,7 +13,7 @@ PID_FILE="$BASE_DIR/stock_service.pid"
 LOG_DIR="$BASE_DIR/logs"
 SERVICE_LOG="$LOG_DIR/service.log"
 
-APP_MODULE="stock_service_prod:app"
+APP_MODULE="stock_service:app"
 HOST="0.0.0.0"
 PORT="8000"
 

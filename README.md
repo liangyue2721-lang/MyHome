@@ -603,3 +603,137 @@ Response:
 2. 按钮权限：控制用户可操作的按钮功能
 3. 数据权限：控制用户可访问的数据范围
 
+
+## Python 服务说明
+
+### 一、服务定位与职责
+
+本项目中的 **Stock Data Service**（位于 `python/` 目录）是一个专门的微服务，主要承担以下职责：
+
+*   **金融数据采集**：利用 Playwright (Chromium) 获取实时股票/ETF行情及K线数据，绕过反爬虫机制。
+*   **标准 API 接口**：为 Java 后端（`money-stock` 模块）提供 RESTful API 数据服务。
+*   **高可用性保障**：管理浏览器上下文生命周期与并发控制，确保数据流稳定。
+
+### 二、技术栈
+
+*   **语言**：Python >= 3.9
+*   **Web 框架**：FastAPI
+*   **服务器**：Uvicorn (ASGI) / Gunicorn (进程管理)
+*   **核心引擎**：Playwright (Headless Chromium)
+*   **数据格式**：JSON
+
+### 三、目录结构说明（Python 服务）
+
+```text
+MyHome/
+├── python/
+│   ├── stock_service.py     # 服务主入口 (FastAPI)
+│   ├── gunicorn_conf.py     # Gunicorn 配置文件
+│   ├── requirements.txt     # Python 依赖
+│   └── logs/                # 服务日志
+```
+
+### 四、环境准备
+
+1.  **创建虚拟环境（推荐）**
+    ```bash
+    cd python
+    python3 -m venv venv
+    source venv/bin/activate      # macOS / Linux
+    # venv\Scripts\activate       # Windows
+    ```
+
+2.  **安装依赖**
+    ```bash
+    pip install -r requirements.txt
+    playwright install chromium
+    ```
+
+### 五、服务启动方式
+
+**1. 本地开发模式**
+```bash
+# 在 'python' 目录下运行
+uvicorn stock_service:app --host 0.0.0.0 --port 8000 --reload
+```
+*   服务监听：`http://localhost:8000`
+*   Swagger 文档：`http://localhost:8000/docs`
+
+**2. 生产环境模式 (Gunicorn)**
+```bash
+# 使用提供的脚本
+./start_service.sh
+```
+
+### 六、配置说明
+
+主要配置位于 `stock_service.py` 和 `gunicorn_conf.py`：
+*   **端口**：默认 8000。
+*   **日志**：存储在 `python/logs/`（每日轮转）。
+*   **并发**：通过 `stock_service.py` 中的 `asyncio.Semaphore(10)` 和 Gunicorn worker 控制。
+
+### 七、接口调用示例
+
+**示例 1：健康检查**
+*   **URL**: `/health`
+*   **Method**: `GET`
+*   **Response**:
+    ```json
+    {
+      "status": "ok",
+      "browser": true
+    }
+    ```
+
+**示例 2：获取股票 K 线**
+*   **URL**: `/stock/kline`
+*   **Method**: `POST`
+*   **Body**:
+    ```json
+    {
+      "secid": "0.600000",
+      "ndays": 5
+    }
+    ```
+*   **Response**:
+    ```json
+    [
+      {
+        "trade_date": "2023-10-27",
+        "open": 7.35,
+        "close": 7.40,
+        ...
+      }
+    ]
+    ```
+
+**示例 3：获取实时行情**
+*   **URL**: `/stock/realtime`
+*   **Method**: `POST`
+*   **Body**:
+    ```json
+    {
+      "url": "https://push2.eastmoney.com/api/qt/stock/get?..."
+    }
+    ```
+
+### 八、需求描述（完善版）
+
+**功能性需求**
+*   对外提供稳定的 Stock/ETF 数据 HTTP API。
+*   支持自动化的浏览器生命周期管理 (Playwright)。
+*   将上游数据标准化为严格的 JSON 格式供 Java DTO 使用。
+*   实现防御性校验（如处理空数据、对异常输入返回 422）。
+
+**非功能性需求**
+*   **延迟**：API 响应时间 ≤ 2s（取决于上游网络）。
+*   **稳定性**：自动回收浏览器上下文以防止内存泄漏。
+*   **可观测性**：提供结构化日志（`[FETCH_START]`, `[FETCH_SUCCESS]`）以便追踪。
+
+### 九、常见问题
+
+**端口 8000 被占用**
+修改 `gunicorn_conf.py` 或启动参数。
+
+**缺少 Playwright 浏览器**
+在环境中运行 `playwright install chromium`。
