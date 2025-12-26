@@ -1,31 +1,77 @@
 @echo off
+setlocal enabledelayedexpansion
 
-REM ===========================================================
-REM  Test script for the optimized stock service.
-REM  This script sends sample POST requests to your local
-REM  FastAPI endpoints and echoes both the request and response.
-REM  It properly escapes special characters (& and |) so the
-REM  commands run without being split by the Windows shell.
-REM  Ensure the service is running on http://localhost:8000.
-REM ===========================================================
-
-REM ---- Stock realtime test ----
-echo Sending stock realtime request...
-echo {"url":"https://push2.eastmoney.com/api/qt/stock/get?invt=2&fltt=1&fields=f43,f60,f57,f58&secid=1.688256&ut=fa5fd1943c7b386f172d6893dbfba10b&wbp2u=|0|1|0|web&dect=1"}
-curl -X POST -H "Content-Type: application/json" -d "{\"url\":\"https://push2.eastmoney.com/api/qt/stock/get?invt=2^&fltt=1^&fields=f43,f60,f57,f58^&secid=1.688256^&ut=fa5fd1943c7b386f172d6893dbfba10b^&wbp2u=^|0^|1^|0^|web^&dect=1\"}" http://localhost:8000/stock/realtime
+echo ==================================================
+echo TEST START : Stock Data Validation
+echo ==================================================
 echo.
 
-REM ---- ETF realtime test ----
-echo Sending ETF realtime request...
-echo {"url":"https://push2.eastmoney.com/api/qt/stock/get?invt=2&fltt=1&fields=f43,f60&secid=1.510050&ut=fa5fd1943c7b386f172d6893dbfba10b&wbp2u=|0|1|0|web&dect=1"}
-curl -X POST -H "Content-Type: application/json" -d "{\"url\":\"https://push2.eastmoney.com/api/qt/stock/get?invt=2^&fltt=1^&fields=f43,f60^&secid=1.510050^&ut=fa5fd1943c7b386f172d6893dbfba10b^&wbp2u=^|0^|1^|0^|web^&dect=1\"}" http://localhost:8000/etf/realtime
+REM ==================================================
+REM PHASE 1 - stock_service.py API validation
+REM ==================================================
+echo ========== PHASE 1 : stock_service.py APIs ==========
 echo.
 
-REM ---- 5-day Kline test ----
-echo Sending 5-day Kline request...
-echo {"secid":"688256","ndays":5}
-curl -X POST -H "Content-Type: application/json" -d "{\"secid\":\"688256\",\"ndays\":5}" http://localhost:8000/stock/kline
+echo [SERVICE] Health Check
+curl -s http://localhost:8000/health || echo [FAIL] /health
 echo.
 
-echo Tests complete. Press any key to exit.
-pause >nul
+echo [SERVICE] /stock/realtime
+curl -s -X POST http://localhost:8000/stock/realtime ^
+  -H "Content-Type: application/json" ^
+  -d "{\"url\":\"https://push2.eastmoney.com/api/qt/stock/get?secid=1.601138\"}" ^
+  || echo [FAIL] /stock/realtime
+echo.
+
+echo [SERVICE] /etf/realtime
+curl -s -X POST http://localhost:8000/etf/realtime ^
+  -H "Content-Type: application/json" ^
+  -d "{\"url\":\"https://push2.eastmoney.com/api/qt/stock/get?secid=1.510300\"}" ^
+  || echo [FAIL] /etf/realtime
+echo.
+
+echo [SERVICE] /stock/kline
+curl -s -X POST http://localhost:8000/stock/kline ^
+  -H "Content-Type: application/json" ^
+  -d "{\"secid\":\"1.601138\",\"ndays\":5}" ^
+  || echo [FAIL] /stock/kline
+echo.
+
+REM ==================================================
+REM PHASE 2 - standalone python scripts
+REM ==================================================
+echo ========== PHASE 2 : Standalone Scripts ==========
+echo.
+
+echo [SCRIPT] fetch_stock_realtime.py
+python fetch_stock_realtime.py "https://push2.eastmoney.com/api/qt/stock/get?secid=1.601138" ^
+  || echo [FAIL] fetch_stock_realtime.py
+echo.
+
+echo [SCRIPT] etf_realtime_fetcher.py
+python etf_realtime_fetcher.py "https://push2.eastmoney.com/api/qt/stock/get?secid=1.510300" ^
+  || echo [FAIL] etf_realtime_fetcher.py
+echo.
+
+echo [SCRIPT] eastmoney_kline_fetcher.py
+python eastmoney_kline_fetcher.py 601138 1 ^
+  || echo [FAIL] eastmoney_kline_fetcher.py
+echo.
+
+echo [SCRIPT] hybrid_kline_trends.py
+python hybrid_kline_trends.py 1.601138 5 ^
+  || echo [FAIL] hybrid_kline_trends.py
+echo.
+
+echo [SCRIPT] kline_playwright.py
+python kline_playwright.py ^
+  || echo [FAIL] kline_playwright.py
+echo.
+
+REM ==================================================
+REM FINISH
+REM ==================================================
+echo ==================================================
+echo TEST END
+echo ==================================================
+pause
