@@ -12,12 +12,19 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * 股票任务队列服务
  * 负责 Redis 队列的 Push/Pop 和 状态管理
+ * <p>
+ * Refactored:
+ * 1.  Using independent keys per task: stock:refresh:status:{stockCode}:{traceId}
+ * 2.  Using ZSET index for retrieval: stock:refresh:status:index
+ * 3.  Lazy cleanup on read
  */
 @Service
 public class StockTaskQueueService {
@@ -26,7 +33,8 @@ public class StockTaskQueueService {
 
     private static final String QUEUE_KEY = "mq:task:stock:refresh";
     private static final String LOCK_PREFIX = "stock:refresh:lock:";
-    private static final String STATUS_HASH_KEY = "stock:refresh:status";
+    private static final String STATUS_KEY_PREFIX = "stock:refresh:status:"; // + stockCode + : + traceId
+    private static final String STATUS_INDEX_KEY = "stock:refresh:status:index";
 
     @Resource
     private RedisTemplate<String, String> redisTemplate;
@@ -40,12 +48,13 @@ public class StockTaskQueueService {
             String json = JSON.toJSONString(task);
             redisTemplate.opsForList().leftPush(QUEUE_KEY, json);
 
-            // Set INIT status
+            // Set WAITING status (Long TTL safety net)
             StockTaskStatus status = new StockTaskStatus();
             status.setStockCode(task.getStockCode());
-            status.setStatus(StockTaskStatus.STATUS_INIT);
+            status.setStatus(StockTaskStatus.STATUS_WAITING);
             status.setTraceId(task.getTraceId());
             status.setLastUpdateTime(System.currentTimeMillis());
+
             updateStatus(task.getStockCode(), status);
         } catch (Exception e) {
             log.error("Failed to enqueue stock task: {}", task.getStockCode(), e);
@@ -98,37 +107,49 @@ public class StockTaskQueueService {
     }
 
     /**
-     * 更新任务状态 (Hash)
+     * 更新任务状态 (New Structure: Key per task + ZSet Index)
      */
     public void updateStatus(String stockCode, StockTaskStatus status) {
+        if (status == null || StringUtils.isEmpty(status.getTraceId())) {
+            log.warn("Invalid status update for stock: {}", stockCode);
+            return;
+        }
         try {
-            redisTemplate.opsForHash().put(STATUS_HASH_KEY, stockCode, JSON.toJSONString(status));
+            String traceId = status.getTraceId();
+            String key = getStatusKey(stockCode, traceId);
+            long now = System.currentTimeMillis();
+            status.setLastUpdateTime(now);
+
+            // Determine TTL
+            long ttlSeconds = 300; // Default 5 min for terminal states
+            if (StockTaskStatus.STATUS_WAITING.equals(status.getStatus()) ||
+                StockTaskStatus.STATUS_RUNNING.equals(status.getStatus())) {
+                ttlSeconds = 1800; // 30 min for active states
+            }
+
+            // 1. Set Key with TTL
+            redisTemplate.opsForValue().set(key, JSON.toJSONString(status), ttlSeconds, TimeUnit.SECONDS);
+
+            // 2. Add to Index (Member: stockCode:traceId, Score: lastUpdateTime)
+            String member = getIndexMember(stockCode, traceId);
+            redisTemplate.opsForZSet().add(STATUS_INDEX_KEY, member, now);
+
         } catch (Exception e) {
             log.error("Failed to update status for {}", stockCode, e);
         }
     }
 
     /**
-     * 删除任务状态 (Hash)
-     * Safe delete: Only delete if traceId matches (prevent deleting status of a newer task)
+     * 删除任务状态
+     * Only used for Admin/Maintenance/Test
      */
-    public void deleteStatus(String stockCode, String expectedTraceId) {
+    public void deleteStatus(String stockCode, String traceId) {
         try {
-            if (expectedTraceId == null) {
-                // Legacy support or force delete
-                redisTemplate.opsForHash().delete(STATUS_HASH_KEY, stockCode);
-                return;
-            }
-
-            Object obj = redisTemplate.opsForHash().get(STATUS_HASH_KEY, stockCode);
-            if (obj != null) {
-                StockTaskStatus current = JSON.parseObject(obj.toString(), StockTaskStatus.class);
-                if (current != null && expectedTraceId.equals(current.getTraceId())) {
-                    redisTemplate.opsForHash().delete(STATUS_HASH_KEY, stockCode);
-                } else {
-                    // TraceId mismatch, likely a new task has started/enqueued. Do not delete.
-                    // log.debug("Skipped delete status for {}, traceId mismatch", stockCode);
-                }
+            if (traceId != null) {
+                String key = getStatusKey(stockCode, traceId);
+                String member = getIndexMember(stockCode, traceId);
+                redisTemplate.delete(key);
+                redisTemplate.opsForZSet().remove(STATUS_INDEX_KEY, member);
             }
         } catch (Exception e) {
             log.error("Failed to delete status for {}", stockCode, e);
@@ -136,33 +157,63 @@ public class StockTaskQueueService {
     }
 
     /**
-     * 获取单个状态
-     */
-    public StockTaskStatus getStatus(String stockCode) {
-        try {
-            Object obj = redisTemplate.opsForHash().get(STATUS_HASH_KEY, stockCode);
-            if (obj != null) {
-                return JSON.parseObject(obj.toString(), StockTaskStatus.class);
-            }
-        } catch (Exception e) {
-            log.error("Failed to get status for {}", stockCode, e);
-        }
-        return null;
-    }
-
-    /**
      * 获取所有状态 (用于监控列表)
+     * Strategy:
+     * 1. Fetch all members from ZSet.
+     * 2. Construct keys and MGET.
+     * 3. Lazy clean missing keys from ZSet.
      */
     public List<StockTaskStatus> getAllStatuses() {
         List<StockTaskStatus> list = new ArrayList<>();
         try {
-            Map<Object, Object> map = redisTemplate.opsForHash().entries(STATUS_HASH_KEY);
-            for (Object val : map.values()) {
-                list.add(JSON.parseObject(val.toString(), StockTaskStatus.class));
+            // 1. Get all members from ZSet (ordered by time)
+            Set<String> members = redisTemplate.opsForZSet().range(STATUS_INDEX_KEY, 0, -1);
+            if (members == null || members.isEmpty()) {
+                return list;
+            }
+
+            // 2. Construct Keys
+            List<String> keys = new ArrayList<>();
+            // Keep mapping of key -> member for cleanup
+            List<String> memberList = new ArrayList<>(members);
+
+            for (String member : memberList) {
+                // member format: stockCode:traceId
+                // key format: stock:refresh:status:stockCode:traceId
+                // We can just replace the first colon? No, constructing carefully is safer.
+                // Assuming member is stockCode:traceId, we can prepend prefix.
+                // But stockCode *might* contain colons? Unlikely for stocks.
+                // Let's rely on consistent construction.
+                keys.add(STATUS_KEY_PREFIX + member);
+            }
+
+            // 3. MGET
+            List<String> values = redisTemplate.opsForValue().multiGet(keys);
+
+            // 4. Process Results & Lazy Cleanup
+            if (values != null) {
+                for (int i = 0; i < values.size(); i++) {
+                    String json = values.get(i);
+                    if (StringUtils.isEmpty(json)) {
+                        // Key expired or missing -> Clean from ZSet
+                        String missingMember = memberList.get(i);
+                        redisTemplate.opsForZSet().remove(STATUS_INDEX_KEY, missingMember);
+                    } else {
+                        list.add(JSON.parseObject(json, StockTaskStatus.class));
+                    }
+                }
             }
         } catch (Exception e) {
             log.error("Failed to get all statuses", e);
         }
         return list;
+    }
+
+    private String getStatusKey(String stockCode, String traceId) {
+        return STATUS_KEY_PREFIX + stockCode + ":" + traceId;
+    }
+
+    private String getIndexMember(String stockCode, String traceId) {
+        return stockCode + ":" + traceId;
     }
 }

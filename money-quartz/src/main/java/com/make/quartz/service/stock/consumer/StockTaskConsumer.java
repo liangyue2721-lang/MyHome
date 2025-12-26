@@ -28,17 +28,9 @@
     /**
      * 股票刷新任务消费者（升级版：多线程并发消费 + 内部失败重试）
      * <p>
-     * 设计目标：
-     * 1) 提升吞吐：多个 Poll Worker 并发从队列拉取任务（并发消费）。
-     * 2) 有界提交：使用 Semaphore 做背压控制，避免线程池饱和后 Rejected + sleep 造成“拉取停止”。
-     * 3) 内部重试：单个任务在 process 内部对可重试失败进行重试（不回队列、不二次 poll）。
-     * 4) 分布式互斥：通过 queueService.tryLockStock(stockCode, nodeId) 做股票粒度互斥。
-     * 5) 落库留痕：最终状态写执行记录；并清理 Redis 状态（terminal state）。
-     * <p>
-     * 语义说明：
-     * - “并发消费”：多个线程同时 poll 队列并提交执行；任务执行顺序不保证 FIFO（因为并发）。
-     * - “每股票互斥”：同一时刻同一 stockCode 只允许一个节点/线程执行；锁失败会短暂重试，仍失败则 SKIPPED。
-     * - “内部重试”：主要覆盖 HTTP 抖动/短暂异常；对明显不可恢复（如无 DB 记录、URL 非法）不重试。
+     * Refactored:
+     * 1. No longer calls deleteStatus() on completion.
+     * 2. Calls updateStatus() with terminal state (SUCCESS/FAILED/SKIPPED) which sets a short TTL.
      */
     @Component
     public class StockTaskConsumer implements SmartLifecycle {
@@ -280,13 +272,15 @@
             if (!locked) {
                 // 锁拿不到：说明被其他节点占用；按终态处理并清理状态。
                 updateStatus(stockCode, StockTaskStatus.STATUS_SKIPPED, "Occupied by other node", traceId);
-                queueService.deleteStatus(stockCode, traceId);
+                // Do NOT delete status; let TTL expire.
+                // queueService.deleteStatus(stockCode, traceId);
                 return;
             }
 
             String dbStatus = "FAILED";
             String dbResult = "";
             String stockName = null;
+            boolean executed = false;
 
             try {
                 // 状态置为运行中：便于前端/运维查看。
@@ -321,11 +315,13 @@
 
                 dbStatus = "SUCCESS";
                 dbResult = "Price=" + info.getPrice();
+                executed = true;
 
             } catch (Exception e) {
                 // 未预期异常：记录并失败终态。
                 log.error("Task failed: stockCode={}, traceId={}", stockCode, traceId, e);
                 dbResult = Objects.toString(e.getMessage(), "Exception");
+                dbStatus = "FAILED";
             } finally {
                 // 6) 释放锁：务必放 finally，防止死锁。
                 safeReleaseLock(stockCode);
@@ -333,8 +329,12 @@
                 // 7) 记录执行结果：只记终态（SUCCESS/FAILED）。
                 saveExecutionRecord(stockCode, stockName, dbStatus, dbResult, traceId);
 
-                // 8) 清理 Redis 状态：表示任务结束（终态）。
-                queueService.deleteStatus(stockCode, traceId);
+                // 8) 更新 Redis 状态为终态：SUCCESS / FAILED。
+                // This updates the key with a short TTL (5 min).
+                String finalStatus = executed ? StockTaskStatus.STATUS_SUCCESS : StockTaskStatus.STATUS_FAILED;
+                updateStatus(stockCode, finalStatus, dbResult, traceId);
+
+                // Do NOT delete status.
             }
         }
 
