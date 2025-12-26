@@ -9,6 +9,7 @@ public class StockTaskStatus implements Serializable {
     private static final long serialVersionUID = 1L;
 
     public static final String STATUS_OCCUPIED = "OCCUPIED";
+    public static final String STATUS_INIT = "INIT";
     public static final String STATUS_RUNNING = "RUNNING";
     public static final String STATUS_SUCCESS = "SUCCESS";
     public static final String STATUS_FAILED = "FAILED";

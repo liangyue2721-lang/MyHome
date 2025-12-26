@@ -39,7 +39,14 @@ public class StockTaskQueueService {
         try {
             String json = JSON.toJSONString(task);
             redisTemplate.opsForList().leftPush(QUEUE_KEY, json);
-            // log.debug("Enqueue stock task: {}", task.getStockCode());
+
+            // Set INIT status
+            StockTaskStatus status = new StockTaskStatus();
+            status.setStockCode(task.getStockCode());
+            status.setStatus(StockTaskStatus.STATUS_INIT);
+            status.setTraceId(task.getTraceId());
+            status.setLastUpdateTime(System.currentTimeMillis());
+            updateStatus(task.getStockCode(), status);
         } catch (Exception e) {
             log.error("Failed to enqueue stock task: {}", task.getStockCode(), e);
         }
@@ -103,10 +110,26 @@ public class StockTaskQueueService {
 
     /**
      * 删除任务状态 (Hash)
+     * Safe delete: Only delete if traceId matches (prevent deleting status of a newer task)
      */
-    public void deleteStatus(String stockCode) {
+    public void deleteStatus(String stockCode, String expectedTraceId) {
         try {
-            redisTemplate.opsForHash().delete(STATUS_HASH_KEY, stockCode);
+            if (expectedTraceId == null) {
+                // Legacy support or force delete
+                redisTemplate.opsForHash().delete(STATUS_HASH_KEY, stockCode);
+                return;
+            }
+
+            Object obj = redisTemplate.opsForHash().get(STATUS_HASH_KEY, stockCode);
+            if (obj != null) {
+                StockTaskStatus current = JSON.parseObject(obj.toString(), StockTaskStatus.class);
+                if (current != null && expectedTraceId.equals(current.getTraceId())) {
+                    redisTemplate.opsForHash().delete(STATUS_HASH_KEY, stockCode);
+                } else {
+                    // TraceId mismatch, likely a new task has started/enqueued. Do not delete.
+                    // log.debug("Skipped delete status for {}, traceId mismatch", stockCode);
+                }
+            }
         } catch (Exception e) {
             log.error("Failed to delete status for {}", stockCode, e);
         }

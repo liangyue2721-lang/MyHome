@@ -166,7 +166,7 @@ public class StockTaskConsumer implements SmartLifecycle {
             saveExecutionRecord(stockCode, stockName, dbStatus, dbResult, traceId);
 
             // 8. Remove from Redis (Terminal State)
-            queueService.deleteStatus(stockCode);
+            queueService.deleteStatus(stockCode, traceId);
         }
     }
 
