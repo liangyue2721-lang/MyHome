@@ -181,7 +181,15 @@ public class TaskDistributor {
                     );
 
                     // 3.2 Enqueue
-                    String priority = StringUtils.isEmpty(job.getPriority()) ? "NORMAL" : job.getPriority();
+                    // Job with id = 30 is temporarily treated as highest priority.
+                    // TODO: Remove this hardcoded logic once SysJob.priority is fully supported (DB + Mapper + UI).
+                    String priority;
+                    if (Long.valueOf(30L).equals(job.getJobId())) {
+                        priority = "HIGH";
+                    } else {
+                        priority = StringUtils.isEmpty(job.getPriority()) ? "NORMAL" : job.getPriority();
+                    }
+
                     // Use injected instance instead of getInstance() for better testability/pattern
                     // Force immediate enqueue regardless of scheduled time
                     redisMessageQueue.enqueueInPipeline(connection, job, execId, priority, 0);
@@ -260,7 +268,14 @@ public class TaskDistributor {
             sysJob.setTraceId(executionId);
 
             // 默认优先级
-            String priority = StringUtils.isEmpty(sysJob.getPriority()) ? "NORMAL" : sysJob.getPriority();
+            // Job with id = 30 is temporarily treated as highest priority.
+            // TODO: Remove this hardcoded logic once SysJob.priority is fully supported (DB + Mapper + UI).
+            String priority;
+            if (Long.valueOf(30L).equals(sysJob.getJobId())) {
+                priority = "HIGH";
+            } else {
+                priority = StringUtils.isEmpty(sysJob.getPriority()) ? "NORMAL" : sysJob.getPriority();
+            }
 
             // 路由策略：目前默认当前节点或由 Queue 内部处理 (targetNode=null)
             String targetNode = null;
