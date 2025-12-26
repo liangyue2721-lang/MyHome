@@ -249,69 +249,142 @@ export default {
       getRefreshExecuteStats(params).then(response => {
         this.chartInstance.hideLoading();
         const data = response.data || [];
+        const isSingleMode = !!params.stockCode;
 
-        // Transform data: backend returns [{status: 'SUCCESS', count: 10}, ...]
-        let successCount = 0;
-        let failedCount = 0;
-
-        data.forEach(item => {
-          if (item.status === 'SUCCESS') successCount = Number(item.count);
-          if (item.status === 'FAILED') failedCount = Number(item.count);
-        });
-
-        const chartData = [
-          { value: successCount, name: '成功 (SUCCESS)', itemStyle: { color: '#67C23A' } }, // Green
-          { value: failedCount, name: '失败 (FAILED)', itemStyle: { color: '#F56C6C' } }   // Red
-        ];
-
-        // Check if empty
-        if (successCount === 0 && failedCount === 0) {
-           chartData.push({ value: 0, name: '无数据', itemStyle: { color: '#909399' } });
+        if (isSingleMode) {
+          // Single Stock Mode
+          this.renderSingleChart(data);
+        } else {
+          // Grid Mode (List of stocks)
+          this.renderGridChart(data);
         }
-
-        const option = {
-          tooltip: {
-            trigger: 'item',
-            formatter: '{b}: {c} ({d}%)'
-          },
-          legend: {
-            top: '5%',
-            left: 'center'
-          },
-          series: [
-            {
-              name: '执行结果',
-              type: 'pie',
-              radius: ['40%', '70%'], // Donut
-              avoidLabelOverlap: false,
-              itemStyle: {
-                borderRadius: 10,
-                borderColor: '#fff',
-                borderWidth: 2
-              },
-              label: {
-                show: false,
-                position: 'center'
-              },
-              emphasis: {
-                label: {
-                  show: true,
-                  fontSize: 20,
-                  fontWeight: 'bold'
-                }
-              },
-              labelLine: {
-                show: false
-              },
-              data: chartData
-            }
-          ]
-        };
-        this.chartInstance.setOption(option);
       }).catch(error => {
         console.error("Failed to load chart stats", error);
         this.chartInstance.hideLoading();
       });
+    },
+
+    renderSingleChart(data) {
+      // Logic for single chart (same as before)
+      let successCount = 0;
+      let failedCount = 0;
+      data.forEach(item => {
+        if (item.status === 'SUCCESS') successCount = Number(item.count);
+        if (item.status === 'FAILED') failedCount = Number(item.count);
+      });
+
+      const chartData = [
+        { value: successCount, name: '成功', itemStyle: { color: '#67C23A' } },
+        { value: failedCount, name: '失败', itemStyle: { color: '#F56C6C' } }
+      ];
+      if (successCount === 0 && failedCount === 0) {
+        chartData.push({ value: 0, name: '无数据', itemStyle: { color: '#909399' } });
+      }
+
+      // Reset height for single chart
+      const chartDom = document.getElementById('stats-chart');
+      if (chartDom) {
+        chartDom.style.height = '250px';
+        this.chartInstance.resize();
+      }
+
+      const option = {
+        title: {
+          text: this.queryParams.stockCode,
+          left: 'center',
+          top: 'center',
+          textStyle: { fontSize: 16 }
+        },
+        tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+        series: [{
+          name: '执行结果',
+          type: 'pie',
+          radius: ['50%', '70%'],
+          center: ['50%', '50%'],
+          itemStyle: { borderRadius: 5, borderColor: '#fff', borderWidth: 2 },
+          label: { show: false },
+          data: chartData
+        }]
+      };
+      // Clear previous settings (like multiple titles)
+      this.chartInstance.clear();
+      this.chartInstance.setOption(option);
+    },
+
+    renderGridChart(data) {
+      // Group data by stockCode
+      const stockStats = {};
+      data.forEach(item => {
+        const code = item.stockCode || 'Unknown';
+        if (!stockStats[code]) stockStats[code] = { success: 0, failed: 0 };
+        if (item.status === 'SUCCESS') stockStats[code].success = Number(item.count);
+        if (item.status === 'FAILED') stockStats[code].failed = Number(item.count);
+      });
+
+      const stockCodes = Object.keys(stockStats).sort(); // Sort alphabetically
+      const totalStocks = stockCodes.length;
+
+      // 10 columns per row
+      const cols = 10;
+      const rowHeight = 150; // px per row
+      const rows = Math.ceil(totalStocks / cols);
+      const totalHeight = Math.max(250, rows * rowHeight);
+
+      // Resize container
+      const chartDom = document.getElementById('stats-chart');
+      if (chartDom) {
+        chartDom.style.height = totalHeight + 'px';
+        this.chartInstance.resize();
+      }
+
+      const seriesList = [];
+      const titleList = [];
+
+      stockCodes.forEach((code, index) => {
+        const stats = stockStats[code];
+        const colIndex = index % cols;
+        const rowIndex = Math.floor(index / cols);
+
+        // Center X: 5%, 15%, 25% ... 95%
+        const centerX = (colIndex * 10 + 5) + '%';
+        // Center Y: row top + half height
+        const centerY = (rowIndex * rowHeight + rowHeight / 2);
+
+        const chartData = [
+          { value: stats.success, name: '成功', itemStyle: { color: '#67C23A' } },
+          { value: stats.failed, name: '失败', itemStyle: { color: '#F56C6C' } }
+        ];
+
+        seriesList.push({
+          type: 'pie',
+          radius: [30, 45], // Fixed px size for uniform look
+          center: [centerX, centerY],
+          itemStyle: { borderRadius: 3, borderColor: '#fff', borderWidth: 1 },
+          label: { show: false },
+          hoverAnimation: false, // Reduce performance cost
+          data: chartData
+        });
+
+        titleList.push({
+          text: code,
+          left: centerX,
+          top: centerY, // Center text in pie
+          textAlign: 'center',
+          textVerticalAlign: 'middle',
+          textStyle: { fontSize: 10, fontWeight: 'normal' }
+        });
+      });
+
+      const option = {
+        tooltip: { trigger: 'item', formatter: '{a} <br/>{b}: {c} ({d}%)' }, // {a} is series name (Stock Code?) No, series name is undefined here.
+        // ECharts doesn't bind title to tooltip easily.
+        // Let's rely on hover. Or we can set series name to stock code.
+        title: titleList,
+        series: seriesList.map((s, i) => ({ ...s, name: stockCodes[i] }))
+      };
+
+      this.chartInstance.clear();
+      this.chartInstance.setOption(option);
     },
     /**
      * 初始化用户列表数据

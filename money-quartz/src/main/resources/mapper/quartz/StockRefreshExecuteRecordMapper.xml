@@ -107,11 +107,16 @@
     </delete>
 
     <select id="selectExecutionStats" resultType="java.util.Map">
-        select status, count(*) as count
+        select
+        <if test="stockCode == null or stockCode == ''">stock_code as "stockCode",</if>
+        status,
+        count(*) as "count"
         from stock_refresh_execute_record
         <where>
             <if test="stockCode != null and stockCode != ''">and stock_code = #{stockCode}</if>
         </where>
-        group by status
+        group by
+        <if test="stockCode == null or stockCode == ''">stock_code,</if>
+        status
     </select>
 </mapper>
