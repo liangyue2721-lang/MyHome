@@ -88,4 +88,12 @@ public class StockRefreshExecuteRecordServiceImpl implements IStockRefreshExecut
     public int deleteStockRefreshExecuteRecordById(String id) {
         return stockRefreshExecuteRecordMapper.deleteStockRefreshExecuteRecordById(id);
     }
+
+    /**
+     * 统计执行结果
+     */
+    @Override
+    public List<java.util.Map<String, Object>> selectExecutionStats(String stockCode) {
+        return stockRefreshExecuteRecordMapper.selectExecutionStats(stockCode);
+    }
 }

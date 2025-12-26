@@ -59,4 +59,11 @@ public interface IStockRefreshExecuteRecordService {
      * @return 结果
      */
     public int deleteStockRefreshExecuteRecordById(String id);
+
+    /**
+     * 统计执行结果
+     * @param stockCode 股票代码
+     * @return 统计列表
+     */
+    public List<java.util.Map<String, Object>> selectExecutionStats(String stockCode);
 }

@@ -36,6 +36,17 @@ public class StockRefreshExecuteRecordController extends BaseController {
     private IStockRefreshExecuteRecordService stockRefreshExecuteRecordService;
 
     /**
+     * 统计任务执行结果 (Donut Chart Data)
+     */
+    @PreAuthorize("@ss.hasPermi('quartz:refresh_execute_record:list')")
+    @GetMapping("/stats")
+    public AjaxResult getStats(StockRefreshExecuteRecord stockRefreshExecuteRecord) {
+        // Use stockCode from the query params object if present
+        String stockCode = stockRefreshExecuteRecord != null ? stockRefreshExecuteRecord.getStockCode() : null;
+        return success(stockRefreshExecuteRecordService.selectExecutionStats(stockCode));
+    }
+
+    /**
      * 查询刷新任务执行记录列表
      */
     @PreAuthorize("@ss.hasPermi('quartz:refresh_execute_record:list')")

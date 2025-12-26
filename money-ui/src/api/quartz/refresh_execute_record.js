@@ -9,6 +9,15 @@ export function listRefresh_execute_record(query) {
   })
 }
 
+// 获取刷新任务执行统计 (Donut Chart)
+export function getRefreshExecuteStats(query) {
+  return request({
+    url: '/quartz/refresh_execute_record/stats',
+    method: 'get',
+    params: query
+  })
+}
+
 // 查询刷新任务执行记录详细
 export function getRefresh_execute_record(id) {
   return request({

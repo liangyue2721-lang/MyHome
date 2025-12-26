@@ -105,4 +105,13 @@
             #{id}
         </foreach>
     </delete>
+
+    <select id="selectExecutionStats" resultType="java.util.Map">
+        select status, count(*) as count
+        from stock_refresh_execute_record
+        <where>
+            <if test="stockCode != null and stockCode != ''">and stock_code = #{stockCode}</if>
+        </where>
+        group by status
+    </select>
 </mapper>

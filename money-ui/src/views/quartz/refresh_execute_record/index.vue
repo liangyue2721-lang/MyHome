@@ -1,5 +1,13 @@
 <template>
   <div class="app-container">
+    <!-- 统计图表卡片 -->
+    <el-card shadow="hover" class="mb8" style="margin-bottom: 20px;">
+      <div slot="header" class="clearfix">
+        <span><i class="el-icon-pie-chart"></i> 任务执行统计 {{ queryParams.stockCode ? `(${queryParams.stockCode})` : '(全局)' }}</span>
+      </div>
+      <div id="stats-chart" style="width: 100%; height: 250px;"></div>
+    </el-card>
+
     <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch" label-width="68px">
       <el-form-item label="股票代码" prop="stockCode">
         <el-input
@@ -124,16 +132,21 @@
 <script>
 import {
   listRefresh_execute_record,
+  getRefreshExecuteStats,
   getRefresh_execute_record,
   delRefresh_execute_record,
   addRefresh_execute_record,
   updateRefresh_execute_record
 } from "@/api/quartz/refresh_execute_record"
 import {listUser} from "@/api/stock/dropdown_component";  // 获取用户列表API
+import * as echarts from 'echarts'
+
 export default {
   name: "Refresh_execute_record",
   data() {
     return {
+      // 统计图表实例
+      chartInstance: null,
       // 遮罩层
       loading: true,
       // 选中数组
@@ -201,7 +214,105 @@ export default {
     // 加载数据
     this.getList();
   },
+  mounted() {
+    this.initChart();
+    this.getStatsData();
+    window.addEventListener('resize', this.resizeChart);
+  },
+  beforeDestroy() {
+    window.removeEventListener('resize', this.resizeChart);
+    if (this.chartInstance) {
+      this.chartInstance.dispose();
+    }
+  },
   methods: {
+    initChart() {
+      const chartDom = document.getElementById('stats-chart');
+      if (chartDom) {
+        this.chartInstance = echarts.init(chartDom);
+      }
+    },
+    resizeChart() {
+      if (this.chartInstance) {
+        this.chartInstance.resize();
+      }
+    },
+    getStatsData() {
+      if (!this.chartInstance) return;
+
+      this.chartInstance.showLoading();
+      const params = {};
+      if (this.queryParams.stockCode) {
+        params.stockCode = this.queryParams.stockCode;
+      }
+
+      getRefreshExecuteStats(params).then(response => {
+        this.chartInstance.hideLoading();
+        const data = response.data || [];
+
+        // Transform data: backend returns [{status: 'SUCCESS', count: 10}, ...]
+        let successCount = 0;
+        let failedCount = 0;
+
+        data.forEach(item => {
+          if (item.status === 'SUCCESS') successCount = Number(item.count);
+          if (item.status === 'FAILED') failedCount = Number(item.count);
+        });
+
+        const chartData = [
+          { value: successCount, name: '成功 (SUCCESS)', itemStyle: { color: '#67C23A' } }, // Green
+          { value: failedCount, name: '失败 (FAILED)', itemStyle: { color: '#F56C6C' } }   // Red
+        ];
+
+        // Check if empty
+        if (successCount === 0 && failedCount === 0) {
+           chartData.push({ value: 0, name: '无数据', itemStyle: { color: '#909399' } });
+        }
+
+        const option = {
+          tooltip: {
+            trigger: 'item',
+            formatter: '{b}: {c} ({d}%)'
+          },
+          legend: {
+            top: '5%',
+            left: 'center'
+          },
+          series: [
+            {
+              name: '执行结果',
+              type: 'pie',
+              radius: ['40%', '70%'], // Donut
+              avoidLabelOverlap: false,
+              itemStyle: {
+                borderRadius: 10,
+                borderColor: '#fff',
+                borderWidth: 2
+              },
+              label: {
+                show: false,
+                position: 'center'
+              },
+              emphasis: {
+                label: {
+                  show: true,
+                  fontSize: 20,
+                  fontWeight: 'bold'
+                }
+              },
+              labelLine: {
+                show: false
+              },
+              data: chartData
+            }
+          ]
+        };
+        this.chartInstance.setOption(option);
+      }).catch(error => {
+        console.error("Failed to load chart stats", error);
+        this.chartInstance.hideLoading();
+      });
+    },
     /**
      * 初始化用户列表数据
      * @returns {Promise<void>} 异步操作完成Promise
@@ -285,11 +396,13 @@ export default {
     handleQuery() {
       this.queryParams.pageNum = 1
       this.getList()
+      this.getStatsData() // Refresh chart
     },
     /** 重置按钮操作 */
     resetQuery() {
       this.resetForm("queryForm")
       this.handleQuery()
+      // getStatsData is called inside handleQuery
     },
     // 多选框选中数据
     handleSelectionChange(selection) {
