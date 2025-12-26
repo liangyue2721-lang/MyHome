@@ -211,6 +211,11 @@ public class TaskExecutionService {
                 // Requirement 2: 异常日志
                 log.info("TASK_LIFECYCLE|FAIL|jobId={}|executionId={}|nodeId={}|costMs={}|errorMsg={}",
                         sysJob.getJobId(), execId, nodeId, (System.currentTimeMillis() - startTime), errorMsg);
+
+                // Detailed failure logging for replay/debug
+                log.error("[TASK_FAIL_DETAIL] |jobId={}|executionId={}|nodeId={}|traceId={}|target={}|errorType={}|errorMsg={}|stackTrace={}",
+                        sysJob.getJobId(), execId, nodeId, MDC.get("traceId"), sysJob.getInvokeTarget(),
+                        e.getClass().getSimpleName(), e.getMessage(), org.apache.commons.lang3.exception.ExceptionUtils.getStackTrace(e));
             } finally {
                 long duration = System.currentTimeMillis() - startTime;
                 // log.info("[EXEC_END] jobId={} executionId={} status={} durationMs={}", sysJob.getJobId(), executionId, status, duration);
