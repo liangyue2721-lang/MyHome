@@ -51,6 +51,8 @@ public class RedisMessageQueue implements SmartLifecycle {
     private static final String PROCESSING_PREFIX = "mq:task:processing:";
     private static final String META_PREFIX = "mq:task:meta:";
     private static final String RECLAIM_LOCK_PREFIX = "mq:task:reclaim:lock:";
+    private static final String LOCAL_RETRY_PREFIX = "mq:retry:";
+    private static final String NODE_FUSED_PREFIX = "mq:node:fused:";
 
     /**
      * 是否运行（生命周期）
@@ -79,6 +81,7 @@ public class RedisMessageQueue implements SmartLifecycle {
 
     // Lua Scripts
     private DefaultRedisScript<String> pollScript;
+    private DefaultRedisScript<String> pollLocalRetryScript;
     private DefaultRedisScript<Long> promoteScript;
     private DefaultRedisScript<Long> reclaimScript;
 
@@ -184,6 +187,33 @@ public class RedisMessageQueue implements SmartLifecycle {
                 "return msg";
         this.pollScript = new DefaultRedisScript<>(pollLua, String.class);
 
+        // Script: POLL_LOCAL_RETRY
+        // KEYS[1]=LocalRetryZSet
+        // ARGV[1]=ownerIp, ARGV[2]=nowMillis, ARGV[3]=metaPrefix, ARGV[4]=processingPrefix
+        String pollLocalLua = "local now = tonumber(ARGV[2])\n" +
+                "local msgs = redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', now, 'LIMIT', 0, 1)\n" +
+                "if #msgs == 0 then return nil end\n" +
+                "\n" +
+                "local msg = msgs[1]\n" +
+                "redis.call('ZREM', KEYS[1], msg)\n" +
+                "\n" +
+                "local p = string.find(msg, \"\\n\")\n" +
+                "if not p then return nil end\n" +
+                "\n" +
+                "local header = string.sub(msg, 1, p-1)\n" +
+                "local executionId = header\n" +
+                "local sep = string.find(header, \"|\")\n" +
+                "if sep then executionId = string.sub(header, 1, sep-1) end\n" +
+                "\n" +
+                "local metaKey = ARGV[3] .. executionId\n" +
+                "local processingKey = ARGV[4] .. ARGV[1]\n" +
+                "\n" +
+                "redis.call('HSET', metaKey, 'owner', ARGV[1], 'processingAt', ARGV[2])\n" +
+                "redis.call('LPUSH', processingKey, msg)\n" +
+                "\n" +
+                "return msg";
+        this.pollLocalRetryScript = new DefaultRedisScript<>(pollLocalLua, String.class);
+
         // Script: PROMOTE_TASK
         // KEYS[1]=DelayZSet, KEYS[2]=GlobalHigh, KEYS[3]=GlobalNormal
         // ARGV[1]=nowMillis, ARGV[2]=batch
@@ -253,10 +283,26 @@ public class RedisMessageQueue implements SmartLifecycle {
         while (running && !Thread.currentThread().isInterrupted()) {
             TaskMessage msg = null;
             try {
-                // Lua Poll
-                String msgRaw = redisTemplate.execute(pollScript,
-                        Arrays.asList(GLOBAL_QUEUE_HIGH, GLOBAL_QUEUE_NORMAL),
+                // 1. Poll Local Retry (Priority 1)
+                // Always check local retry first, even if fused (it's our own mess to clean up)
+                String msgRaw = redisTemplate.execute(pollLocalRetryScript,
+                        Collections.singletonList(LOCAL_RETRY_PREFIX + currentNodeId),
                         currentNodeId, String.valueOf(System.currentTimeMillis()), META_PREFIX, PROCESSING_PREFIX);
+
+                // 2. Poll Global (Priority 2)
+                if (msgRaw == null) {
+                    // Check Circuit Breaker
+                    if (redisTemplate.hasKey(NODE_FUSED_PREFIX + currentNodeId)) {
+                        // Node is FUSED: Skip global poll, sleep and continue
+                        Thread.sleep(1000);
+                        continue;
+                    }
+
+                    // Not fused, poll global
+                    msgRaw = redisTemplate.execute(pollScript,
+                            Arrays.asList(GLOBAL_QUEUE_HIGH, GLOBAL_QUEUE_NORMAL),
+                            currentNodeId, String.valueOf(System.currentTimeMillis()), META_PREFIX, PROCESSING_PREFIX);
+                }
 
                 if (msgRaw == null) {
                     // Empty queue, sleep to avoid spin
@@ -358,24 +404,65 @@ public class RedisMessageQueue implements SmartLifecycle {
                 redisTemplate.delete(META_PREFIX + execId);
             }
 
-            int retry = msg.getRetryCount();
-            msg.setRetryCount(retry + 1);
+            // Retry Logic
+            int retry = msg.getRetryCount(); // Current Node Retries
+            int maxNodeRetries = quartzProperties.getMaxNodeRetries();
 
-            long now = System.currentTimeMillis();
-            long backoff = Math.min(60_000L, 2000L * (long) Math.pow(2, retry));
-            long nextAt = now + backoff;
-            msg.setScheduledAt(nextAt);
+            // Attempt = retry + 1 (since this is called after failure)
+            // If retry < maxNodeRetries - 1 (e.g. 0 < 2, 1 < 2), then increment and local retry.
+            // If retry == 2 (meaning we just failed the 3rd time total), then trigger fuse.
+            // Actually, simplified: if (retry + 1 < maxNodeRetries) => LOCAL
+            // Example: max=3.
+            // Initial (retry=0) -> Fail -> 0+1=1 < 3 -> Local Retry 1.
+            // Retry 1 (retry=1) -> Fail -> 1+1=2 < 3 -> Local Retry 2.
+            // Retry 2 (retry=2) -> Fail -> 2+1=3 (Not < 3) -> Fuse.
+            // Result: 3 Execution attempts (Initial, Retry1, Retry2). Correct.
 
-            // Re-construct raw format
-            String priority = StringUtils.isEmpty(msg.getPriority()) ? "NORMAL" : msg.getPriority();
-            String newJson = JSON.toJSONString(msg);
-            String newRaw = execId + "|" + priority + "\n" + newJson;
-            msg.setOriginalJson(newRaw);
+            if (retry + 1 < maxNodeRetries) {
+                // === LOCAL RETRY ===
+                msg.setRetryCount(retry + 1);
+                long now = System.currentTimeMillis();
+                long nextAt = now + quartzProperties.getNodeRetryIntervalMs();
+                msg.setScheduledAt(nextAt);
 
-            redisTemplate.opsForZSet().add(GLOBAL_DELAY_ZSET, newRaw, nextAt);
+                // Re-construct raw format
+                String priority = StringUtils.isEmpty(msg.getPriority()) ? "NORMAL" : msg.getPriority();
+                String newJson = JSON.toJSONString(msg);
+                String newRaw = execId + "|" + priority + "\n" + newJson;
+                msg.setOriginalJson(newRaw);
 
-            log.warn("[RMQ_REQUEUE] executionId={} retry={} nextAt={} err={}",
-                    execId, msg.getRetryCount(), nextAt, e.getMessage());
+                redisTemplate.opsForZSet().add(LOCAL_RETRY_PREFIX + currentNodeId, newRaw, nextAt);
+
+                log.warn("[RMQ_LOCAL_RETRY] executionId={} nodeRetry={} nextAt={} err={}",
+                        execId, msg.getRetryCount(), nextAt, e.getMessage());
+
+            } else {
+                // === CIRCUIT BREAK (FUSE) ===
+                // 1. Set Fuse Flag
+                long fuseDuration = quartzProperties.getFuseDurationMs();
+                String fuseKey = NODE_FUSED_PREFIX + currentNodeId;
+                redisTemplate.opsForValue().set(fuseKey, "FUSED", fuseDuration, TimeUnit.MILLISECONDS);
+
+                // 2. Reset Retry for Migration
+                msg.setRetryCount(0);
+                msg.setTotalFailureCount(msg.getTotalFailureCount() + 1);
+
+                // 3. Move to Global Queue (Immediate)
+                String priority = StringUtils.isEmpty(msg.getPriority()) ? "NORMAL" : msg.getPriority();
+                String newJson = JSON.toJSONString(msg);
+                String newRaw = execId + "|" + priority + "\n" + newJson;
+                msg.setOriginalJson(newRaw);
+
+                if ("HIGH".equals(priority)) {
+                    redisTemplate.opsForList().leftPush(GLOBAL_QUEUE_HIGH, newRaw);
+                } else {
+                    redisTemplate.opsForList().leftPush(GLOBAL_QUEUE_NORMAL, newRaw);
+                }
+
+                log.error("[RMQ_NODE_FUSED] Node {} FUSED due to task {}. Migrated to Global. err={}",
+                        currentNodeId, execId, e.getMessage());
+            }
+
         } catch (Exception ex) {
             log.error("[RMQ_REQUEUE_ERR] executionId={}", msg.getExecutionId(), ex);
         }
@@ -587,7 +674,8 @@ public class RedisMessageQueue implements SmartLifecycle {
         private long scheduledAt;
         private Map<String, Object> payload;
         private String traceId;
-        private int retryCount = 0;
+        private int retryCount = 0; // Current Node Retry Count
+        private int totalFailureCount = 0; // Global Failure Count
         private String priority = "NORMAL";
 
         @JSONField(serialize = false)
@@ -664,6 +752,9 @@ public class RedisMessageQueue implements SmartLifecycle {
         public void setRetryCount(int retryCount) {
             this.retryCount = retryCount;
         }
+
+        public int getTotalFailureCount() { return totalFailureCount; }
+        public void setTotalFailureCount(int totalFailureCount) { this.totalFailureCount = totalFailureCount; }
 
         public String getPriority() {
             return priority;

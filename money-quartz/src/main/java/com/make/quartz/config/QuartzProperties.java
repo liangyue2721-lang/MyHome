@@ -51,6 +51,21 @@ public class QuartzProperties {
     private int maxRetryCount = 3;
 
     /**
+     * 单节点失败重试间隔 (默认 30秒)
+     */
+    private long nodeRetryIntervalMs = 30000L;
+
+    /**
+     * 单节点最大重试次数 (默认 3次，达到则熔断)
+     */
+    private int maxNodeRetries = 3;
+
+    /**
+     * 节点熔断时长 (默认 5分钟)
+     */
+    private long fuseDurationMs = 300000L;
+
+    /**
      * 任务执行超时时间 (毫秒)，默认5分钟
      */
     private long taskTimeout = 300000;
@@ -137,6 +152,15 @@ public class QuartzProperties {
     public void setMaxRetryCount(int maxRetryCount) {
         this.maxRetryCount = maxRetryCount;
     }
+
+    public long getNodeRetryIntervalMs() { return nodeRetryIntervalMs; }
+    public void setNodeRetryIntervalMs(long nodeRetryIntervalMs) { this.nodeRetryIntervalMs = nodeRetryIntervalMs; }
+
+    public int getMaxNodeRetries() { return maxNodeRetries; }
+    public void setMaxNodeRetries(int maxNodeRetries) { this.maxNodeRetries = maxNodeRetries; }
+
+    public long getFuseDurationMs() { return fuseDurationMs; }
+    public void setFuseDurationMs(long fuseDurationMs) { this.fuseDurationMs = fuseDurationMs; }
 
     public long getTaskTimeout() {
         return taskTimeout;
