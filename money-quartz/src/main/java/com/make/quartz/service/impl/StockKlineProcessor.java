@@ -133,6 +133,13 @@ public class StockKlineProcessor {
         String stockCode = task.getStockCode();
         String market = StockMarketResolver.getMarketCode(stockCode);
 
+        // [VALIDATION] 校验 Market 是否合法，若不合法直接终止
+        if (market == null) {
+            log.warn("⚠ [INVALID_MARKET] 无法解析市场编码，终止任务 stock={}", stockCode);
+            result.failedCount++;
+            return;
+        }
+
         log.info("▶ 今日任务拉取分钟级数据 stock={} market={}", stockCode, market);
 
         // ====== 拉取 Python 分钟级数据并聚合成日级（内部 fresh session） ======
@@ -229,6 +236,13 @@ public class StockKlineProcessor {
 
         String stockCode = task.getStockCode();
         String market = StockMarketResolver.getMarketCode(stockCode);
+
+        // [VALIDATION] 校验 Market 是否合法，若不合法直接终止
+        if (market == null) {
+            log.warn("⚠ [INVALID_MARKET] 无法解析市场编码，终止任务 stock={}", stockCode);
+            result.failedCount++;
+            return;
+        }
 
         log.info("▶ 历史任务全历史拉取 stock={} market={}", stockCode, market);
 

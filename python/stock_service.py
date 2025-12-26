@@ -399,6 +399,10 @@ async def stock_kline(req: KlineRequest):
     """
     Fetch K-line data for the last `ndays`.
     """
+    # 0. Validate input (Defensive check)
+    if not req.secid or req.secid.startswith("null."):
+        raise HTTPException(status_code=422, detail="Invalid secid parameter")
+
     # 1. Normalize secid (add market prefix if missing)
     secid = normalize_secid(req.secid)
 
@@ -424,7 +428,11 @@ async def stock_kline(req: KlineRequest):
     if not raw_json:
         raise HTTPException(status_code=404, detail="Not Found")
 
-    data = raw_json.get("data", {})
+    data = raw_json.get("data")
+    if data is None:
+        # API returned success (HTTP 200/JSON) but data is null (e.g. invalid secid on provider side)
+        raise HTTPException(status_code=404, detail="Remote data is null")
+
     klines = data.get("klines", [])
     code = data.get("code")
 

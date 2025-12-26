@@ -165,21 +165,40 @@ public class KlineDataFetcher {
      * 获取沪深股市 K 线数据（5日 Trends 聚合）
      */
     public static List<KlineData> fetchKlineDataFiveDay(String secid, String market) {
+        logger.info("fetchKlineDataFiveDay [ENTRY] secid={}, market={}", secid, market);
+
+        if (market == null || secid == null || "null".equals(market) || "null".equals(secid) || secid.startsWith("null.")) {
+            logger.error("fetchKlineDataFiveDay [BLOCKED] invalid input: secid={}, market={}", secid, market);
+            return Collections.emptyList();
+        }
+
         String fullSecid = market + "." + secid;
-        logger.info("Fetching 5-Day K-line data via Service for stock: {}", fullSecid);
+        logger.info("fetchKlineDataFiveDay [EXECUTE] fullSecid={}", fullSecid);
 
         Map<String, Object> body = new HashMap<>();
         body.put("secid", fullSecid);
         body.put("ndays", 5);
 
         List<KlineData> result = post("/stock/kline", body, new TypeReference<List<KlineData>>() {});
-        return result != null ? result : Collections.emptyList();
+        if (result == null) {
+            logger.warn("fetchKlineDataFiveDay [FAILED] result is null");
+            return Collections.emptyList();
+        }
+        logger.info("fetchKlineDataFiveDay [SUCCESS] size={}", result.size());
+        return result;
     }
 
     /**
      * 拉取指定股票的历史日 K 线数据（全历史）
      */
     public static List<KlineData> fetchKlineDataALL(String secid, String market) {
+        logger.info("fetchKlineDataALL [ENTRY] secid={}, market={}", secid, market);
+
+        if (market == null || secid == null || "null".equals(market) || "null".equals(secid) || secid.startsWith("null.")) {
+            logger.error("fetchKlineDataALL [BLOCKED] invalid input: secid={}, market={}", secid, market);
+            return Collections.emptyList();
+        }
+
         // 使用 /stock/kline (Trends) 还是 /stock/kline/range?
         // 原始代码调用 hybrid_kline_trends.py，它调用 trends2。
         // trends2 接口主要返回近期分钟/日线趋势。
@@ -187,7 +206,7 @@ public class KlineDataFetcher {
         // 假设 Service 的 /stock/kline 端点复刻了 hybrid_kline_trends 的逻辑。
 
         String fullSecid = market + "." + secid;
-        logger.info("Fetching ALL K-line data for stock: {}, market: {}", secid, market);
+        logger.info("fetchKlineDataALL [EXECUTE] fullSecid={}", fullSecid);
 
         // 注意：这里复用 /stock/kline，因为我们在 Service 里实现了它对应 hybrid 逻辑
         Map<String, Object> body = new HashMap<>();
@@ -195,7 +214,12 @@ public class KlineDataFetcher {
         body.put("ndays", 10000); // 尝试请求长周期
 
         List<KlineData> result = post("/stock/kline", body, new TypeReference<List<KlineData>>() {});
-        return result != null ? result : Collections.emptyList();
+        if (result == null) {
+            logger.warn("fetchKlineDataALL [FAILED] result is null");
+            return Collections.emptyList();
+        }
+        logger.info("fetchKlineDataALL [SUCCESS] size={}", result.size());
+        return result;
     }
 
     /**

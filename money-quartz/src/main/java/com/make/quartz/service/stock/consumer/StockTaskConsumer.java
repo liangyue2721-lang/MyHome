@@ -119,6 +119,12 @@ public class StockTaskConsumer implements SmartLifecycle {
                 return;
             }
 
+            // 2.1 Validate URL (Prevent 'Fetch returned null' due to bad inputs)
+            if (ws.getStockApi() == null || ws.getStockApi().contains("secid=null.")) {
+                updateStatus(stockCode, StockTaskStatus.STATUS_FAILED, "INVALID_URL", traceId);
+                return;
+            }
+
             // 3. Fetch Realtime
             StockRealtimeInfo info = KlineDataFetcher.fetchRealtimeInfo(ws.getStockApi());
             if (info != null) {
