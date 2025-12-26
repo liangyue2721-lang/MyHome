@@ -102,6 +102,17 @@ public class StockTaskQueueService {
     }
 
     /**
+     * 删除任务状态 (Hash)
+     */
+    public void deleteStatus(String stockCode) {
+        try {
+            redisTemplate.opsForHash().delete(STATUS_HASH_KEY, stockCode);
+        } catch (Exception e) {
+            log.error("Failed to delete status for {}", stockCode, e);
+        }
+    }
+
+    /**
      * 获取单个状态
      */
     public StockTaskStatus getStatus(String stockCode) {

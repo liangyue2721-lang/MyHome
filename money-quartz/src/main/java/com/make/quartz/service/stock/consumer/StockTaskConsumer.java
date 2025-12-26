@@ -128,7 +128,6 @@ public class StockTaskConsumer implements SmartLifecycle {
             if (ws == null) {
                 dbResult = "Stock not found in DB";
                 dbStatus = "FAILED";
-                updateStatus(stockCode, StockTaskStatus.STATUS_FAILED, dbResult, traceId);
                 return;
             }
             stockName = ws.getName();
@@ -137,7 +136,6 @@ public class StockTaskConsumer implements SmartLifecycle {
             if (ws.getStockApi() == null || ws.getStockApi().contains("secid=null.")) {
                 dbResult = "INVALID_URL";
                 dbStatus = "FAILED";
-                updateStatus(stockCode, StockTaskStatus.STATUS_FAILED, dbResult, traceId);
                 return;
             }
 
@@ -151,24 +149,24 @@ public class StockTaskConsumer implements SmartLifecycle {
 
                 dbResult = "Price: " + info.getPrice();
                 dbStatus = "SUCCESS";
-                updateStatus(stockCode, StockTaskStatus.STATUS_SUCCESS, dbResult, traceId);
             } else {
                 dbResult = "Fetch returned null";
                 dbStatus = "FAILED";
-                updateStatus(stockCode, StockTaskStatus.STATUS_FAILED, dbResult, traceId);
             }
 
         } catch (Exception e) {
             log.error("Task failed: {}", stockCode, e);
             dbResult = e.getMessage();
             dbStatus = "FAILED";
-            updateStatus(stockCode, StockTaskStatus.STATUS_FAILED, dbResult, traceId);
         } finally {
             // 6. Release Lock
             queueService.releaseLock(stockCode, currentNodeId);
 
-            // 7. Save Record to DB
+            // 7. Save Record to DB (Only Final States)
             saveExecutionRecord(stockCode, stockName, dbStatus, dbResult, traceId);
+
+            // 8. Remove from Redis (Terminal State)
+            queueService.deleteStatus(stockCode);
         }
     }
 
