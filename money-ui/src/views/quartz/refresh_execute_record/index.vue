@@ -315,7 +315,8 @@ export default {
       // Group data by stockCode
       const stockStats = {};
       data.forEach(item => {
-        const code = item.stockCode || 'Unknown';
+        // Robust check for stock code key (Map return from backend might vary in case)
+        const code = item.stockCode || item.stock_code || item.STOCK_CODE || 'Unknown';
         if (!stockStats[code]) stockStats[code] = { success: 0, failed: 0 };
         if (item.status === 'SUCCESS') stockStats[code].success = Number(item.count);
         if (item.status === 'FAILED') stockStats[code].failed = Number(item.count);
