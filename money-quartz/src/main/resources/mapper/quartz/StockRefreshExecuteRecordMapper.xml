@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.quartz.mapper.StockRefreshExecuteRecordMapper">
+
+    <resultMap type="StockRefreshExecuteRecord" id="StockRefreshExecuteRecordResult">
+        <result property="id" column="id"/>
+        <result property="stockCode" column="stock_code"/>
+        <result property="stockName" column="stock_name"/>
+        <result property="status" column="status"/>
+        <result property="executeResult" column="execute_result"/>
+        <result property="nodeIp" column="node_ip"/>
+        <result property="executeTime" column="execute_time"/>
+        <result property="traceId" column="trace_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <sql id="selectStockRefreshExecuteRecordVo">
+        select id,
+               stock_code,
+               stock_name,
+               status,
+               execute_result,
+               node_ip,
+               execute_time,
+               trace_id,
+               create_time,
+               update_time
+        from stock_refresh_execute_record
+    </sql>
+
+    <select id="selectStockRefreshExecuteRecordList" parameterType="StockRefreshExecuteRecord"
+            resultMap="StockRefreshExecuteRecordResult">
+        <include refid="selectStockRefreshExecuteRecordVo"/>
+        <where>
+            <if test="stockCode != null  and stockCode != ''">and stock_code = #{stockCode}</if>
+            <if test="stockName != null  and stockName != ''">and stock_name like concat('%', #{stockName}, '%')</if>
+            <if test="status != null  and status != ''">and status = #{status}</if>
+            <if test="executeResult != null  and executeResult != ''">and execute_result = #{executeResult}</if>
+            <if test="nodeIp != null  and nodeIp != ''">and node_ip = #{nodeIp}</if>
+            <if test="executeTime != null ">and execute_time = #{executeTime}</if>
+            <if test="traceId != null  and traceId != ''">and trace_id = #{traceId}</if>
+        </where>
+    </select>
+
+    <select id="selectStockRefreshExecuteRecordById" parameterType="String" resultMap="StockRefreshExecuteRecordResult">
+        <include refid="selectStockRefreshExecuteRecordVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertStockRefreshExecuteRecord" parameterType="StockRefreshExecuteRecord" useGeneratedKeys="true"
+            keyProperty="id">
+        insert into stock_refresh_execute_record
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="stockCode != null and stockCode != ''">stock_code,</if>
+            <if test="stockName != null and stockName != ''">stock_name,</if>
+            <if test="status != null and status != ''">status,</if>
+            <if test="executeResult != null">execute_result,</if>
+            <if test="nodeIp != null and nodeIp != ''">node_ip,</if>
+            <if test="executeTime != null">execute_time,</if>
+            <if test="traceId != null and traceId != ''">trace_id,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateTime != null">update_time,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="stockCode != null and stockCode != ''">#{stockCode},</if>
+            <if test="stockName != null and stockName != ''">#{stockName},</if>
+            <if test="status != null and status != ''">#{status},</if>
+            <if test="executeResult != null">#{executeResult},</if>
+            <if test="nodeIp != null and nodeIp != ''">#{nodeIp},</if>
+            <if test="executeTime != null">#{executeTime},</if>
+            <if test="traceId != null and traceId != ''">#{traceId},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+        </trim>
+    </insert>
+
+    <update id="updateStockRefreshExecuteRecord" parameterType="StockRefreshExecuteRecord">
+        update stock_refresh_execute_record
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="stockCode != null and stockCode != ''">stock_code = #{stockCode},</if>
+            <if test="stockName != null and stockName != ''">stock_name = #{stockName},</if>
+            <if test="status != null and status != ''">status = #{status},</if>
+            <if test="executeResult != null">execute_result = #{executeResult},</if>
+            <if test="nodeIp != null and nodeIp != ''">node_ip = #{nodeIp},</if>
+            <if test="executeTime != null">execute_time = #{executeTime},</if>
+            <if test="traceId != null and traceId != ''">trace_id = #{traceId},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteStockRefreshExecuteRecordById" parameterType="String">
+        delete
+        from stock_refresh_execute_record
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteStockRefreshExecuteRecordByIds" parameterType="String">
+        delete from stock_refresh_execute_record where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>
