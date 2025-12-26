@@ -80,10 +80,16 @@ public class KlineDataFetcher {
             HttpEntity<Object> entity = new HttpEntity<>(requestBody, headers);
 
             logger.debug("Calling Python Service: {}", url);
+            // Log request body for debugging
+            if (logger.isDebugEnabled()) {
+                logger.debug("Python Service Request Body: {}", JSON.toJSONString(requestBody));
+            }
+
             ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
 
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-                logger.error("Python Service failed. Status: {}, Body: {}", response.getStatusCode(), response.getBody());
+                logger.error("Python Service failed. Status: {}, Body: {}, Request: {}",
+                        response.getStatusCode(), response.getBody(), JSON.toJSONString(requestBody));
                 return null;
             }
 
@@ -94,7 +100,9 @@ public class KlineDataFetcher {
             }
 
         } catch (Exception e) {
-            logger.error("Error calling Python Service [{}]: {}", path, e.getMessage());
+            // Enhanced logging: full stack trace and request details
+            logger.error("Error calling Python Service [{}]. Request: {}. Exception: ",
+                    path, JSON.toJSONString(requestBody), e);
             // No fallback - Service is the single source of truth.
             return null;
         }
