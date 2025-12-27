@@ -21,7 +21,7 @@ import java.util.List;
  * - 不再直接操作 Quartz Scheduler
  */
 @RestController
-@RequestMapping("/quartz/job")
+@RequestMapping("/monitor/job")
 public class SysJobController extends BaseController {
 
     @Autowired

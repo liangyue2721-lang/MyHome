@@ -54,21 +54,39 @@ public class StockTaskQueueService {
         }
     }
 
-    /**
-     * 递减批次计数器
-     * @return 剩余数量 (remaining count), or -1 if failed
-     */
     public long decrementBatch(String traceId) {
         if (StringUtils.isEmpty(traceId)) return -1;
+        String key = BATCH_COUNT_PREFIX + traceId;
         try {
-            String key = BATCH_COUNT_PREFIX + traceId;
+            String current = redisTemplate.opsForValue().get(key);
+
+            // 1) key 不存在：你可以选择返回 -1，或认为剩余 0
+            if (StringUtils.isEmpty(current)) {
+                return -1;
+            }
+
+            // 2) 非整数：自愈（删掉脏数据），避免一直报错
+            // 只接受可选负号 + 数字
+            if (!current.matches("-?\\d+")) {
+                log.error("Batch count key is not integer. key={}, value={}", key, current);
+                redisTemplate.delete(key);
+                return -1;
+            }
+
             Long remaining = redisTemplate.opsForValue().decrement(key);
-            return remaining != null ? remaining : -1;
+            if (remaining == null) return -1;
+
+            // 3) 可选：到 0 或以下就清理 key，避免继续递减到负数
+            if (remaining <= 0) {
+                redisTemplate.delete(key);
+            }
+            return remaining;
         } catch (Exception e) {
             log.error("Failed to decrement batch count: {}", traceId, e);
             return -1;
         }
     }
+
 
     /**
      * 投递任务
@@ -111,8 +129,9 @@ public class StockTaskQueueService {
 
     /**
      * 尝试获取股票锁 (占位)
+     *
      * @param stockCode 股票代码
-     * @param nodeId 节点ID (IP)
+     * @param nodeId    节点ID (IP)
      * @return true if acquired
      */
     public boolean tryLockStock(String stockCode, String nodeId) {
@@ -154,7 +173,7 @@ public class StockTaskQueueService {
             // Determine TTL
             long ttlSeconds = 300; // Default 5 min for terminal states
             if (StockTaskStatus.STATUS_WAITING.equals(status.getStatus()) ||
-                StockTaskStatus.STATUS_RUNNING.equals(status.getStatus())) {
+                    StockTaskStatus.STATUS_RUNNING.equals(status.getStatus())) {
                 ttlSeconds = 1800; // 30 min for active states
             }
 
