@@ -358,7 +358,7 @@
     <select id="getWatchStockByCode" parameterType="Watchstock" resultMap="WatchstockResult">
         <include refid="selectWatchstockVo"/>
         <where>
-            <if test="code != null  and code != ''">code = #{stockCode}</if>
+            <if test="stockCode != null  stockCode != ''">code = #{stockCode}</if>
         </where>
     </select>
 </mapper>
