@@ -75,5 +75,5 @@ public interface WatchstockMapper {
      */
     public List<Watchstock> getWatchstockAllList();
 
-    Watchstock getWatchStockByCode(@Param("stockCode") String stockCode);
+    Watchstock getWatchStockByCode(@Param("code") String code);
 }
