@@ -6,6 +6,7 @@
     import com.make.quartz.domain.StockRefreshTask;
     import com.make.quartz.domain.StockTaskStatus;
     import com.make.quartz.service.IStockRefreshExecuteRecordService;
+    import com.make.quartz.service.impl.StockWatchProcessor;
     import com.make.quartz.service.impl.WatchStockUpdater;
     import com.make.quartz.service.stock.queue.StockTaskQueueService;
     import com.make.stock.domain.Watchstock;
@@ -73,6 +74,11 @@
 
         @Resource
         private StockTaskQueueService queueService;
+
+        // Lazy inject to avoid circular dependency (Consumer -> Processor -> Consumer)
+        @Resource
+        @org.springframework.context.annotation.Lazy
+        private StockWatchProcessor stockWatchProcessor;
 
         @Resource
         private WatchStockUpdater watchStockUpdater;
@@ -333,6 +339,13 @@
                 // 8) Atomic Cleanup: Immediate deletion for Monitor semantics.
                 // (Only WAITING/RUNNING tasks appear in monitor)
                 queueService.deleteStatus(stockCode, traceId);
+
+                // 9) Decrement Batch Counter & Trigger Next Loop
+                long remaining = queueService.decrementBatch(traceId);
+                if (remaining == 0) {
+                    log.info("Batch completed (traceId={}). Triggering next batch...", traceId);
+                    stockWatchProcessor.triggerNextBatch();
+                }
             }
         }
 

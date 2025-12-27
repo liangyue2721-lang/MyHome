@@ -36,9 +36,39 @@ public class StockTaskQueueService {
     private static final String LOCK_PREFIX = "stock:refresh:lock:";
     private static final String STATUS_KEY_PREFIX = "stock:refresh:status:"; // + stockCode + : + traceId
     private static final String STATUS_INDEX_KEY = "stock:refresh:status:index";
+    private static final String BATCH_COUNT_PREFIX = "stock:batch:count:"; // + traceId
 
     @Resource
     private RedisTemplate<String, String> redisTemplate;
+
+    /**
+     * 初始化批次计数器
+     */
+    public void initBatch(String traceId, int total) {
+        if (StringUtils.isEmpty(traceId) || total <= 0) return;
+        try {
+            String key = BATCH_COUNT_PREFIX + traceId;
+            redisTemplate.opsForValue().set(key, String.valueOf(total), 30, TimeUnit.MINUTES);
+        } catch (Exception e) {
+            log.error("Failed to init batch count: {}", traceId, e);
+        }
+    }
+
+    /**
+     * 递减批次计数器
+     * @return 剩余数量 (remaining count), or -1 if failed
+     */
+    public long decrementBatch(String traceId) {
+        if (StringUtils.isEmpty(traceId)) return -1;
+        try {
+            String key = BATCH_COUNT_PREFIX + traceId;
+            Long remaining = redisTemplate.opsForValue().decrement(key);
+            return remaining != null ? remaining : -1;
+        } catch (Exception e) {
+            log.error("Failed to decrement batch count: {}", traceId, e);
+            return -1;
+        }
+    }
 
     /**
      * 投递任务
