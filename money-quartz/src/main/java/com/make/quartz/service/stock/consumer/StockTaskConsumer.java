@@ -273,10 +273,8 @@
             // 1) 分布式锁：避免同一 stockCode 被多节点/多线程并发刷新。
             boolean locked = tryLockWithRetry(stockCode);
             if (!locked) {
-                // 锁拿不到：说明被其他节点占用；按终态处理并清理状态。
-                updateStatus(stockCode, StockTaskStatus.STATUS_SKIPPED, "Occupied by other node", traceId);
-                // Do NOT delete status; let TTL expire.
-                // queueService.deleteStatus(stockCode, traceId);
+                // 锁拿不到：说明被其他节点占用（ACTIVE RUNNING in other node）。
+                // 不做任何状态更新，避免覆盖 legitimate RUNNING status。
                 return;
             }
 
@@ -332,12 +330,9 @@
                 // 7) 记录执行结果：只记终态（SUCCESS/FAILED）。
                 saveExecutionRecord(stockCode, stockName, dbStatus, dbResult, traceId);
 
-                // 8) 更新 Redis 状态为终态：SUCCESS / FAILED。
-                // This updates the key with a short TTL (5 min).
-                String finalStatus = executed ? StockTaskStatus.STATUS_SUCCESS : StockTaskStatus.STATUS_FAILED;
-                updateStatus(stockCode, finalStatus, dbResult, traceId);
-
-                // Do NOT delete status.
+                // 8) Atomic Cleanup: Immediate deletion for Monitor semantics.
+                // (Only WAITING/RUNNING tasks appear in monitor)
+                queueService.deleteStatus(stockCode, traceId);
             }
         }
 
