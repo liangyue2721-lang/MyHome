@@ -42,7 +42,7 @@
         /**
          * Poll Worker 数：并发从队列拉取任务的线程数量（提升吞吐的关键参数之一）。
          */
-        private static final int POLL_WORKERS = 4;
+    private static final int POLL_WORKERS = 10;
 
         /**
          * 单个任务内部最大重试次数（不含首次尝试；此处按“总尝试次数=MAX_ATTEMPTS”来写更直观）。

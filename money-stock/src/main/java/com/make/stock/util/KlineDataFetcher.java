@@ -10,6 +10,7 @@ import com.make.stock.exception.PythonServiceException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -40,14 +41,18 @@ public class KlineDataFetcher {
     @PostConstruct
     public void init() {
         pythonServiceUrl = pythonServiceUrlConfig;
-        restTemplate = new RestTemplate();
+
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(timeoutMillis);
+        factory.setReadTimeout(timeoutMillis);
+        restTemplate = new RestTemplate(factory);
 
         webClient = WebClient.builder()
                 .baseUrl(pythonServiceUrl)
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .build();
 
-        log.info("KlineDataFetcher initialized with Python Service URL: {}", pythonServiceUrl);
+        log.info("KlineDataFetcher initialized with Python Service URL: {}, Timeout: {}ms", pythonServiceUrl, timeoutMillis);
     }
 
     // ========================== 核心调用方法 ==========================
