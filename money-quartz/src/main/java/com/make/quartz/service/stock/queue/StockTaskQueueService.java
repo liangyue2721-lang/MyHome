@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -153,6 +154,37 @@ public class StockTaskQueueService {
             }
         } catch (Exception e) {
             log.error("Failed to delete status for {}", stockCode, e);
+        }
+    }
+
+    /**
+     * 恢复 WAITING 状态的任务（系统启动时调用）
+     * 防止任务在 Redis Queue 丢失但 Status 仍为 WAITING 的不一致情况。
+     */
+    public void recoverWaitingTasks() {
+        try {
+            log.info("Starting recovery of WAITING tasks...");
+            List<StockTaskStatus> allStatuses = getAllStatuses();
+            int recoveredCount = 0;
+
+            for (StockTaskStatus status : allStatuses) {
+                if (StockTaskStatus.STATUS_WAITING.equals(status.getStatus())) {
+                    // Re-construct task
+                    StockRefreshTask task = new StockRefreshTask();
+                    task.setTaskId(UUID.randomUUID().toString());
+                    task.setStockCode(status.getStockCode());
+                    task.setTaskType("REFRESH_PRICE"); // Default type
+                    task.setCreateTime(System.currentTimeMillis());
+                    task.setTraceId(status.getTraceId());
+
+                    // Re-enqueue
+                    enqueue(task);
+                    recoveredCount++;
+                }
+            }
+            log.info("Recovered {} WAITING tasks into queue.", recoveredCount);
+        } catch (Exception e) {
+            log.error("Failed to recover waiting tasks", e);
         }
     }
 

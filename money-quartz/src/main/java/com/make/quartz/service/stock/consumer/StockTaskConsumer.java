@@ -148,6 +148,9 @@
                 return;
             }
 
+            // Recovery: WAITING tasks must be in queue.
+            queueService.recoverWaitingTasks();
+
             // 启动 N 个 poll loop，提高拉取速度，减少队列堆积。
             for (int i = 0; i < POLL_WORKERS; i++) {
                 pollPool.submit(this::pollLoopSafely);
