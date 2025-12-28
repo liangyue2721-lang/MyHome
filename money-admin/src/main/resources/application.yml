@@ -82,7 +82,7 @@ spring:
     # 密码
     password: aB3x9Rq7Z2pY8sK4nL6
     # 连接超时时间 从10s增加到30s
-    timeout: 60s
+    timeout: 30s
     lettuce:
       pool:
         # 连接池中的最小空闲连接 从0增加到2
@@ -92,7 +92,7 @@ spring:
         # 连接池的最大数据库连接数 从8增加到32
         max-active: 128
         # 连接池最大阻塞等待时间 从-1ms改为30s
-        max-wait: 60s
+        max-wait: 30s
   # Quartz配置
   quartz:
     bootstrapEnabled: true
