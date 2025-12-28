@@ -345,6 +345,13 @@
                 if (remaining == 0) {
                     log.info("Batch completed (traceId={}). Triggering next batch...", traceId);
                     stockWatchProcessor.triggerNextBatch();
+                } else if (remaining < 0) {
+                    // Batch counter missing (expired or lost): Use recovery lock to trigger safely
+                    log.warn("Batch counter missing (remaining < 0). Attempting recovery... traceId={}", traceId);
+                    if (queueService.tryLockRecovery(traceId)) {
+                        log.info("Recovery lock acquired. Triggering next batch... traceId={}", traceId);
+                        stockWatchProcessor.triggerNextBatch();
+                    }
                 }
             }
         }

@@ -37,6 +37,7 @@ public class StockTaskQueueService {
     private static final String STATUS_KEY_PREFIX = "stock:refresh:status:"; // + stockCode + : + traceId
     private static final String STATUS_INDEX_KEY = "stock:refresh:status:index";
     private static final String BATCH_COUNT_PREFIX = "stock:batch:count:"; // + traceId
+    private static final String RECOVERY_LOCK_PREFIX = "stock:batch:recovery:"; // + traceId
 
     @Resource
     private RedisTemplate<String, String> redisTemplate;
@@ -48,7 +49,7 @@ public class StockTaskQueueService {
         if (StringUtils.isEmpty(traceId) || total <= 0) return;
         try {
             String key = BATCH_COUNT_PREFIX + traceId;
-            redisTemplate.opsForValue().set(key, String.valueOf(total), 30, TimeUnit.MINUTES);
+            redisTemplate.opsForValue().set(key, String.valueOf(total), 60, TimeUnit.MINUTES);
         } catch (Exception e) {
             log.error("Failed to init batch count: {}", traceId, e);
         }
@@ -76,6 +77,9 @@ public class StockTaskQueueService {
             Long remaining = redisTemplate.opsForValue().decrement(key);
             if (remaining == null) return -1;
 
+            // Renew TTL on every decrement to prevent expiration during slow batches
+            redisTemplate.expire(key, 60, TimeUnit.MINUTES);
+
             // 3) 可选：到 0 或以下就清理 key，避免继续递减到负数
             if (remaining <= 0) {
                 redisTemplate.delete(key);
@@ -85,6 +89,15 @@ public class StockTaskQueueService {
             log.error("Failed to decrement batch count: {}", traceId, e);
             return -1;
         }
+    }
+
+    /**
+     * 尝试获取恢复锁 (用于自循环断链时的兜底触发)
+     */
+    public boolean tryLockRecovery(String traceId) {
+        String key = RECOVERY_LOCK_PREFIX + traceId;
+        Boolean success = redisTemplate.opsForValue().setIfAbsent(key, "LOCKED", 30, TimeUnit.SECONDS);
+        return success != null && success;
     }
 
 
