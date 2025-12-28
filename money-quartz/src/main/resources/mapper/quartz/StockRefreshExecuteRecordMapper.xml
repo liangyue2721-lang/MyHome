@@ -114,7 +114,7 @@
         from stock_refresh_execute_record
         <where>
             <if test="stockCode != null and stockCode != ''">and stock_code = #{stockCode}</if>
-            and DATE(create_time) = CURDATE()
+            and DATE(execute_time) = CURDATE()
         </where>
         group by
         <if test="stockCode == null or stockCode == ''">stock_code,</if>
