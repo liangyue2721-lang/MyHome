@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 import com.make.finance.domain.vo.LabelEntity;
 import com.make.finance.domain.Income;
@@ -86,4 +87,12 @@ public interface IIncomeService {
      * @return 收入
      */
     public Income getIncomeByUserIdAndDate(Long userId, Date date);
+
+    /**
+     * 查询收入统计
+     *
+     * @param income 收入
+     * @return 结果
+     */
+    public List<Map<String, Object>> selectIncomeStats(Income income);
 }

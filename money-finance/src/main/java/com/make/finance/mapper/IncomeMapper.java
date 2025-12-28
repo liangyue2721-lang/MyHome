@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 import com.make.finance.domain.Income;
 import org.apache.ibatis.annotations.Param;
@@ -66,4 +67,6 @@ public interface IncomeMapper {
     BigDecimal selectCurrentMonthIncomeTotal(@Param("userId") Long userId, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
 
     Income selectIncomeByUserIdAndDate(@Param("userId") Long userId,@Param("incomeDate") Date incomeDate);
+
+    List<Map<String, Object>> selectIncomeStats(Income income);
 }

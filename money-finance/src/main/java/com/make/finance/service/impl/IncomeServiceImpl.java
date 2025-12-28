@@ -103,6 +103,11 @@ public class IncomeServiceImpl implements IIncomeService {
         return incomeMapper.selectIncomeByUserIdAndDate(userId, date);
     }
 
+    @Override
+    public List<Map<String, Object>> selectIncomeStats(Income income) {
+        return incomeMapper.selectIncomeStats(income);
+    }
+
 
     /**
      * 获取收入来源选项列表，用于前端下拉框展示

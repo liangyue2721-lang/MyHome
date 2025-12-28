@@ -46,6 +46,15 @@ public class IncomeController extends BaseController {
     }
 
     /**
+     * 查询收入统计
+     */
+    @PreAuthorize("@ss.hasPermi('finance:income:list')")
+    @GetMapping("/stats")
+    public AjaxResult stats(Income income) {
+        return success(incomeService.selectIncomeStats(income));
+    }
+
+    /**
      * 导出收入列表
      */
     @PreAuthorize("@ss.hasPermi('finance:income:export')")

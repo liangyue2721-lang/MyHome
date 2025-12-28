@@ -9,6 +9,15 @@ export function listIncome(query) {
   })
 }
 
+// 查询收入统计
+export function getIncomeStats(query) {
+  return request({
+    url: '/finance/income/stats',
+    method: 'get',
+    params: query
+  })
+}
+
 // 查询收入详细
 export function getIncome(incomeId) {
   return request({

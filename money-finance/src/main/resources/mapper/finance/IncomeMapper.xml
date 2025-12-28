@@ -109,5 +109,29 @@
         AND `source` = 0
     </select>
 
+    <select id="selectIncomeStats" parameterType="Income" resultType="java.util.Map">
+        select DATE_FORMAT(income_date, '%Y-%m') as month, SUM(amount) as totalAmount
+        from income
+        <where>
+            <if test="userId != null ">and user_id = #{userId}</if>
+            <if test="amount != null ">and amount = #{amount}</if>
+            <if test="source != null  and source != ''">and source = #{source}</if>
+            <if test="incomeDate != null ">and income_date = #{incomeDate}</if>
+            <if test="category != null  and category != ''">and category = #{category}</if>
+            <if test="params.beginTime != null and params.beginTime != ''">
+                and income_date &gt;= #{params.beginTime}
+            </if>
+            <if test="params.endTime != null and params.endTime != ''">
+                and income_date &lt;= #{params.endTime}
+            </if>
+            <!-- Default to recent 12 months if no date range is provided -->
+            <if test="params.beginTime == null and params.endTime == null">
+                and income_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+            </if>
+        </where>
+        group by DATE_FORMAT(income_date, '%Y-%m')
+        order by month asc
+    </select>
+
 
 </mapper>
