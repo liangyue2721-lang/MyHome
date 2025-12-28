@@ -1,5 +1,0 @@
-
-> ruoyi@3.8.9 dev
-> vue-cli-service serve --port 1024
-
-sh: 1: vue-cli-service: not found
