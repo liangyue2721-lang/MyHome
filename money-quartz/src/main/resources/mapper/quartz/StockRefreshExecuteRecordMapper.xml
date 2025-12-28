@@ -43,6 +43,7 @@
             <if test="executeTime != null ">and execute_time = #{executeTime}</if>
             <if test="traceId != null  and traceId != ''">and trace_id = #{traceId}</if>
         </where>
+        order by execute_time desc
     </select>
 
     <select id="selectStockRefreshExecuteRecordById" parameterType="String" resultMap="StockRefreshExecuteRecordResult">
