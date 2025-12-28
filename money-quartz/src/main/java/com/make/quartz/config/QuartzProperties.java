@@ -105,6 +105,19 @@ public class QuartzProperties {
      */
     private long bootstrapRetryIntervalMs = 3000L;
 
+    /**
+     * 股票任务消费者 Poll Worker 数量
+     */
+    private int stockPollWorkers = 5;
+
+    public int getStockPollWorkers() {
+        return stockPollWorkers;
+    }
+
+    public void setStockPollWorkers(int stockPollWorkers) {
+        this.stockPollWorkers = stockPollWorkers;
+    }
+
     public int getListenerCoreThreadsMultiple() {
         return listenerCoreThreadsMultiple;
     }

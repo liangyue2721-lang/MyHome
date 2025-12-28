@@ -5,6 +5,7 @@
     import com.make.quartz.domain.StockRefreshExecuteRecord;
     import com.make.quartz.domain.StockRefreshTask;
     import com.make.quartz.domain.StockTaskStatus;
+    import com.make.quartz.config.QuartzProperties;
     import com.make.quartz.service.IStockRefreshExecuteRecordService;
     import com.make.quartz.service.impl.StockWatchProcessor;
     import com.make.quartz.service.impl.WatchStockUpdater;
@@ -39,11 +40,6 @@
         private static final Logger log = LoggerFactory.getLogger(StockTaskConsumer.class);
 
         /* ===================== 可配置参数（建议最终做成配置项） ===================== */
-
-        /**
-         * Poll Worker 数：并发从队列拉取任务的线程数量（提升吞吐的关键参数之一）。
-         */
-    private static final int POLL_WORKERS = 10;
 
         /**
          * 单个任务内部最大重试次数（不含首次尝试；此处按“总尝试次数=MAX_ATTEMPTS”来写更直观）。
@@ -89,6 +85,9 @@
         @Resource
         private IStockRefreshExecuteRecordService recordService;
 
+        @Resource
+        private QuartzProperties quartzProperties;
+
         /* ===================== 运行时状态与线程资源 ===================== */
 
         /**
@@ -131,8 +130,9 @@
             int inFlightLimit = Math.max(1, executePool.getMaximumPoolSize());
             this.submitLimiter = new Semaphore(inFlightLimit);
 
+            int pollWorkers = quartzProperties.getStockPollWorkers();
             // 初始化 poll worker 池。
-            this.pollPool = Executors.newFixedThreadPool(POLL_WORKERS, r -> {
+            this.pollPool = Executors.newFixedThreadPool(pollWorkers, r -> {
                 Thread t = new Thread(r);
                 t.setName("stock-task-poll-worker");
                 t.setDaemon(true);
@@ -140,7 +140,7 @@
             });
 
             log.info("StockTaskConsumer init done. node={}, pollWorkers={}, inFlightLimit={}, executePool(max={})",
-                    currentNodeId, POLL_WORKERS, inFlightLimit, executePool.getMaximumPoolSize());
+                    currentNodeId, pollWorkers, inFlightLimit, executePool.getMaximumPoolSize());
         }
 
         /**
@@ -155,14 +155,22 @@
             }
 
             // Recovery: WAITING tasks must be in queue.
-            queueService.recoverWaitingTasks();
+            // Execute asynchronously to prevent blocking startup due to Redis timeout/latency
+            CompletableFuture.runAsync(() -> {
+                try {
+                    queueService.recoverWaitingTasks();
+                } catch (Exception e) {
+                    log.error("Failed to recover waiting tasks asynchronously", e);
+                }
+            });
 
+            int pollWorkers = quartzProperties.getStockPollWorkers();
             // 启动 N 个 poll loop，提高拉取速度，减少队列堆积。
-            for (int i = 0; i < POLL_WORKERS; i++) {
+            for (int i = 0; i < pollWorkers; i++) {
                 pollPool.submit(this::pollLoopSafely);
             }
 
-            log.info("StockTaskConsumer started. node={}, pollWorkers={}", currentNodeId, POLL_WORKERS);
+            log.info("StockTaskConsumer started. node={}, pollWorkers={}", currentNodeId, pollWorkers);
         }
 
         /**
