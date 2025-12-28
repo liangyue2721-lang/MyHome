@@ -80,7 +80,7 @@
       <el-table-column label="执行节点IP" align="center" prop="nodeIp"/>
       <el-table-column label="任务执行时间" align="center" prop="executeTime" width="180">
         <template slot-scope="scope">
-          <span>{{ parseTime(scope.row.executeTime, '{y}-{m}-{d}') }}</span>
+          <span>{{ parseTime(scope.row.executeTime, '{y}-{m}-{d} {h}:{i}:{s}') }}</span>
         </template>
       </el-table-column>
       <el-table-column label="Trace ID" align="center" prop="traceId"/>
