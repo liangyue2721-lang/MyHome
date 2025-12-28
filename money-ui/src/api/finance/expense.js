@@ -9,6 +9,15 @@ export function listExpense(query) {
   })
 }
 
+// 查询消费统计
+export function getExpenseStats(query) {
+  return request({
+    url: '/finance/expense/stats',
+    method: 'get',
+    params: query
+  })
+}
+
 // 查询消费详细
 export function getExpense(expenseId) {
   return request({

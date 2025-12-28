@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import com.make.finance.domain.TransactionRecords;
@@ -54,6 +55,17 @@ public class ExpenseServiceImpl implements IExpenseService {
     @Override
     public List<Expense> selectExpenseList(Expense expense) {
         return expenseMapper.selectExpenseList(expense);
+    }
+
+    /**
+     * 查询消费月度统计
+     *
+     * @param expense 消费
+     * @return 结果
+     */
+    @Override
+    public List<Map<String, Object>> selectExpenseStats(Expense expense) {
+        return expenseMapper.selectExpenseStats(expense);
     }
 
     /**

@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
+
 import com.make.finance.domain.Expense;
 
 /**
@@ -29,6 +31,14 @@ public interface IExpenseService
      * @return 消费集合
      */
     public List<Expense> selectExpenseList(Expense expense);
+
+    /**
+     * 查询消费月度统计
+     *
+     * @param expense 消费
+     * @return 结果
+     */
+    public List<Map<String, Object>> selectExpenseStats(Expense expense);
 
     /**
      * 新增消费

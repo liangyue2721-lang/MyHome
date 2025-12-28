@@ -103,6 +103,30 @@
         AND user_id = #{userId}
     </select>
 
+    <select id="selectExpenseStats" parameterType="Expense" resultType="java.util.Map">
+        select DATE_FORMAT(expense_date, '%Y-%m') as month, SUM(amount) as totalAmount
+        from expense
+        <where>
+            <if test="userId != null ">and user_id = #{userId}</if>
+            <if test="amount != null ">and amount = #{amount}</if>
+            <if test="merchant != null  and merchant != ''">and merchant = #{merchant}</if>
+            <if test="expenseDate != null ">and expense_date = #{expenseDate}</if>
+            <if test="category != null  and category != ''">and category = #{category}</if>
+            <if test="params.beginTime != null and params.beginTime != ''">
+                and expense_date &gt;= #{params.beginTime}
+            </if>
+            <if test="params.endTime != null and params.endTime != ''">
+                and expense_date &lt;= #{params.endTime}
+            </if>
+            <!-- Default to recent 12 months if no date range is provided -->
+            <if test="params.beginTime == null and params.endTime == null">
+                and expense_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+            </if>
+        </where>
+        group by DATE_FORMAT(expense_date, '%Y-%m')
+        order by month asc
+    </select>
+
     <select id="selectExpenseListByTransactionId" resultMap="ExpenseResult">
         <include refid="selectExpenseVo"/>
         where merchant like concat( #{merchant}, '%')

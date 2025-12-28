@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 import com.make.finance.domain.Expense;
 import org.apache.ibatis.annotations.Param;
@@ -83,6 +84,14 @@ public interface ExpenseMapper {
      */
     BigDecimal selectCurrentMonthExpenseTotal(@Param("userId") Long userId, @Param("startDate") LocalDate startDate,
                                               @Param("endDate") LocalDate endDate);
+
+    /**
+     * 查询消费月度统计
+     *
+     * @param expense 消费
+     * @return 结果
+     */
+    public List<Map<String, Object>> selectExpenseStats(Expense expense);
 
     /**
      * 查询异常消费

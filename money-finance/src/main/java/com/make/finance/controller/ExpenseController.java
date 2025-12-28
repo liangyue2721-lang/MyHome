@@ -46,6 +46,15 @@ public class ExpenseController extends BaseController {
     }
 
     /**
+     * 查询消费统计
+     */
+    @PreAuthorize("@ss.hasPermi('finance:expense:list')")
+    @GetMapping("/stats")
+    public AjaxResult stats(Expense expense) {
+        return success(expenseService.selectExpenseStats(expense));
+    }
+
+    /**
      * 导出消费列表
      */
     @PreAuthorize("@ss.hasPermi('finance:expense:export')")

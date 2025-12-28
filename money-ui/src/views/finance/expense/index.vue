@@ -47,6 +47,8 @@
       </el-form-item>
     </el-form>
 
+    <div ref="chart" style="width: 100%; height: 350px; margin-bottom: 20px;"></div>
+
     <el-row :gutter="10" class="mb8">
       <el-col :span="1.5">
         <el-button
@@ -193,13 +195,15 @@
 </template>
 
 <script>
-import {listExpense, getExpense, delExpense, addExpense, updateExpense, syncExpense} from "@/api/finance/expense";
+import {listExpense, getExpense, delExpense, addExpense, updateExpense, syncExpense, getExpenseStats} from "@/api/finance/expense";
 import {listUser} from "@/api/stock/dropdown_component";
+import * as echarts from 'echarts';
 
 export default {
   name: "Expense",
   data() {
     return {
+      chartInstance: null,
       // 遮罩层
       loading: true,
       // 选中数组
@@ -252,7 +256,73 @@ export default {
     this.getUserList();
     this.getList();
   },
+  mounted() {
+    this.initChart();
+    this.getChartData();
+    window.addEventListener('resize', this.resizeChart);
+  },
+  beforeDestroy() {
+    window.removeEventListener('resize', this.resizeChart);
+    if (this.chartInstance) {
+      this.chartInstance.dispose();
+    }
+  },
   methods: {
+    initChart() {
+      this.chartInstance = echarts.init(this.$refs.chart);
+      this.chartInstance.setOption({
+        title: {
+          text: '月度消费趋势',
+          left: 'center'
+        },
+        tooltip: {
+          trigger: 'axis',
+          formatter: '{b}: {c}元'
+        },
+        xAxis: {
+          type: 'category',
+          data: []
+        },
+        yAxis: {
+          type: 'value',
+          name: '金额 (元)'
+        },
+        series: [{
+          data: [],
+          type: 'line',
+          smooth: true,
+          areaStyle: {},
+          itemStyle: {
+            color: '#409EFF'
+          }
+        }]
+      });
+    },
+    resizeChart() {
+      if (this.chartInstance) {
+        this.chartInstance.resize();
+      }
+    },
+    getChartData() {
+      getExpenseStats(this.addDateRange(this.queryParams, this.dateRange)).then(response => {
+        const data = response.data || [];
+        // Extract months and amounts, ensure sorted by month
+        const months = data.map(item => item.month);
+        const amounts = data.map(item => item.totalAmount);
+
+        // Update chart
+        if (this.chartInstance) {
+          this.chartInstance.setOption({
+            xAxis: {
+              data: months
+            },
+            series: [{
+              data: amounts
+            }]
+          });
+        }
+      });
+    },
     /**
      * 初始化用户列表数据
      * @returns {Promise<void>} 异步操作完成Promise
@@ -346,6 +416,7 @@ export default {
         this.total = response.total;
         this.loading = false;
       });
+      this.getChartData();
     },
     // 取消按钮
     cancel() {
