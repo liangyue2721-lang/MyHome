@@ -47,6 +47,15 @@ public class StockRefreshExecuteRecordController extends BaseController {
     }
 
     /**
+     * 按节点IP统计任务执行结果 (Donut Chart Data)
+     */
+    @PreAuthorize("@ss.hasPermi('quartz:refresh_execute_record:list')")
+    @GetMapping("/stats/node_ip")
+    public AjaxResult getStatsByNodeIp() {
+        return success(stockRefreshExecuteRecordService.selectExecutionStatsByNodeIp());
+    }
+
+    /**
      * 查询刷新任务执行记录列表
      */
     @PreAuthorize("@ss.hasPermi('quartz:refresh_execute_record:list')")

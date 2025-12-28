@@ -96,4 +96,12 @@ public class StockRefreshExecuteRecordServiceImpl implements IStockRefreshExecut
     public List<java.util.Map<String, Object>> selectExecutionStats(String stockCode) {
         return stockRefreshExecuteRecordMapper.selectExecutionStats(stockCode);
     }
+
+    /**
+     * 按节点IP统计执行结果
+     */
+    @Override
+    public List<java.util.Map<String, Object>> selectExecutionStatsByNodeIp() {
+        return stockRefreshExecuteRecordMapper.selectExecutionStatsByNodeIp();
+    }
 }

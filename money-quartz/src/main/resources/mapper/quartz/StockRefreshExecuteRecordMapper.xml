@@ -121,4 +121,18 @@
         <if test="stockCode == null or stockCode == ''">stock_code,</if>
         status
     </select>
+
+    <select id="selectExecutionStatsByNodeIp" resultType="java.util.Map">
+        select
+        node_ip as "nodeIp",
+        status,
+        count(*) as "count"
+        from stock_refresh_execute_record
+        <where>
+            and DATE(execute_time) = CURDATE()
+        </where>
+        group by
+        node_ip,
+        status
+    </select>
 </mapper>

@@ -4,6 +4,7 @@
     "vue-echarts": "^7.0.3"
   },
   "devDependencies": {
-    "@playwright/test": "^1.57.0"
+    "@playwright/test": "^1.57.0",
+    "playwright": "^1.57.0"
   }
 }

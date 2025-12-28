@@ -66,4 +66,10 @@ public interface StockRefreshExecuteRecordMapper {
      * @return 统计列表
      */
     public List<java.util.Map<String, Object>> selectExecutionStats(String stockCode);
+
+    /**
+     * 按节点IP统计执行结果
+     * @return 统计列表
+     */
+    public List<java.util.Map<String, Object>> selectExecutionStatsByNodeIp();
 }

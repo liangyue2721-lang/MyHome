@@ -18,6 +18,14 @@ export function getRefreshExecuteStats(query) {
   })
 }
 
+// 获取节点维度执行统计
+export function getRefreshExecuteStatsByNodeIp() {
+  return request({
+    url: '/quartz/refresh_execute_record/stats/node_ip',
+    method: 'get'
+  })
+}
+
 // 查询刷新任务执行记录详细
 export function getRefresh_execute_record(id) {
   return request({

@@ -1,98 +1,113 @@
 <template>
   <div class="app-container">
-    <!-- 统计图表卡片 -->
-    <el-card shadow="hover" class="mb8" style="margin-bottom: 20px;">
-      <div slot="header" class="clearfix">
-        <span><i class="el-icon-pie-chart"></i> 任务执行统计 {{ queryParams.stockCode ? `(${queryParams.stockCode})` : '(全局)' }}</span>
-      </div>
-      <div id="stats-chart" style="width: 100%; height: 250px;"></div>
-    </el-card>
+    <el-tabs v-model="activeTab" @tab-click="handleTabClick">
+      <!-- 股票维度 (Original Content) -->
+      <el-tab-pane label="股票维度" name="stock">
+        <!-- 统计图表卡片 -->
+        <el-card shadow="hover" class="mb8" style="margin-bottom: 20px;">
+          <div slot="header" class="clearfix">
+            <span><i class="el-icon-pie-chart"></i> 任务执行统计 {{ queryParams.stockCode ? `(${queryParams.stockCode})` : '(全局)' }}</span>
+          </div>
+          <div id="stats-chart" style="width: 100%; height: 250px;"></div>
+        </el-card>
 
-    <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch" label-width="68px">
-      <el-form-item label="股票代码" prop="stockCode">
-        <el-input
-          v-model="queryParams.stockCode"
-          placeholder="请输入股票代码"
-          clearable
-          @keyup.enter.native="handleQuery"
-        />
-      </el-form-item>
-      <el-form-item label="股票名称" prop="stockName">
-        <el-input
-          v-model="queryParams.stockName"
-          placeholder="请输入股票名称"
-          clearable
-          @keyup.enter.native="handleQuery"
-        />
-      </el-form-item>
-      <el-form-item label="执行结果" prop="executeResult">
-        <el-input
-          v-model="queryParams.executeResult"
-          placeholder="请输入执行结果"
-          clearable
-          @keyup.enter.native="handleQuery"
-        />
-      </el-form-item>
-      <el-form-item label="执行节点IP" prop="nodeIp">
-        <el-input
-          v-model="queryParams.nodeIp"
-          placeholder="请输入执行节点IP"
-          clearable
-          @keyup.enter.native="handleQuery"
-        />
-      </el-form-item>
-      <el-form-item label="Trace ID" prop="traceId">
-        <el-input
-          v-model="queryParams.traceId"
-          placeholder="请输入Trace ID"
-          clearable
-          @keyup.enter.native="handleQuery"
-        />
-      </el-form-item>
-      <el-form-item>
-        <el-button type="primary" icon="el-icon-search" size="mini" @click="handleQuery">搜索</el-button>
-        <el-button icon="el-icon-refresh" size="mini" @click="resetQuery">重置</el-button>
-      </el-form-item>
-    </el-form>
+        <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch" label-width="68px">
+          <el-form-item label="股票代码" prop="stockCode">
+            <el-input
+              v-model="queryParams.stockCode"
+              placeholder="请输入股票代码"
+              clearable
+              @keyup.enter.native="handleQuery"
+            />
+          </el-form-item>
+          <el-form-item label="股票名称" prop="stockName">
+            <el-input
+              v-model="queryParams.stockName"
+              placeholder="请输入股票名称"
+              clearable
+              @keyup.enter.native="handleQuery"
+            />
+          </el-form-item>
+          <el-form-item label="执行结果" prop="executeResult">
+            <el-input
+              v-model="queryParams.executeResult"
+              placeholder="请输入执行结果"
+              clearable
+              @keyup.enter.native="handleQuery"
+            />
+          </el-form-item>
+          <el-form-item label="执行节点IP" prop="nodeIp">
+            <el-input
+              v-model="queryParams.nodeIp"
+              placeholder="请输入执行节点IP"
+              clearable
+              @keyup.enter.native="handleQuery"
+            />
+          </el-form-item>
+          <el-form-item label="Trace ID" prop="traceId">
+            <el-input
+              v-model="queryParams.traceId"
+              placeholder="请输入Trace ID"
+              clearable
+              @keyup.enter.native="handleQuery"
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" icon="el-icon-search" size="mini" @click="handleQuery">搜索</el-button>
+            <el-button icon="el-icon-refresh" size="mini" @click="resetQuery">重置</el-button>
+          </el-form-item>
+        </el-form>
 
-    <el-row :gutter="10" class="mb8">
-      <el-col :span="1.5">
-        <el-button
-          type="warning"
-          plain
-          icon="el-icon-download"
-          size="mini"
-          @click="handleExport"
-          v-hasPermi="['quartz:refresh_execute_record:export']"
-        >导出
-        </el-button>
-      </el-col>
-      <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
-    </el-row>
+        <el-row :gutter="10" class="mb8">
+          <el-col :span="1.5">
+            <el-button
+              type="warning"
+              plain
+              icon="el-icon-download"
+              size="mini"
+              @click="handleExport"
+              v-hasPermi="['quartz:refresh_execute_record:export']"
+            >导出
+            </el-button>
+          </el-col>
+          <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
+        </el-row>
 
-    <el-table v-loading="loading" :data="refresh_execute_recordList" @selection-change="handleSelectionChange">
-      <el-table-column type="selection" width="55" align="center"/>
-      <el-table-column label="主键ID" align="center" prop="id"/>
-      <el-table-column label="股票代码" align="center" prop="stockCode"/>
-      <el-table-column label="股票名称" align="center" prop="stockName"/>
-      <el-table-column label="任务状态" align="center" prop="status"/>
-      <el-table-column label="执行结果" align="center" prop="executeResult"/>
-      <el-table-column label="执行节点IP" align="center" prop="nodeIp"/>
-      <el-table-column label="任务执行时间" align="center" prop="executeTime" width="180">
-        <template slot-scope="scope">
-          <span>{{ parseTime(scope.row.executeTime, '{y}-{m}-{d} {h}:{i}:{s}') }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="Trace ID" align="center" prop="traceId"/>
-    </el-table>
+        <el-table v-loading="loading" :data="refresh_execute_recordList" @selection-change="handleSelectionChange">
+          <el-table-column type="selection" width="55" align="center"/>
+          <el-table-column label="主键ID" align="center" prop="id"/>
+          <el-table-column label="股票代码" align="center" prop="stockCode"/>
+          <el-table-column label="股票名称" align="center" prop="stockName"/>
+          <el-table-column label="任务状态" align="center" prop="status"/>
+          <el-table-column label="执行结果" align="center" prop="executeResult"/>
+          <el-table-column label="执行节点IP" align="center" prop="nodeIp"/>
+          <el-table-column label="任务执行时间" align="center" prop="executeTime" width="180">
+            <template slot-scope="scope">
+              <span>{{ parseTime(scope.row.executeTime, '{y}-{m}-{d} {h}:{i}:{s}') }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="Trace ID" align="center" prop="traceId"/>
+        </el-table>
 
-    <pagination
-      v-show="total>0"
-      :total="total"
-      :page.sync="queryParams.pageNum"
-      :limit.sync="queryParams.pageSize"
-      @pagination="getList"
-    />
+        <pagination
+          v-show="total>0"
+          :total="total"
+          :page.sync="queryParams.pageNum"
+          :limit.sync="queryParams.pageSize"
+          @pagination="getList"
+        />
+      </el-tab-pane>
+
+      <!-- 节点维度 (New Content) -->
+      <el-tab-pane label="节点维度" name="node">
+        <el-card shadow="hover" class="mb8">
+          <div slot="header" class="clearfix">
+            <span><i class="el-icon-s-data"></i> 节点执行统计 (全局)</span>
+          </div>
+          <div id="node-stats-chart" style="width: 100%; height: 250px;"></div>
+        </el-card>
+      </el-tab-pane>
+    </el-tabs>
 
     <!-- 添加或修改刷新任务执行记录对话框 -->
     <el-dialog :title="title" :visible.sync="open" width="500px" append-to-body>
@@ -133,6 +148,7 @@
 import {
   listRefresh_execute_record,
   getRefreshExecuteStats,
+  getRefreshExecuteStatsByNodeIp,
   getRefresh_execute_record,
   delRefresh_execute_record,
   addRefresh_execute_record,
@@ -145,8 +161,10 @@ export default {
   name: "Refresh_execute_record",
   data() {
     return {
+      activeTab: 'stock',
       // 统计图表实例
       chartInstance: null,
+      nodeChartInstance: null,
       // 遮罩层
       loading: true,
       // 选中数组
@@ -217,15 +235,38 @@ export default {
   mounted() {
     this.initChart();
     this.getStatsData();
-    window.addEventListener('resize', this.resizeChart);
+    window.addEventListener('resize', this.resizeAllCharts);
   },
   beforeDestroy() {
-    window.removeEventListener('resize', this.resizeChart);
+    window.removeEventListener('resize', this.resizeAllCharts);
     if (this.chartInstance) {
       this.chartInstance.dispose();
     }
+    if (this.nodeChartInstance) {
+      this.nodeChartInstance.dispose();
+    }
   },
   methods: {
+    handleTabClick(tab) {
+      this.$nextTick(() => {
+        if (tab.name === 'stock') {
+          this.resizeChart();
+        } else if (tab.name === 'node') {
+          if (!this.nodeChartInstance) {
+            this.initNodeChart();
+            this.getNodeStatsData();
+          } else {
+            this.resizeNodeChart();
+          }
+        }
+      });
+    },
+    resizeAllCharts() {
+      this.resizeChart();
+      this.resizeNodeChart();
+    },
+
+    // --- Stock Chart Logic ---
     initChart() {
       const chartDom = document.getElementById('stats-chart');
       if (chartDom) {
@@ -387,6 +428,103 @@ export default {
       this.chartInstance.clear();
       this.chartInstance.setOption(option);
     },
+
+    // --- Node Chart Logic ---
+    initNodeChart() {
+      const chartDom = document.getElementById('node-stats-chart');
+      if (chartDom) {
+        this.nodeChartInstance = echarts.init(chartDom);
+      }
+    },
+    resizeNodeChart() {
+      if (this.nodeChartInstance) {
+        this.nodeChartInstance.resize();
+      }
+    },
+    getNodeStatsData() {
+      if (!this.nodeChartInstance) return;
+
+      this.nodeChartInstance.showLoading();
+      getRefreshExecuteStatsByNodeIp().then(response => {
+        this.nodeChartInstance.hideLoading();
+        const data = response.data || [];
+        this.renderNodeGridChart(data);
+      }).catch(error => {
+        console.error("Failed to load node chart stats", error);
+        this.nodeChartInstance.hideLoading();
+      });
+    },
+    renderNodeGridChart(data) {
+      const nodeStats = {};
+      data.forEach(item => {
+        const ip = item.nodeIp || 'Unknown';
+        if (!nodeStats[ip]) nodeStats[ip] = { success: 0, failed: 0 };
+        if (item.status === 'SUCCESS') nodeStats[ip].success = Number(item.count);
+        if (item.status === 'FAILED') nodeStats[ip].failed = Number(item.count);
+      });
+
+      const nodeIps = Object.keys(nodeStats).sort();
+      const totalNodes = nodeIps.length;
+
+      // 5 columns per row for Nodes (assuming fewer nodes than stocks, make them bigger)
+      const cols = 5;
+      const rowHeight = 200;
+      const rows = Math.ceil(totalNodes / cols);
+      const totalHeight = Math.max(250, rows * rowHeight);
+
+      const chartDom = document.getElementById('node-stats-chart');
+      if (chartDom) {
+        chartDom.style.height = totalHeight + 'px';
+        this.nodeChartInstance.resize();
+      }
+
+      const seriesList = [];
+      const titleList = [];
+
+      nodeIps.forEach((ip, index) => {
+        const stats = nodeStats[ip];
+        const colIndex = index % cols;
+        const rowIndex = Math.floor(index / cols);
+
+        // Center X: 10%, 30%, 50%, 70%, 90%
+        const centerX = (colIndex * 20 + 10) + '%';
+        const centerY = (rowIndex * rowHeight + rowHeight / 2);
+
+        const chartData = [
+          { value: stats.success, name: '成功', itemStyle: { color: '#67C23A' } },
+          { value: stats.failed, name: '失败', itemStyle: { color: '#F56C6C' } }
+        ];
+
+        seriesList.push({
+          type: 'pie',
+          radius: [40, 60], // Bigger than stock pie
+          center: [centerX, centerY],
+          itemStyle: { borderRadius: 5, borderColor: '#fff', borderWidth: 2 },
+          label: { show: false },
+          hoverAnimation: false,
+          data: chartData
+        });
+
+        titleList.push({
+          text: ip,
+          left: centerX,
+          top: centerY,
+          textAlign: 'center',
+          textVerticalAlign: 'middle',
+          textStyle: { fontSize: 12, fontWeight: 'bold' }
+        });
+      });
+
+      const option = {
+        tooltip: { trigger: 'item', formatter: '{a} <br/>{b}: {c} ({d}%)' },
+        title: titleList,
+        series: seriesList.map((s, i) => ({ ...s, name: nodeIps[i] }))
+      };
+
+      this.nodeChartInstance.clear();
+      this.nodeChartInstance.setOption(option);
+    },
+
     /**
      * 初始化用户列表数据
      * @returns {Promise<void>} 异步操作完成Promise
