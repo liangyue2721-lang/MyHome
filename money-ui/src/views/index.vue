@@ -9,6 +9,61 @@
       </div>
     </el-card>
 
+    <!-- Wealth Stage Bar (Horizontal Visualization) -->
+    <el-row class="wealth-stage-row" v-if="wealthStage.current">
+      <el-col :span="24">
+        <el-card shadow="never" class="wealth-stage-card">
+          <!-- Summary Header -->
+          <div class="stage-summary-header">
+            <div class="current-assets">
+              <span class="label">當前年度資產</span>
+              <span class="amount">¥ {{ wealthStage.totalAssets.toLocaleString() }}</span>
+            </div>
+
+            <div class="stage-gap" v-if="wealthStage.next">
+              <span class="gap-label">距離 <span class="next-name">{{ wealthStage.next.name }}</span> 還需</span>
+              <span class="gap-amount">¥ {{ wealthStage.gap.toLocaleString() }}</span>
+              <el-progress
+                :percentage="wealthStage.progress"
+                :show-text="false"
+                :stroke-width="6"
+                color="#67C23A"
+                class="mini-progress"
+              ></el-progress>
+            </div>
+            <div class="stage-gap success" v-else>
+              <i class="el-icon-medal"></i> 已登峰造極
+            </div>
+          </div>
+
+          <!-- Horizontal Stages -->
+          <div class="stages-container">
+            <div
+              v-for="(stage, index) in allStages"
+              :key="index"
+              class="stage-item"
+              :class="{
+                'is-completed': wealthStage.totalAssets >= stage.max,
+                'is-current': wealthStage.totalAssets >= stage.min && wealthStage.totalAssets < stage.max,
+                'is-future': wealthStage.totalAssets < stage.min
+              }"
+            >
+              <div class="stage-bar"></div>
+              <div class="stage-dot">
+                <i class="el-icon-check" v-if="wealthStage.totalAssets >= stage.max"></i>
+                <i class="el-icon-star-on" v-else-if="wealthStage.totalAssets >= stage.min && wealthStage.totalAssets < stage.max"></i>
+                <span class="stage-index" v-else>{{ index + 1 }}</span>
+              </div>
+              <div class="stage-content">
+                <div class="stage-name">{{ stage.name }}</div>
+                <div class="stage-range">{{ formatMoney(stage.min) }}</div>
+              </div>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
+
     <!-- Task Status Panel (New) -->
     <el-row :gutter="20" class="task-status-row">
       <el-col :span="6">
@@ -109,13 +164,37 @@ import {
   getProfitLineData,
   renderLoanRepaymentComparisonChart
 } from "@/api/finance/pieChart";
+import { getAnnualSummary } from "@/api/finance/annual_deposit_summary";
 import {listUser} from "@/api/stock/dropdown_component";
 import Cookies from 'js-cookie';
+
+const WEALTH_STAGES = [
+  { name: '負債階段', min: -Infinity, max: 0, desc: '需優化債務結構' },
+  { name: '生存艱難', min: 0, max: 27000, desc: '維持基本生存' },
+  { name: '貧窮階段', min: 27000, max: 60000, desc: '積累原始資本' },
+  { name: '低收入階段', min: 60000, max: 150000, desc: '提升主動收入' },
+  { name: '中下產階段', min: 150000, max: 300000, desc: '建立安全緩衝' },
+  { name: '中產階段', min: 300000, max: 500000, desc: '資產穩步增長' },
+  { name: '中上產階段', min: 500000, max: 1000000, desc: '多元化投資佈局' },
+  { name: '富人階段', min: 1000000, max: 8000000, desc: '實現財務自由' },
+  { name: '富豪階段', min: 8000000, max: 20000000, desc: '資產傳承規劃' },
+  { name: '大富豪階段', min: 20000000, max: Infinity, desc: '社會影響力構建' }
+];
 
 export default {
   name: 'Index', // Changed from 'Charts' to 'Index' to match usage
   data() {
     return {
+      // Wealth Stage Data
+      wealthStage: {
+        current: null,
+        next: null,
+        totalAssets: 0,
+        progress: 0,
+        gap: 0,
+        loading: false
+      },
+      allStages: WEALTH_STAGES,
       // Task Stats Data
       taskStats: {
         pending: 0,
@@ -158,6 +237,9 @@ export default {
     }
   },
   mounted() {
+    // Load Wealth Stage
+    this.fetchWealthStage();
+
     // Load Task Stats
     this.fetchTaskStats();
 
@@ -172,6 +254,56 @@ export default {
     this.disposeCharts();
   },
   methods: {
+    // --- Wealth Stage Method ---
+    fetchWealthStage() {
+      this.wealthStage.loading = true;
+      getAnnualSummary().then(response => {
+        const payload = response.data || response;
+        if (payload) {
+          const totalAssets = Number(payload.totalDeposit) || 0;
+          this.wealthStage.totalAssets = totalAssets;
+
+          // Find Current Stage
+          let stageIndex = WEALTH_STAGES.findIndex(s => totalAssets >= s.min && totalAssets < s.max);
+          // Handle edge case for max value (Infinity)
+          if (stageIndex === -1) {
+             if (totalAssets >= WEALTH_STAGES[WEALTH_STAGES.length - 1].min) {
+                 stageIndex = WEALTH_STAGES.length - 1;
+             } else {
+                 stageIndex = 0; // Fallback
+             }
+          }
+
+          this.wealthStage.current = WEALTH_STAGES[stageIndex];
+
+          // Calculate Progress & Gap
+          if (stageIndex < WEALTH_STAGES.length - 1) {
+            this.wealthStage.next = WEALTH_STAGES[stageIndex + 1];
+            const currentMin = this.wealthStage.current.min === -Infinity ? 0 : this.wealthStage.current.min;
+            const currentMax = this.wealthStage.current.max;
+
+            // Avoid division by zero
+            const range = currentMax - currentMin;
+            const effectiveAssets = totalAssets < currentMin ? currentMin : totalAssets; // Handle negative assets in negative stage logic if needed, simplified here
+
+            this.wealthStage.gap = currentMax - totalAssets;
+            this.wealthStage.progress = range > 0
+                ? Math.min(100, Math.max(0, ((totalAssets - currentMin) / range) * 100))
+                : 100;
+          } else {
+            // Top Stage
+            this.wealthStage.next = null;
+            this.wealthStage.gap = 0;
+            this.wealthStage.progress = 100;
+          }
+        }
+      }).catch(err => {
+        console.error("Failed to fetch wealth stage", err);
+      }).finally(() => {
+        this.wealthStage.loading = false;
+      });
+    },
+
     // --- Task Stats Method ---
     fetchTaskStats() {
       request({
@@ -230,6 +362,12 @@ export default {
     },
     disposeCharts() {
       Object.values(this.charts).forEach(chart => chart && chart.dispose());
+    },
+    formatMoney(val) {
+      if (val === -Infinity) return '< 0';
+      if (val === Infinity) return '> 2000w';
+      if (val >= 10000) return (val / 10000).toFixed(0) + '萬';
+      return val;
     },
     resizeCharts() {
       Object.values(this.charts).forEach(chart => chart && chart.resize());
@@ -721,6 +859,148 @@ export default {
 
   .el-row + .el-row {
     margin-top: 20px;
+  }
+
+  /* Wealth Stage Bar Styles */
+  .wealth-stage-card {
+    border-radius: 8px;
+    background: #fff;
+
+    .stage-summary-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #EBEEF5;
+
+      .current-assets {
+        .label {
+          font-size: 14px;
+          color: #909399;
+          margin-right: 10px;
+        }
+        .amount {
+          font-size: 28px;
+          font-weight: bold;
+          color: #303133;
+        }
+      }
+
+      .stage-gap {
+        display: flex;
+        align-items: center;
+        background: #fdf6ec;
+        padding: 8px 15px;
+        border-radius: 20px;
+        color: #E6A23C;
+        font-size: 13px;
+
+        .gap-amount {
+          font-weight: bold;
+          margin: 0 10px;
+        }
+
+        .mini-progress {
+          width: 60px;
+        }
+
+        &.success {
+          background: #f0f9eb;
+          color: #67C23A;
+        }
+      }
+    }
+
+    .stages-container {
+      display: flex;
+      justify-content: space-between;
+      position: relative;
+      padding: 0 10px;
+
+      // Connecting line behind dots
+      &::before {
+        content: '';
+        position: absolute;
+        top: 15px; /* Aligns with middle of dot (30px height) */
+        left: 20px;
+        right: 20px;
+        height: 2px;
+        background: #EBEEF5;
+        z-index: 0;
+      }
+
+      .stage-item {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        flex: 1;
+        text-align: center;
+
+        .stage-bar {
+          display: none; // Handled by container ::before
+        }
+
+        .stage-dot {
+          width: 30px;
+          height: 30px;
+          border-radius: 50%;
+          background: #fff;
+          border: 2px solid #DCDFE6;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          margin-bottom: 10px;
+          color: #909399;
+          font-size: 12px;
+          transition: all 0.3s;
+        }
+
+        .stage-content {
+          .stage-name {
+            font-size: 12px;
+            color: #909399;
+            margin-bottom: 4px;
+            font-weight: 500;
+          }
+          .stage-range {
+            font-size: 11px;
+            color: #C0C4CC;
+          }
+        }
+
+        /* States */
+        &.is-completed {
+          .stage-dot {
+            background: #E1F3D8;
+            border-color: #67C23A;
+            color: #67C23A;
+          }
+          .stage-name { color: #606266; }
+        }
+
+        &.is-current {
+          .stage-dot {
+            background: #409EFF;
+            border-color: #409EFF;
+            color: #fff;
+            box-shadow: 0 0 0 4px rgba(64, 158, 255, 0.2);
+            transform: scale(1.1);
+          }
+          .stage-name {
+            color: #409EFF;
+            font-weight: bold;
+          }
+          .stage-range { color: #606266; }
+        }
+
+        &.is-future {
+             /* Default styles apply */
+        }
+      }
+    }
   }
 
   /* Status Card Styles */

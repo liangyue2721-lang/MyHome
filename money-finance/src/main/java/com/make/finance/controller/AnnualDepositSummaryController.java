@@ -1,8 +1,10 @@
 package com.make.finance.controller;
 
+import java.time.LocalDate;
 import java.util.List;
 import javax.servlet.http.HttpServletResponse;
 
+import com.make.common.utils.SecurityUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -44,6 +46,16 @@ public class AnnualDepositSummaryController extends BaseController {
         startPage();
         List<AnnualDepositSummary> list = annualDepositSummaryService.selectAnnualDepositSummaryList(annualDepositSummary);
         return getDataTable(list);
+    }
+
+    /**
+     * Get current user's annual deposit summary for the current year.
+     */
+    @GetMapping("/current-user-summary")
+    public AjaxResult getCurrentUserSummary() {
+        Long userId = SecurityUtils.getUserId();
+        int currentYear = LocalDate.now().getYear();
+        return success(annualDepositSummaryService.queryAnnualDepositSummaryByYearAndUser(currentYear, userId));
     }
 
     /**

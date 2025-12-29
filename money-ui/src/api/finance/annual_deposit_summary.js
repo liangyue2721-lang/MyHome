@@ -9,6 +9,14 @@ export function listAnnual_deposit_summary(query) {
   })
 }
 
+// 查询用户当前年度存款统计
+export function getAnnualSummary() {
+  return request({
+    url: '/finance/annual_deposit_summary/current-user-summary',
+    method: 'get'
+  })
+}
+
 // 查询年度存款统计详细
 export function getAnnual_deposit_summary(id) {
   return request({
