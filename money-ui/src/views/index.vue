@@ -7,12 +7,12 @@
           <!-- Summary Header -->
           <div class="stage-summary-header">
             <div class="current-assets">
-              <span class="label">當前年度資產</span>
+              <span class="label">当前年度资产</span>
               <span class="amount">¥ {{ wealthStage.totalAssets.toLocaleString() }}</span>
             </div>
 
             <div class="stage-gap" v-if="wealthStage.next">
-              <span class="gap-label">距離 <span class="next-name">{{ wealthStage.next.name }}</span> 還需</span>
+              <span class="gap-label">距离 <span class="next-name">{{ wealthStage.next.name }}</span> 还需</span>
               <span class="gap-amount">¥ {{ wealthStage.gap.toLocaleString() }}</span>
               <el-progress
                 :percentage="wealthStage.progress"
@@ -23,7 +23,7 @@
               ></el-progress>
             </div>
             <div class="stage-gap success" v-else>
-              <i class="el-icon-medal"></i> 已登峰造極
+              <i class="el-icon-medal"></i> 已登峰造极
             </div>
           </div>
 
@@ -40,13 +40,19 @@
               }"
             >
               <div class="stage-bar"></div>
-              <div class="stage-dot">
-                <i class="el-icon-check" v-if="wealthStage.totalAssets >= stage.max"></i>
-                <i class="el-icon-star-on" v-else-if="wealthStage.totalAssets >= stage.min && wealthStage.totalAssets < stage.max"></i>
-                <span class="stage-index" v-else>{{ index + 1 }}</span>
+              <div
+                class="stage-dot"
+                :style="wealthStage.totalAssets >= stage.min && wealthStage.totalAssets < stage.max ? { borderColor: stage.customColor, backgroundColor: stage.customColor } : {}"
+              >
+                <!-- Completed: Show Icon (Inherits Green from CSS) -->
+                <i :class="stage.icon" v-if="wealthStage.totalAssets >= stage.max" style="font-weight: bold;"></i>
+                <!-- Current: Show Icon (White on Custom Background) -->
+                <i :class="stage.icon" v-else-if="wealthStage.totalAssets >= stage.min && wealthStage.totalAssets < stage.max" style="color: #fff; font-size: 16px;"></i>
+                <!-- Future: Show Icon (Gray) -->
+                <i :class="stage.icon" v-else style="color: #C0C4CC; font-size: 14px;"></i>
               </div>
               <div class="stage-content">
-                <div class="stage-name">{{ stage.name }}</div>
+                <div class="stage-name" :style="wealthStage.totalAssets >= stage.min && wealthStage.totalAssets < stage.max ? { color: stage.customColor, fontWeight: 'bold' } : {}">{{ stage.name }}</div>
                 <div class="stage-range">{{ formatMoney(stage.min) }}</div>
               </div>
             </div>
@@ -60,7 +66,7 @@
       <el-col :span="6">
         <el-card shadow="hover" class="status-card">
           <div class="card-header">
-            <span>待執行任務數</span>
+            <span>待执行任务数</span>
           </div>
           <div class="card-body">
             <span class="count-text pending">{{ taskStats.pending }}</span>
@@ -71,7 +77,7 @@
       <el-col :span="6">
         <el-card shadow="hover" class="status-card">
           <div class="card-header">
-            <span>已執行任務數</span>
+            <span>已执行任务数</span>
           </div>
           <div class="card-body">
             <span class="count-text completed">{{ taskStats.completed }}</span>
@@ -82,7 +88,7 @@
       <el-col :span="6">
         <el-card shadow="hover" class="status-card">
           <div class="card-header">
-            <span>執行中任務</span>
+            <span>执行中任务</span>
           </div>
           <div class="card-body">
             <span class="count-text executing">{{ taskStats.executing }}</span>
@@ -93,7 +99,7 @@
       <el-col :span="6">
         <el-card shadow="hover" class="status-card">
           <div class="card-header">
-            <span>執行中占比</span>
+            <span>执行中占比</span>
           </div>
           <div class="card-body chart-container">
             <el-progress
@@ -113,8 +119,8 @@
       <el-col :span="24">
         <el-card class="chart-card" shadow="hover">
           <div slot="header" class="chart-header">
-            <span>📈 利潤趨勢分析</span>
-            <el-tag size="small" effect="plain">歷史數據</el-tag>
+            <span>📈 利润趋势分析</span>
+            <el-tag size="small" effect="plain">历史数据</el-tag>
           </div>
           <div id="profitLineChart" class="chart-box"></div>
         </el-card>
@@ -125,7 +131,7 @@
       <el-col :xs="24" :sm="24" :lg="12">
         <el-card class="chart-card" shadow="hover">
           <div slot="header" class="chart-header">
-            <span>💳 近一年還貸對比</span>
+            <span>💳 近一年还贷对比</span>
           </div>
           <div id="generateMonthlyLoanRepaymentBarChart" class="chart-box"></div>
         </el-card>
@@ -133,7 +139,7 @@
       <el-col :xs="24" :sm="24" :lg="12">
         <el-card class="chart-card" shadow="hover">
           <div slot="header" class="chart-header">
-            <span>💰 月度收支對比</span>
+            <span>💰 月度收支对比</span>
           </div>
           <div id="monthlyIncomeExpenseBarChart" class="chart-box"></div>
         </el-card>
@@ -160,16 +166,16 @@ import {listUser} from "@/api/stock/dropdown_component";
 import Cookies from 'js-cookie';
 
 const WEALTH_STAGES = [
-  { name: '負債階段', min: -Infinity, max: 0, desc: '需優化債務結構' },
-  { name: '生存艱難', min: 0, max: 27000, desc: '維持基本生存' },
-  { name: '貧窮階段', min: 27000, max: 60000, desc: '積累原始資本' },
-  { name: '低收入階段', min: 60000, max: 150000, desc: '提升主動收入' },
-  { name: '中下產階段', min: 150000, max: 300000, desc: '建立安全緩衝' },
-  { name: '中產階段', min: 300000, max: 500000, desc: '資產穩步增長' },
-  { name: '中上產階段', min: 500000, max: 1000000, desc: '多元化投資佈局' },
-  { name: '富人階段', min: 1000000, max: 8000000, desc: '實現財務自由' },
-  { name: '富豪階段', min: 8000000, max: 20000000, desc: '資產傳承規劃' },
-  { name: '大富豪階段', min: 20000000, max: Infinity, desc: '社會影響力構建' }
+  { name: '负债阶段', min: -Infinity, max: 0, desc: '需优化债务结构', icon: 'el-icon-heavy-rain', customColor: '#909399' },
+  { name: '生存艰难', min: 0, max: 27000, desc: '维持基本生存', icon: 'el-icon-bicycle', customColor: '#E6A23C' },
+  { name: '贫穷阶段', min: 27000, max: 60000, desc: '积累原始资本', icon: 'el-icon-sunny', customColor: '#F56C6C' },
+  { name: '低收入阶段', min: 60000, max: 150000, desc: '提升主动收入', icon: 'el-icon-grape', customColor: '#E6A23C' },
+  { name: '中下产阶段', min: 150000, max: 300000, desc: '建立安全缓冲', icon: 'el-icon-mobile-phone', customColor: '#FAAD14' },
+  { name: '中产阶段', min: 300000, max: 500000, desc: '资产稳步增长', icon: 'el-icon-house', customColor: '#13CE66' },
+  { name: '中上产阶段', min: 500000, max: 1000000, desc: '多元化投资布局', icon: 'el-icon-office-building', customColor: '#1890FF' },
+  { name: '富人阶段', min: 1000000, max: 8000000, desc: '实现财务自由', icon: 'el-icon-trophy', customColor: '#722ED1' },
+  { name: '富豪阶段', min: 8000000, max: 20000000, desc: '资产传承规划', icon: 'el-icon-medal', customColor: '#EB2F96' },
+  { name: '大富豪阶段', min: 20000000, max: Infinity, desc: '社会影响力构建', icon: 'el-icon-crown', customColor: '#FFD700' }
 ];
 
 export default {
@@ -332,7 +338,7 @@ export default {
         const rawUsers = Array.isArray(payload.rows) ? payload.rows : Array.isArray(payload) ? payload : [];
         this.userList = rawUsers.map(u => ({
           id: u.userId,
-          name: u.userName || u.nickName || `用戶${u.userId}`
+          name: u.userName || u.nickName || `用户${u.userId}`
         }));
         if (this.userList.length) {
           const savedUsername = Cookies.get('username');
@@ -342,7 +348,7 @@ export default {
           this.selectedUserId = null;
         }
       } catch (err) {
-        console.error('用戶列表加載失敗:', err);
+        console.error('用户列表加载失败:', err);
       } finally {
         this.userLoading = false;
       }
@@ -357,7 +363,7 @@ export default {
     formatMoney(val) {
       if (val === -Infinity) return '< 0';
       if (val === Infinity) return '> 2000w';
-      if (val >= 10000) return (val / 10000).toFixed(0) + '萬';
+      if (val >= 10000) return (val / 10000).toFixed(0) + '万';
       return val;
     },
     resizeCharts() {
@@ -372,13 +378,13 @@ export default {
     },
 
     loadAllCharts(selectedUserId) {
-      this.loadPieChart('transactionType', 'clientPieChart', () => getWechatAlipayData(selectedUserId), '交易類型', '個');
+      this.loadPieChart('transactionType', 'clientPieChart', () => getWechatAlipayData(selectedUserId), '交易类型', '个');
       this.loadBarChart('monthlyConsumption', 'monthlyConsumptionColumnChart', () => getTotalAmountChart(selectedUserId), '每月支出', '元');
-      this.loadMixedChart('monthlyIncomeExpense', 'monthlyIncomeExpenseBarChart', () => getMonthlyIncomeBarChart(selectedUserId), '每月收支', '元', ['收入', '支出', '結余']);
-      this.loadMixedChart('generateMonthlyLoanRepayment', 'generateMonthlyLoanRepaymentBarChart', () => renderLoanRepaymentComparisonChart(selectedUserId), '還貸本息', '元', ['貸款償還']);
+      this.loadMixedChart('monthlyIncomeExpense', 'monthlyIncomeExpenseBarChart', () => getMonthlyIncomeBarChart(selectedUserId), '每月收支', '元', ['收入', '支出', '结余']);
+      this.loadMixedChart('generateMonthlyLoanRepayment', 'generateMonthlyLoanRepaymentBarChart', () => renderLoanRepaymentComparisonChart(selectedUserId), '还贷本息', '元', ['贷款偿还']);
       this.loadHeartProgressChart('totalRepayment', 'totalRepaymentPieChart', () => getTotalRepaymentPieChart(selectedUserId));
       this.loadLiquidChart('expenseLiquid', 'expenseLiquidChart', () => getYearIncomeExpenseRatio(selectedUserId), '支出');
-      this.loadLiquidChart('incomeLiquid', 'incomeLiquidChart', () => getYearIncomeExpenseRatio(selectedUserId), '結余');
+      this.loadLiquidChart('incomeLiquid', 'incomeLiquidChart', () => getYearIncomeExpenseRatio(selectedUserId), '结余');
       this.loadLineChart('profitLine', 'profitLineChart', () => getProfitLineData(selectedUserId));
     },
 
@@ -402,11 +408,11 @@ export default {
               return `
                 <div style="font-size:14px; font-weight:bold; margin-bottom:5px;">${params.name}</div>
                 <div style="display:flex; justify-content:space-between; min-width:120px;">
-                  <span>金額:</span>
+                  <span>金额:</span>
                   <span style="font-weight:bold; color:${params.color}">${params.value} ${unit}</span>
                 </div>
                 <div style="display:flex; justify-content:space-between; margin-top:3px;">
-                  <span>佔比:</span>
+                  <span>占比:</span>
                   <span>${params.percent}%</span>
                 </div>
               `;
@@ -519,8 +525,8 @@ export default {
         const createSeries = (name, colorStart, colorEnd) => {
           let amountKey = '';
           if (name === '收入') amountKey = 'supportInAmount';
-          else if (name === '支出' || name === '貸款償還') amountKey = 'supportOutAmount';
-          else if (name === '結余') amountKey = 'balanceAmount';
+          else if (name === '支出' || name === '贷款偿还') amountKey = 'supportOutAmount';
+          else if (name === '结余') amountKey = 'balanceAmount';
 
           series.push({
             name: name,
@@ -547,7 +553,7 @@ export default {
           });
 
           series.push({
-            name: `${name}趨勢`,
+            name: `${name}趋势`,
             type: 'line',
             data: data.map(i => i[amountKey]),
             smooth: true,
@@ -560,8 +566,8 @@ export default {
         legendData.forEach(name => {
           if (name === '收入') createSeries('收入', '#67C23A', '#95D475');
           else if (name === '支出') createSeries('支出', '#F56C6C', '#FAB6B6');
-          else if (name === '貸款償還') createSeries('貸款償還', '#E6A23C', '#F3D19E');
-          else if (name === '結余') createSeries('結余', '#409EFF', '#79BBFF');
+          else if (name === '贷款偿还') createSeries('贷款偿还', '#E6A23C', '#F3D19E');
+          else if (name === '结余') createSeries('结余', '#409EFF', '#79BBFF');
         });
 
         const legendNames = legendData;
@@ -626,7 +632,7 @@ export default {
               return `
                 <div style="font-weight:bold; margin-bottom:5px;">📅 ${p.axisValue}</div>
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                  <span>${p.marker} 利潤</span>
+                  <span>${p.marker} 利润</span>
                   <span style="font-weight:bold; color:#409EFF; margin-left:15px; font-size:16px;">${p.value} 元</span>
                 </div>
               `;
@@ -636,7 +642,7 @@ export default {
           xAxis: {type: 'category', boundaryGap: false, data: xData, axisLine: {lineStyle: {color: '#ccc'}}},
           yAxis: {type: 'value', splitLine: {lineStyle: {color: '#f0f0f0'}}},
           series: [{
-            name: '利潤',
+            name: '利润',
             type: 'line',
             smooth: true,
             symbol: 'circle',
@@ -669,7 +675,7 @@ export default {
         if (!chart) return;
 
         const keywords = [categoryLabel];
-        if (categoryLabel === '結余') keywords.push('结余');
+        if (categoryLabel === '结余') keywords.push('結余');
 
         const item = raw.find(i => keywords.some(k => i.category && i.category.includes(k)));
 
@@ -707,16 +713,16 @@ export default {
           }],
           tooltip: {
             show: true,
-            formatter: () => `${categoryLabel}: <b>${amount} 元</b><br/>總流動: ${total} 元`
+            formatter: () => `${categoryLabel}: <b>${amount} 元</b><br/>总流动: ${total} 元`
           }
         });
-      }).catch(e => console.error("水滴圖加載失敗:", e));
+      }).catch(e => console.error("水滴图加载失败:", e));
     },
 
     loadHeartProgressChart(key, domId, apiFn) {
       apiFn({userId: this.selectedUserId}).then(rawList => {
         if (!rawList || !Array.isArray(rawList)) {
-          console.warn(`${key} API 返回數據為空或格式錯誤`, rawList);
+          console.warn(`${key} API 返回数据为空或格式错误`, rawList);
           return;
         }
 
@@ -756,14 +762,14 @@ export default {
               const unpaid = isInterest ? interestUnpaid : principalUnpaid;
               const percent = isInterest ? iPercent : pPercent;
 
-              if (params.seriesName === '已償還') {
-                return `<div style="font-weight:bold">${type} - 已償還</div>
-                        <div>金額：${paid.toLocaleString()} 元</div>
-                        <div>進度：${percent}%</div>`;
+              if (params.seriesName === '已偿还') {
+                return `<div style="font-weight:bold">${type} - 已偿还</div>
+                        <div>金额：${paid.toLocaleString()} 元</div>
+                        <div>进度：${percent}%</div>`;
               } else {
-                return `<div style="font-weight:bold">${type} - 未償還</div>
-                        <div>金額：${unpaid.toLocaleString()} 元</div>
-                        <div>剩餘：${(100 - percent).toFixed(1)}%</div>`;
+                return `<div style="font-weight:bold">${type} - 未偿还</div>
+                        <div>金额：${unpaid.toLocaleString()} 元</div>
+                        <div>剩余：${(100 - percent).toFixed(1)}%</div>`;
               }
             }
           },
@@ -776,7 +782,7 @@ export default {
           },
           series: [
             {
-              name: '已償還',
+              name: '已偿还',
               type: 'bar',
               stack: 'total',
               data: [iPercent, pPercent],
@@ -799,7 +805,7 @@ export default {
               }
             },
             {
-              name: '未償還',
+              name: '未偿还',
               type: 'bar',
               stack: 'total',
               data: [100 - iPercent, 100 - pPercent],
@@ -823,7 +829,7 @@ export default {
             }
           ]
         });
-      }).catch(e => console.error("貸款圖表加載失敗:", e));
+      }).catch(e => console.error("贷款图表加载失败:", e));
     },
   }
 };
