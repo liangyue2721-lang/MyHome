@@ -280,77 +280,87 @@ public class WatchStockUpdater {
     }
 
     /**
-     * 根据需要更新年度高低价
-     * <p>
-     * 逻辑：
-     * 1. 确定时间范围：今年1月1日 ~ 今天
-     * 2. 查询该范围内所有K线
-     * 3. 计算最高/最低，并与Watchstock当前（即今日）高低价比较
-     * 4. 更新
-     * </p>
+     * 根据年初至今的行情数据，按需更新股票的年度最高价和最低价。
+     *
+     * <p>处理逻辑：
+     * <ol>
+     *   <li>以当年 1 月 1 日至今日为时间范围，查询历史 K 线数据</li>
+     *   <li>遍历计算区间内的最高价和最低价</li>
+     *   <li>将计算结果与今日实时行情进行兜底合并</li>
+     *   <li>仅在突破当前已记录的年高/年低时才执行更新</li>
+     * </ol>
+     *
+     * <p>设计目的：
+     * <ul>
+     *   <li>避免因 K 线未及时入库导致年高/年低遗漏</li>
+     *   <li>避免无意义的覆盖更新</li>
+     *   <li>保证年高/年低数据的单调性与正确性</li>
+     * </ul>
+     *
+     * @param stock 股票基础信息（需包含今日实时高低价）
      */
     public void updateYearHighLowIfNeeded(Watchstock stock) {
         String stockCode = stock.getCode();
         LocalDate today = LocalDate.now();
 
-        // 1. 本年第一天
+        // 本年起始日期
         LocalDate startOfYear = LocalDate.of(today.getYear(), 1, 1);
 
-        // 2. 构造查询条件
+        // 构造 K 线查询条件
         StockKline query = new StockKline();
         query.setStockCode(stockCode);
         query.setStartDate(Date.from(startOfYear.atStartOfDay(ZoneId.systemDefault()).toInstant()));
         query.setEndDate(Date.from(today.atStartOfDay(ZoneId.systemDefault()).toInstant()));
 
-        // 3. 查询
+        // 查询年内 K 线
         List<StockKline> klineList = stockKlineService.selectStockKlineList(query);
-        if (klineList == null || klineList.isEmpty()) {
-            // 如果查不到历史K线，仅依靠今日数据做一次更新尝试（如果今日有数据的话）
-            // 但如果连今日数据都在 klineList 里查不到（或根本没历史），
-            // 则只能退化为仅对比 stock 对象里的 High/Low（假设它是今日最新的）
-            // 这里简单处理：若无K线列表，则视为“今年以来只有今天”，直接取 stock 的数据进行初始化/更新
-        }
 
-        // 4. 遍历计算 Min/Max
-        BigDecimal yearHigh = null;
-        BigDecimal yearLow = null;
+        BigDecimal computedYearHigh = null;
+        BigDecimal computedYearLow = null;
 
-        if (klineList != null) {
+        // 计算年内历史最高/最低
+        if (klineList != null && !klineList.isEmpty()) {
             for (StockKline k : klineList) {
                 if (k.getHigh() != null) {
-                    yearHigh = (yearHigh == null) ? k.getHigh() : yearHigh.max(k.getHigh());
+                    computedYearHigh = (computedYearHigh == null)
+                            ? k.getHigh()
+                            : computedYearHigh.max(k.getHigh());
                 }
                 if (k.getLow() != null) {
-                    yearLow = (yearLow == null) ? k.getLow() : yearLow.min(k.getLow());
+                    computedYearLow = (computedYearLow == null)
+                            ? k.getLow()
+                            : computedYearLow.min(k.getLow());
                 }
             }
         }
 
-        // 5. 兜底：和当前 stock 对象里（今日实时）的高低价做对比
-        // 防止 klineList 里还没入库今天的 K 线，但 stock 对象已经有了今日行情
-        BigDecimal todayHigh = stock.getHighPrice();
-        BigDecimal todayLow = stock.getLowPrice();
-
-        if (todayHigh != null) {
-            yearHigh = (yearHigh == null) ? todayHigh : yearHigh.max(todayHigh);
+        // 今日实时行情兜底（防止今日 K 线未入库）
+        if (stock.getHighPrice() != null) {
+            computedYearHigh = (computedYearHigh == null)
+                    ? stock.getHighPrice()
+                    : computedYearHigh.max(stock.getHighPrice());
         }
-        if (todayLow != null) {
-            yearLow = (yearLow == null) ? todayLow : yearLow.min(todayLow);
-        }
-
-        // 6. 更新并打日志
-        if (yearLow != null &&
-                (stock.getYearLow() == null || yearLow.compareTo(stock.getYearLow()) < 0)) {
-            stock.setYearLow(yearLow);
-            log.info("股票 [{}] 年最低价更新为 {}", stockCode, yearLow);
+        if (stock.getLowPrice() != null) {
+            computedYearLow = (computedYearLow == null)
+                    ? stock.getLowPrice()
+                    : computedYearLow.min(stock.getLowPrice());
         }
 
-        if (yearHigh != null &&
-                (stock.getYearHigh() == null || yearHigh.compareTo(stock.getYearHigh()) > 0)) {
-            stock.setYearHigh(yearHigh);
-            log.info("股票 [{}] 年最高价更新为 {}", stockCode, yearHigh);
+        // 年最低价更新（仅当更低时）
+        if (computedYearLow != null &&
+                (stock.getYearLow() == null || computedYearLow.compareTo(stock.getYearLow()) < 0)) {
+            stock.setYearLow(computedYearLow);
+            log.info("股票 [{}] 年最低价更新为 {}", stockCode, computedYearLow);
+        }
+
+        // 年最高价更新（仅当更高时）
+        if (computedYearHigh != null &&
+                (stock.getYearHigh() == null || computedYearHigh.compareTo(stock.getYearHigh()) > 0)) {
+            stock.setYearHigh(computedYearHigh);
+            log.info("股票 [{}] 年最高价更新为 {}", stockCode, computedYearHigh);
         }
     }
+
 
     public void batchUpdateWatchStock(List<Watchstock> watchstocks) {
         watchstockService.updateWatchstockBatch(watchstocks);
