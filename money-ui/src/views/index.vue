@@ -61,58 +61,58 @@
       </el-col>
     </el-row>
 
-    <!-- Task Status Panel (New) -->
-    <el-row :gutter="20" class="task-status-row">
-      <el-col :span="6">
-        <el-card shadow="hover" class="status-card">
-          <div class="card-header">
-            <span>待执行任务数</span>
-          </div>
-          <div class="card-body">
-            <span class="count-text pending">{{ taskStats.pending }}</span>
-          </div>
-        </el-card>
-      </el-col>
+<!--    &lt;!&ndash; Task Status Panel (New) &ndash;&gt;-->
+<!--    <el-row :gutter="20" class="task-status-row">-->
+<!--      <el-col :span="6">-->
+<!--        <el-card shadow="hover" class="status-card">-->
+<!--          <div class="card-header">-->
+<!--            <span>待执行任务数</span>-->
+<!--          </div>-->
+<!--          <div class="card-body">-->
+<!--            <span class="count-text pending">{{ taskStats.pending }}</span>-->
+<!--          </div>-->
+<!--        </el-card>-->
+<!--      </el-col>-->
 
-      <el-col :span="6">
-        <el-card shadow="hover" class="status-card">
-          <div class="card-header">
-            <span>已执行任务数</span>
-          </div>
-          <div class="card-body">
-            <span class="count-text completed">{{ taskStats.completed }}</span>
-          </div>
-        </el-card>
-      </el-col>
+<!--      <el-col :span="6">-->
+<!--        <el-card shadow="hover" class="status-card">-->
+<!--          <div class="card-header">-->
+<!--            <span>已执行任务数</span>-->
+<!--          </div>-->
+<!--          <div class="card-body">-->
+<!--            <span class="count-text completed">{{ taskStats.completed }}</span>-->
+<!--          </div>-->
+<!--        </el-card>-->
+<!--      </el-col>-->
 
-      <el-col :span="6">
-        <el-card shadow="hover" class="status-card">
-          <div class="card-header">
-            <span>执行中任务</span>
-          </div>
-          <div class="card-body">
-            <span class="count-text executing">{{ taskStats.executing }}</span>
-          </div>
-        </el-card>
-      </el-col>
+<!--      <el-col :span="6">-->
+<!--        <el-card shadow="hover" class="status-card">-->
+<!--          <div class="card-header">-->
+<!--            <span>执行中任务</span>-->
+<!--          </div>-->
+<!--          <div class="card-body">-->
+<!--            <span class="count-text executing">{{ taskStats.executing }}</span>-->
+<!--          </div>-->
+<!--        </el-card>-->
+<!--      </el-col>-->
 
-      <el-col :span="6">
-        <el-card shadow="hover" class="status-card">
-          <div class="card-header">
-            <span>执行中占比</span>
-          </div>
-          <div class="card-body chart-container">
-            <el-progress
-              type="circle"
-              class="progress-ring"
-              :percentage="executingPercentage"
-              :width="80"
-              :color="customColors"
-            />
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+<!--      <el-col :span="6">-->
+<!--        <el-card shadow="hover" class="status-card">-->
+<!--          <div class="card-header">-->
+<!--            <span>执行中占比</span>-->
+<!--          </div>-->
+<!--          <div class="card-body chart-container">-->
+<!--            <el-progress-->
+<!--              type="circle"-->
+<!--              class="progress-ring"-->
+<!--              :percentage="executingPercentage"-->
+<!--              :width="80"-->
+<!--              :color="customColors"-->
+<!--            />-->
+<!--          </div>-->
+<!--        </el-card>-->
+<!--      </el-col>-->
+<!--    </el-row>-->
 
     <!-- Original Charts -->
     <el-row :gutter="20">
