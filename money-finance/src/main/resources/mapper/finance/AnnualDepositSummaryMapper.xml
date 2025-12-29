@@ -33,7 +33,7 @@
         <include refid="selectAnnualDepositSummaryVo"/>
         where id = #{id}
     </select>
-    <select id="selectAnnualDepositSummaryByYear" resultType="com.make.finance.domain.AnnualDepositSummary">
+    <select id="selectAnnualDepositSummaryByYear" resultMap="AnnualDepositSummaryResult">
         <include refid="selectAnnualDepositSummaryVo"/>
         where `year` = #{year} and user_id = #{userId}
     </select>
