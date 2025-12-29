@@ -242,7 +242,16 @@ def safe_get(dct, key):
 
 def standardize_realtime_data(data: Dict[str, Any]) -> Dict[str, Any]:
     def _div100(val):
-        return val / 100 if val is not None else None
+        if val is None:
+            return None
+        if val == "" or val == "-":
+            return None
+        try:
+            return float(val) / 100
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid price value: {val}")
+            return None
+
 
     return {
         "stockCode": safe_get(data, "f57"),
