@@ -1,14 +1,5 @@
 <template>
   <div class="app-container home">
-    <!-- Page Header & User Selection -->
-    <el-card shadow="never" class="page-header">
-      <div class="header-content">
-        <h2 class="page-title">儀表板</h2>
-        <div class="header-controls">
-        </div>
-      </div>
-    </el-card>
-
     <!-- Wealth Stage Bar (Horizontal Visualization) -->
     <el-row class="wealth-stage-row" v-if="wealthStage.current">
       <el-col :span="24">
