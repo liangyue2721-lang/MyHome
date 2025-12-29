@@ -44,7 +44,7 @@
     </select>
     <select id="getStockAllTask" resultMap="StockKlineTaskResult">
         <include refid="selectStockKlineTaskVo"/>
-        where task_status IN (0, 3)
+        where task_status IN (0, 1, 3)
         <if test="nodeId != null ">and node_id = #{nodeId}</if>
         order by update_time asc
     </select>
