@@ -25,6 +25,7 @@ import org.springframework.stereotype.Component;
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import javax.annotation.Resource;
+import java.math.BigDecimal;
 import java.util.Date;
 import java.util.Objects;
 import java.util.concurrent.*;
@@ -334,8 +335,8 @@ public class StockTaskConsumer implements SmartLifecycle {
             dbStatus = "SUCCESS";
             dbResult = "Price=" + info.getPrice();
             executed = true;
-            if (info.getPrice() > ws.getThresholdPrice()) {
-                // 股票当前价位小于阈值,发送通知
+            if (BigDecimal.valueOf(info.getPrice()).compareTo(ws.getThresholdPrice()) > 0) {
+                // 价格大于阈值触发提醒
                 sendNotification(task);
             }
         } catch (Exception e) {
@@ -496,6 +497,21 @@ public class StockTaskConsumer implements SmartLifecycle {
         } catch (Exception e) {
             log.error("发送通知失败：股票：{}，原因：{}", existing.getSecurityCode(), e.getMessage(), e);
             return false;
+        }
+    }
+
+    private void sendNotification(StockRefreshTask task) {
+        try {
+            Watchstock ws = watchstockService.getWatchStockByCode(task.getStockCode());
+            if (ws == null) return;
+
+            StockListingNotice notice = new StockListingNotice();
+            notice.setSecurityCode(ws.getCode());
+            notice.setSecurityName(ws.getName());
+            notice.setCurrentPrice(ws.getNewPrice());
+            sendNotification(notice, "价格已突破提醒价位");
+        } catch (Exception e) {
+            log.error("Failed to send price alert for {}", task.getStockCode(), e);
         }
     }
 }
