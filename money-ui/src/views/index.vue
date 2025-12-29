@@ -166,16 +166,16 @@ import {listUser} from "@/api/stock/dropdown_component";
 import Cookies from 'js-cookie';
 
 const WEALTH_STAGES = [
-  { name: '负债阶段', min: -Infinity, max: 0, desc: '需优化债务结构', icon: 'el-icon-heavy-rain', customColor: '#909399' },
-  { name: '生存艰难', min: 0, max: 27000, desc: '维持基本生存', icon: 'el-icon-bicycle', customColor: '#E6A23C' },
-  { name: '贫穷阶段', min: 27000, max: 60000, desc: '积累原始资本', icon: 'el-icon-sunny', customColor: '#F56C6C' },
-  { name: '低收入阶段', min: 60000, max: 150000, desc: '提升主动收入', icon: 'el-icon-grape', customColor: '#E6A23C' },
-  { name: '中下产阶段', min: 150000, max: 300000, desc: '建立安全缓冲', icon: 'el-icon-mobile-phone', customColor: '#FAAD14' },
-  { name: '中产阶段', min: 300000, max: 500000, desc: '资产稳步增长', icon: 'el-icon-house', customColor: '#13CE66' },
-  { name: '中上产阶段', min: 500000, max: 1000000, desc: '多元化投资布局', icon: 'el-icon-office-building', customColor: '#1890FF' },
+  { name: '负债阶段', min: -Infinity, max: 0, desc: '需优化债务结构', icon: 'el-icon-bottom-right', customColor: '#F56C6C' },
+  { name: '生存艰难', min: 0, max: 27000, desc: '维持基本生存', icon: 'el-icon-sunny', customColor: '#67C23A' },
+  { name: '贫穷阶段', min: 27000, max: 60000, desc: '积累原始资本', icon: 'el-icon-coin', customColor: '#909399' },
+  { name: '低收入阶段', min: 60000, max: 150000, desc: '提升主动收入', icon: 'el-icon-suitcase', customColor: '#E6A23C' },
+  { name: '中下产阶段', min: 150000, max: 300000, desc: '建立安全缓冲', icon: 'el-icon-umbrella', customColor: '#409EFF' },
+  { name: '中产阶段', min: 300000, max: 500000, desc: '资产稳步增长', icon: 'el-icon-top-right', customColor: '#67C23A' },
+  { name: '中上产阶段', min: 500000, max: 1000000, desc: '多元化投资布局', icon: 'el-icon-pie-chart', customColor: '#1890FF' },
   { name: '富人阶段', min: 1000000, max: 8000000, desc: '实现财务自由', icon: 'el-icon-trophy', customColor: '#722ED1' },
-  { name: '富豪阶段', min: 8000000, max: 20000000, desc: '资产传承规划', icon: 'el-icon-medal', customColor: '#EB2F96' },
-  { name: '大富豪阶段', min: 20000000, max: Infinity, desc: '社会影响力构建', icon: 'el-icon-crown', customColor: '#FFD700' }
+  { name: '富豪阶段', min: 8000000, max: 20000000, desc: '资产传承规划', icon: 'el-icon-school', customColor: '#C71585' },
+  { name: '大富豪阶段', min: 20000000, max: Infinity, desc: '社会影响力构建', icon: 'el-icon-s-cooperation', customColor: '#FFD700' }
 ];
 
 export default {
