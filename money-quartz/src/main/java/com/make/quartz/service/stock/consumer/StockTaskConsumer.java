@@ -503,8 +503,9 @@ public class StockTaskConsumer implements SmartLifecycle {
     private void sendNotification(StockRefreshTask task) {
         try {
             Watchstock ws = watchstockService.getWatchStockByCode(task.getStockCode());
-            if (ws == null) return;
-
+            if (ws == null || ws.getNum() == null) return;
+            ws.setNum(ws.getNum() + 1);
+            watchstockService.updateWatchstock(ws);
             StockListingNotice notice = new StockListingNotice();
             notice.setSecurityCode(ws.getCode());
             notice.setSecurityName(ws.getName());
