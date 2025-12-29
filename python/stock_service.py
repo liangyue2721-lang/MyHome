@@ -252,6 +252,12 @@ def standardize_realtime_data(data: Dict[str, Any]) -> Dict[str, Any]:
             logger.warning(f"Invalid price value: {val}")
             return None
 
+    def _numeric_or_none(val):
+        if val is None:
+            return None
+        if val == "" or val == "-":
+            return None
+        return val
 
     return {
         "stockCode": safe_get(data, "f57"),
@@ -261,11 +267,11 @@ def standardize_realtime_data(data: Dict[str, Any]) -> Dict[str, Any]:
         "openPrice": _div100(safe_get(data, "f46")),
         "highPrice": _div100(safe_get(data, "f44")),
         "lowPrice": _div100(safe_get(data, "f45")),
-        "volume": safe_get(data, "f47"),
-        "turnover": safe_get(data, "f48"),
-        "volumeRatio": safe_get(data, "f52"),
-        "commissionRatio": safe_get(data, "f20"),
-        "mainFundsInflow": safe_get(data, "f152"),
+        "volume": _numeric_or_none(safe_get(data, "f47")),
+        "turnover": _numeric_or_none(safe_get(data, "f48")),
+        "volumeRatio": _numeric_or_none(safe_get(data, "f52")),
+        "commissionRatio": _numeric_or_none(safe_get(data, "f20")),
+        "mainFundsInflow": _numeric_or_none(safe_get(data, "f152")),
     }
 
 
