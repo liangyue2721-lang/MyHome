@@ -185,99 +185,115 @@ public class WatchStockUpdater {
     }
 
     /**
-     * 根据需要更新周度高低价
-     * <p>
-     * 如果当前的周度高低价为null，或者当日高低价突破了周度记录，则更新周度高低价。
-     * </p>
+     * 根据本周（周一至周五）行情按需更新周度最高价与最低价。
      *
-     * @param stock 自选股对象
+     * <p>规则：
+     * <ul>
+     *   <li>若本周 K 线可用，则以本周计算结果为准（可覆盖修正旧值）</li>
+     *   <li>若本周 K 线不可用，则仅使用当日实时行情做初始化/突破更新</li>
+     *   <li>当日实时行情用于兜底补偿，防止当日 K 线未入库</li>
+     * </ul>
+     *
+     * @param stock 自选股对象（需包含当日实时高低价）
      */
     public void updateWeekHighLowIfNeeded(Watchstock stock) {
 
-        // =========================
-        // 1. 股票代码（直接取 Watchstock）
-        // =========================
+        // 股票代码
         String stockCode = stock.getCode();
 
-        // =========================
-        // 2. 生成本周 周一～周五 的交易日期列表
-        // =========================
+        // 取当前日期（周末视为上一交易日，避免把周末算作新的一周）
         LocalDate today = LocalDate.now();
+        if (today.getDayOfWeek() == DayOfWeek.SATURDAY) {
+            today = today.minusDays(1);
+        } else if (today.getDayOfWeek() == DayOfWeek.SUNDAY) {
+            today = today.minusDays(2);
+        }
 
-        // 计算本周周一（ISO 标准：周一为第一天）
+        // 本周周一（ISO：周一为一周开始）
         LocalDate monday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
 
+        // 构造本周周一至周五日期列表
         List<LocalDate> tradeDateList = new ArrayList<>(5);
         for (int i = 0; i < 5; i++) {
             tradeDateList.add(monday.plusDays(i));
         }
 
-        // =========================
-        // 3. 查询本周所有 K 线数据
-        // =========================
+        // 查询本周 K 线（允许为空）
         List<StockKline> stockKlineList =
                 stockKlineService.queryWeekAllStockKline(stockCode, tradeDateList);
 
-        if (stockKlineList == null || stockKlineList.isEmpty()) {
-            log.warn("股票 [{}] 本周无K线数据，跳过周高/周低计算", stockCode);
+        BigDecimal computedWeekHigh = null;
+        BigDecimal computedWeekLow = null;
+
+        // 基于 K 线计算本周高低价
+        if (stockKlineList != null && !stockKlineList.isEmpty()) {
+            for (StockKline kline : stockKlineList) {
+                if (kline.getHigh() != null) {
+                    computedWeekHigh = (computedWeekHigh == null)
+                            ? kline.getHigh()
+                            : computedWeekHigh.max(kline.getHigh());
+                }
+                if (kline.getLow() != null) {
+                    computedWeekLow = (computedWeekLow == null)
+                            ? kline.getLow()
+                            : computedWeekLow.min(kline.getLow());
+                }
+            }
+        }
+
+        // 当日实时行情兜底补偿（防止当日 K 线尚未入库）
+        if (stock.getHighPrice() != null) {
+            computedWeekHigh = (computedWeekHigh == null)
+                    ? stock.getHighPrice()
+                    : computedWeekHigh.max(stock.getHighPrice());
+        }
+        if (stock.getLowPrice() != null) {
+            computedWeekLow = (computedWeekLow == null)
+                    ? stock.getLowPrice()
+                    : computedWeekLow.min(stock.getLowPrice());
+        }
+
+        // 若本周既无 K 线也无今日行情，则无从计算
+        if (computedWeekHigh == null && computedWeekLow == null) {
+            log.warn("股票 [{}] 本周无有效行情数据，跳过周高/周低更新", stockCode);
             return;
         }
 
-        // =========================
-        // 4. 计算周最高 / 周最低（来自 K 线）
-        // =========================
-        BigDecimal weekHigh = null;
-        BigDecimal weekLow = null;
+        // 本周有 K 线：以本周计算结果为准，允许覆盖修正（解决跨周残留问题）
+        if (stockKlineList != null && !stockKlineList.isEmpty()) {
 
-        for (StockKline kline : stockKlineList) {
-            if (kline.getHigh() != null) {
-                weekHigh = (weekHigh == null)
-                        ? kline.getHigh()
-                        : weekHigh.max(kline.getHigh());
+            boolean changed = false;
+
+            if (computedWeekLow != null && (stock.getWeekLow() == null || computedWeekLow.compareTo(stock.getWeekLow()) != 0)) {
+                stock.setWeekLow(computedWeekLow);
+                changed = true;
             }
 
-            if (kline.getLow() != null) {
-                weekLow = (weekLow == null)
-                        ? kline.getLow()
-                        : weekLow.min(kline.getLow());
+            if (computedWeekHigh != null && (stock.getWeekHigh() == null || computedWeekHigh.compareTo(stock.getWeekHigh()) != 0)) {
+                stock.setWeekHigh(computedWeekHigh);
+                changed = true;
             }
+
+            if (changed) {
+                log.info("股票 [{}] 周度高低价按本周K线校准，高={}, 低={}", stockCode, computedWeekHigh, computedWeekLow);
+            }
+            return;
         }
 
-        // =========================
-        // 5. 与当日行情兜底对比
-        // =========================
-        BigDecimal todayHigh = stock.getHighPrice();
-        BigDecimal todayLow = stock.getLowPrice();
-
-        if (todayHigh != null) {
-            weekHigh = (weekHigh == null)
-                    ? todayHigh
-                    : weekHigh.max(todayHigh);
+        // 本周无 K 线：仅用当日行情做初始化/突破更新（保守，不做重置覆盖）
+        if (computedWeekLow != null &&
+                (stock.getWeekLow() == null || computedWeekLow.compareTo(stock.getWeekLow()) < 0)) {
+            stock.setWeekLow(computedWeekLow);
+            log.info("股票 [{}] 周最低价更新为 {}", stockCode, computedWeekLow);
         }
 
-        if (todayLow != null) {
-            weekLow = (weekLow == null)
-                    ? todayLow
-                    : weekLow.min(todayLow);
-        }
-
-        // =========================
-        // 6. 更新 Watchstock 周高 / 周低
-        // =========================
-        if (weekLow != null &&
-                (stock.getWeekLow() == null || weekLow.compareTo(stock.getWeekLow()) < 0)) {
-
-            stock.setWeekLow(weekLow);
-            log.info("股票 [{}] 周最低价更新为 {}", stockCode, weekLow);
-        }
-
-        if (weekHigh != null &&
-                (stock.getWeekHigh() == null || weekHigh.compareTo(stock.getWeekHigh()) > 0)) {
-
-            stock.setWeekHigh(weekHigh);
-            log.info("股票 [{}] 周最高价更新为 {}", stockCode, weekHigh);
+        if (computedWeekHigh != null &&
+                (stock.getWeekHigh() == null || computedWeekHigh.compareTo(stock.getWeekHigh()) > 0)) {
+            stock.setWeekHigh(computedWeekHigh);
+            log.info("股票 [{}] 周最高价更新为 {}", stockCode, computedWeekHigh);
         }
     }
+
 
     /**
      * 根据年初至今的行情数据，按需更新股票的年度最高价和最低价。
