@@ -45,11 +45,11 @@
                 :style="wealthStage.totalAssets >= stage.min && wealthStage.totalAssets < stage.max ? { borderColor: stage.customColor, backgroundColor: stage.customColor } : {}"
               >
                 <!-- Completed: Show Icon (Inherits Green from CSS) -->
-                <i :class="stage.icon" v-if="wealthStage.totalAssets >= stage.max" style="font-weight: bold;"></i>
+                <span v-if="wealthStage.totalAssets >= stage.max" style="font-size: 18px;">{{ stage.icon }}</span>
                 <!-- Current: Show Icon (White on Custom Background) -->
-                <i :class="stage.icon" v-else-if="wealthStage.totalAssets >= stage.min && wealthStage.totalAssets < stage.max" style="color: #fff; font-size: 16px;"></i>
+                <span v-else-if="wealthStage.totalAssets >= stage.min && wealthStage.totalAssets < stage.max" style="font-size: 18px; color: #fff;">{{ stage.icon }}</span>
                 <!-- Future: Show Icon (Gray) -->
-                <i :class="stage.icon" v-else style="color: #C0C4CC; font-size: 14px;"></i>
+                <span v-else style="font-size: 18px; filter: grayscale(100%); opacity: 0.5;">{{ stage.icon }}</span>
               </div>
               <div class="stage-content">
                 <div class="stage-name" :style="wealthStage.totalAssets >= stage.min && wealthStage.totalAssets < stage.max ? { color: stage.customColor, fontWeight: 'bold' } : {}">{{ stage.name }}</div>
@@ -166,16 +166,16 @@ import {listUser} from "@/api/stock/dropdown_component";
 import Cookies from 'js-cookie';
 
 const WEALTH_STAGES = [
-  { name: '负债阶段', min: -Infinity, max: 0, desc: '需优化债务结构', icon: 'el-icon-bottom-right', customColor: '#F56C6C' },
-  { name: '生存艰难', min: 0, max: 27000, desc: '维持基本生存', icon: 'el-icon-sunny', customColor: '#67C23A' },
-  { name: '贫穷阶段', min: 27000, max: 60000, desc: '积累原始资本', icon: 'el-icon-coin', customColor: '#909399' },
-  { name: '低收入阶段', min: 60000, max: 150000, desc: '提升主动收入', icon: 'el-icon-suitcase', customColor: '#E6A23C' },
-  { name: '中下产阶段', min: 150000, max: 300000, desc: '建立安全缓冲', icon: 'el-icon-umbrella', customColor: '#409EFF' },
-  { name: '中产阶段', min: 300000, max: 500000, desc: '资产稳步增长', icon: 'el-icon-top-right', customColor: '#67C23A' },
-  { name: '中上产阶段', min: 500000, max: 1000000, desc: '多元化投资布局', icon: 'el-icon-pie-chart', customColor: '#1890FF' },
-  { name: '富人阶段', min: 1000000, max: 8000000, desc: '实现财务自由', icon: 'el-icon-trophy', customColor: '#722ED1' },
-  { name: '富豪阶段', min: 8000000, max: 20000000, desc: '资产传承规划', icon: 'el-icon-school', customColor: '#C71585' },
-  { name: '大富豪阶段', min: 20000000, max: Infinity, desc: '社会影响力构建', icon: 'el-icon-s-cooperation', customColor: '#FFD700' }
+  { name: '负债阶段', min: -Infinity, max: 0, desc: '随时可能被风雨（风险）摧毁', icon: '⛺', customColor: '#F56C6C' },
+  { name: '生存艰难', min: 0, max: 27000, desc: '仅能满足遮风避雨的最低需求', icon: '🛖', customColor: '#67C23A' },
+  { name: '贫穷阶段', min: 27000, max: 60000, desc: '有了固定的形状，但设施简陋', icon: '🏠', customColor: '#909399' },
+  { name: '低收入阶段', min: 60000, max: 150000, desc: '标准化生活，依靠集体设施', icon: '🏢', customColor: '#E6A23C' },
+  { name: '中下产阶段', min: 150000, max: 300000, desc: '有了私人空间（安全缓冲）', icon: '🏘️', customColor: '#409EFF' },
+  { name: '中产阶段', min: 300000, max: 500000, desc: '典型的中产标志，独立且舒适', icon: '🏡', customColor: '#67C23A' },
+  { name: '中上产阶段', min: 500000, max: 1000000, desc: '资产属性大于居住属性，象征投资', icon: '🏬', customColor: '#1890FF' },
+  { name: '富人阶段', min: 1000000, max: 8000000, desc: '奢侈、享受、财务自由的象征', icon: '🏰', customColor: '#722ED1' },
+  { name: '富豪阶段', min: 8000000, max: 20000000, desc: '家族基业，防御性强，代代相传', icon: '🏯', customColor: '#C71585' },
+  { name: '大富豪阶段', min: 20000000, max: Infinity, desc: '拥有并规划一座城市，制定规则', icon: '🏙️', customColor: '#FFD700' }
 ];
 
 export default {
