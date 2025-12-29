@@ -133,6 +133,8 @@ public class WatchStockUpdater {
 
         // 周高低逻辑
         updateWeekHighLowIfNeeded(watchstock);
+        // 今年高低逻辑
+        updateYearHighLowIfNeeded(watchstock);
 
         // 更新时间
         watchstock.setUpdateTime(DateUtils.getNowDate());
