@@ -335,7 +335,7 @@ public class StockTaskConsumer implements SmartLifecycle {
             dbStatus = "SUCCESS";
             dbResult = "Price=" + info.getPrice();
             executed = true;
-            if (BigDecimal.valueOf(info.getPrice()).compareTo(ws.getThresholdPrice()) > 0) {
+            if (BigDecimal.valueOf(info.getPrice()).compareTo(ws.getThresholdPrice()) < 0) {
                 // 价格大于阈值触发提醒
                 sendNotification(task);
             }
