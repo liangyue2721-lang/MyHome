@@ -8,7 +8,11 @@
           <div class="stage-summary-header">
             <div class="current-assets">
               <span class="label">当前年度资产</span>
-              <span class="amount">¥ {{ wealthStage.totalAssets.toLocaleString() }}</span>
+              <span class="amount">
+                <span v-if="!isPrivacyMode">¥ {{ wealthStage.totalAssets.toLocaleString() }}</span>
+                <span v-else>¥ ******</span>
+                <i class="el-icon-view" @click="togglePrivacy" style="margin-left: 8px; cursor: pointer; color: #909399;"></i>
+              </span>
             </div>
 
             <div class="stage-gap" v-if="wealthStage.next">
@@ -122,7 +126,7 @@
             <span>📈 利润趋势分析</span>
             <el-tag size="small" effect="plain">历史数据</el-tag>
           </div>
-          <div id="profitLineChart" class="chart-box"></div>
+          <div id="profitLineChart" class="chart-box" :class="{ 'privacy-blur': isPrivacyMode }"></div>
         </el-card>
       </el-col>
     </el-row>
@@ -133,7 +137,7 @@
           <div slot="header" class="chart-header">
             <span>💳 近一年还贷对比</span>
           </div>
-          <div id="generateMonthlyLoanRepaymentBarChart" class="chart-box"></div>
+          <div id="generateMonthlyLoanRepaymentBarChart" class="chart-box" :class="{ 'privacy-blur': isPrivacyMode }"></div>
         </el-card>
       </el-col>
       <el-col :xs="24" :sm="24" :lg="12">
@@ -141,7 +145,7 @@
           <div slot="header" class="chart-header">
             <span>💰 月度收支对比</span>
           </div>
-          <div id="monthlyIncomeExpenseBarChart" class="chart-box"></div>
+          <div id="monthlyIncomeExpenseBarChart" class="chart-box" :class="{ 'privacy-blur': isPrivacyMode }"></div>
         </el-card>
       </el-col>
     </el-row>
@@ -182,6 +186,7 @@ export default {
   name: 'Index', // Changed from 'Charts' to 'Index' to match usage
   data() {
     return {
+      isPrivacyMode: localStorage.getItem('money_privacy_mode') !== 'false',
       // Wealth Stage Data
       wealthStage: {
         current: null,
@@ -251,6 +256,10 @@ export default {
     this.disposeCharts();
   },
   methods: {
+    togglePrivacy() {
+      this.isPrivacyMode = !this.isPrivacyMode;
+      localStorage.setItem('money_privacy_mode', this.isPrivacyMode);
+    },
     // --- Wealth Stage Method ---
     fetchWealthStage() {
       this.wealthStage.loading = true;
@@ -1065,6 +1074,11 @@ export default {
   .chart-box {
     width: 100%;
     height: 360px;
+  }
+
+  .privacy-blur {
+    filter: blur(10px);
+    transition: filter 0.3s ease;
   }
 
   .chart-box-small {
