@@ -188,7 +188,11 @@
           </div>
         </template>
       </el-table-column>
-
+      <el-table-column label="通知次数" min-width="80" align="center">
+        <template slot-scope="scope">
+          <span class="price-font">{{ scope.row.num }}</span>
+        </template>
+      </el-table-column>
       <el-table-column label="更新时间" prop="updatedAt" min-width="140" align="center" show-overflow-tooltip/>
 
       <el-table-column label="操作" align="center" class-name="small-padding fixed-width" fixed="right" width="100">
@@ -228,6 +232,9 @@
         </el-form-item>
         <el-form-item label="阈值价格" prop="thresholdPrice">
           <el-input-number v-model="form.thresholdPrice" :precision="2" :step="0.1" :min="0" style="width: 100%"/>
+        </el-form-item>
+        <el-form-item label="通知次数" prop="num">
+          <el-input-number v-model="form.num" :precision="2" :step="0.1" :min="0" style="width: 100%"/>
         </el-form-item>
       </el-form>
       <div slot="footer" class="dialog-footer">
@@ -270,7 +277,8 @@ export default {
       rules: {
         code: [{required: true, message: "股票代码不能为空", trigger: "blur"}],
         name: [{required: true, message: "股票名称不能为空", trigger: "blur"}],
-        thresholdPrice: [{required: true, message: "阈值价格不能为空", trigger: "blur"}]
+        thresholdPrice: [{required: true, message: "阈值价格不能为空", trigger: "blur"}],
+        num: [{required: true, message: "通知次数不能为空", trigger: "blur"}]
       }
     };
   },
