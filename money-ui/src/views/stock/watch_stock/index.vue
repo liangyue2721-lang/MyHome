@@ -234,7 +234,7 @@
           <el-input-number v-model="form.thresholdPrice" :precision="2" :step="0.1" :min="0" style="width: 100%"/>
         </el-form-item>
         <el-form-item label="通知次数" prop="num">
-          <el-input-number v-model="form.num" :precision="2" :step="0.1" :min="0" style="width: 100%"/>
+          <el-input-number v-model="form.num" :precision="0" :step="1" :min="0" style="width: 100%"/>
         </el-form-item>
       </el-form>
       <div slot="footer" class="dialog-footer">
