@@ -138,6 +138,8 @@ public class WatchStockUpdater {
 
         // 更新时间
         watchstock.setUpdateTime(DateUtils.getNowDate());
+        watchstock.setThresholdPrice(null);
+        watchstock.setNum(null);
     }
 
     /**
