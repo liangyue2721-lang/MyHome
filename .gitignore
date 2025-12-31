@@ -49,3 +49,4 @@ nbdist/
 /python/__pycache__
 /python/logs
 /node_modules
+config/application.yml
