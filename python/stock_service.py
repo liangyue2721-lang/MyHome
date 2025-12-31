@@ -7,23 +7,24 @@ import logging
 import asyncio
 import re
 import time
-import random
+import uuid
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from logging.handlers import TimedRotatingFileHandler
 
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
-from playwright.async_api import async_playwright, Browser, BrowserContext
+from playwright.async_api import async_playwright, Browser
 
 # =========================================================
-# Logging Setup（原样保留）
+# Logging Setup
 # =========================================================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_DIR = os.path.join(BASE_DIR, "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 
+# ---------- main logger ----------
 logger = logging.getLogger("stock-service")
 logger.setLevel(logging.INFO)
 
@@ -31,6 +32,9 @@ formatter = logging.Formatter(
     "[%(asctime)s] [%(levelname)s] %(message)s",
     "%Y-%m-%d %H:%M:%S"
 )
+
+for h in list(logger.handlers):
+    logger.removeHandler(h)
 
 ch = logging.StreamHandler()
 ch.setFormatter(formatter)
@@ -46,62 +50,87 @@ fh = TimedRotatingFileHandler(
 fh.setFormatter(formatter)
 logger.addHandler(fh)
 
+# ---------- access logger ----------
 access_logger = logging.getLogger("access")
 access_logger.setLevel(logging.INFO)
 
-access_console = logging.StreamHandler()
-access_console.setFormatter(logging.Formatter("%(message)s"))
+for h in list(access_logger.handlers):
+    access_logger.removeHandler(h)
 
-access_file = TimedRotatingFileHandler(
+access_fh = TimedRotatingFileHandler(
     os.path.join(LOG_DIR, "access.log"),
     when="midnight",
     interval=1,
     backupCount=14,
     encoding="utf-8"
 )
-access_file.setFormatter(logging.Formatter("%(message)s"))
+access_fh.setFormatter(logging.Formatter("%(message)s"))
+access_logger.addHandler(access_fh)
 
-access_logger.addHandler(access_console)
-access_logger.addHandler(access_file)
+# ---------- trace logger ----------
+trace_logger = logging.getLogger("trace")
+trace_logger.setLevel(logging.INFO)
+
+for h in list(trace_logger.handlers):
+    trace_logger.removeHandler(h)
+
+trace_fh = TimedRotatingFileHandler(
+    os.path.join(LOG_DIR, "trace.log"),
+    when="midnight",
+    interval=1,
+    backupCount=14,
+    encoding="utf-8"
+)
+trace_fh.setFormatter(
+    logging.Formatter(
+        "[%(asctime)s] [%(levelname)s] [%(request_id)s] %(message)s",
+        "%Y-%m-%d %H:%M:%S"
+    )
+)
+trace_logger.addHandler(trace_fh)
 
 logging.getLogger("uvicorn.access").disabled = True
 
 # =========================================================
-# FastAPI App（原样）
+# FastAPI
 # =========================================================
 
 app = FastAPI(title="Stock Data Service", version="1.3.0")
 
 # =========================================================
-# Global Runtime State（⚠️ 不再创建 asyncio 对象）
+# Global Runtime
 # =========================================================
 
 PLAYWRIGHT: Optional[Any] = None
 BROWSER: Optional[Browser] = None
-SEMAPHORE: Optional[asyncio.Semaphore] = None  # ← 修复点
+SEMAPHORE: Optional[asyncio.Semaphore] = None
+
+PAGES = []
+PAGE_INDEX = 0
+PAGE_LOCK = asyncio.Lock()
 
 
 # =========================================================
-# Middleware: JSON Access Log（原样）
+# Trace Adapter
+# =========================================================
+
+class TraceAdapter(logging.LoggerAdapter):
+    def process(self, msg, kwargs):
+        kwargs.setdefault("extra", {})
+        kwargs["extra"]["request_id"] = self.extra["request_id"]
+        return msg, kwargs
+
+
+# =========================================================
+# Middleware
 # =========================================================
 
 @app.middleware("http")
 async def access_log_middleware(request: Request, call_next):
+    request_id = uuid.uuid4().hex[:12]
+    request.state.request_id = request_id
+
     start_time = time.time()
-
-    body_bytes = await request.body()
-    request._body = body_bytes
-
-    body = None
-    if body_bytes:
-        try:
-            body = body_bytes.decode("utf-8")
-            if len(body) > 2000:
-                body = body[:2000] + "...[truncated]"
-        except Exception:
-            body = "<binary>"
-
-    response = None
     status_code = 500
     error = None
 
@@ -115,41 +144,25 @@ async def access_log_middleware(request: Request, call_next):
     finally:
         duration_ms = int((time.time() - start_time) * 1000)
 
-        log_record = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
-            "client_ip": request.client.host if request.client else None,
+        access_logger.info(json.dumps({
+            "ts": datetime.utcnow().isoformat() + "Z",
+            "rid": request_id,
+            "ip": request.client.host if request.client else None,
             "method": request.method,
             "path": request.url.path,
-            "query_params": dict(request.query_params) or None,
-            "body": body,
-            "headers": dict(request.headers),
-            "status_code": status_code,
-            "duration_ms": duration_ms,
+            "status": status_code,
+            "cost_ms": duration_ms,
             "error": error,
-        }
-
-        access_logger.info(json.dumps(log_record, ensure_ascii=False))
+        }, ensure_ascii=False))
 
 
 # =========================================================
-# Utilities（原样）
+# Utils
 # =========================================================
-
-UA_POOL = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15",
-    "Mozilla/5.0 (X11; Linux x86_64) Chrome/118",
-]
-
-
-def random_ua() -> str:
-    return random.choice(UA_POOL)
-
 
 def parse_json_or_jsonp(text: str):
     if not text:
         return None
-    text = text.lstrip("\ufeff").strip()
     try:
         return json.loads(text)
     except Exception:
@@ -170,57 +183,120 @@ def normalize_secid(code: str) -> str:
         return f"113.{code}"
     if code.startswith(("6", "5")):
         return f"1.{code}"
-    if code.startswith(("0", "3")):
-        return f"0.{code}"
     return f"0.{code}"
 
 
-async def hide_webdriver_property(context: BrowserContext) -> None:
-    await context.add_init_script(
-        "() => Object.defineProperty(navigator,'webdriver',{get:()=>undefined})"
-    )
-
-
 # =========================================================
-# Lifecycle（✅ 唯一修改点）
+# Lifecycle
 # =========================================================
 
 @app.on_event("startup")
 async def startup():
-    global PLAYWRIGHT, BROWSER, SEMAPHORE
+    global PLAYWRIGHT, BROWSER, SEMAPHORE, PAGES
 
     logger.info("Starting Playwright...")
     PLAYWRIGHT = await async_playwright().start()
+
     BROWSER = await PLAYWRIGHT.chromium.launch(
         headless=True,
         args=["--disable-blink-features=AutomationControlled"],
     )
 
-    SEMAPHORE = asyncio.Semaphore(10)  # ✅ 正确位置创建
+    SEMAPHORE = asyncio.Semaphore(10)
+
+    # 创建长期页面
+    for i in range(2):
+        context = await BROWSER.new_context(
+            locale="zh-CN",
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+        )
+        await context.add_init_script(
+            "() => Object.defineProperty(navigator,'webdriver',{get:()=>undefined})"
+        )
+
+        page = await context.new_page()
+        try:
+            await page.goto(
+                "https://quote.eastmoney.com/",
+                wait_until="domcontentloaded",
+                timeout=20000
+            )
+            logger.info(f"Warmup page {i} OK")
+        except Exception as e:
+            logger.warning(f"Warmup page {i} ignored: {e}")
+
+        PAGES.append(page)
 
     logger.info("Browser started.")
 
 
 @app.on_event("shutdown")
 async def shutdown():
+    for page in PAGES:
+        await page.close()
     if BROWSER:
         await BROWSER.close()
     if PLAYWRIGHT:
         await PLAYWRIGHT.stop()
-    logger.info("Playwright stopped.")
 
 
 # =========================================================
-# Health（原样）
+# Browser Fetch (核心)
 # =========================================================
 
-@app.get("/health")
-def health():
-    return {"status": "ok", "browser": BROWSER is not None}
+async def fetch_json_with_browser(url: str, request_id: str, max_retry=3):
+    global PAGE_INDEX
+
+    trace = TraceAdapter(trace_logger, {"request_id": request_id})
+
+    if not PAGES:
+        raise HTTPException(status_code=500, detail="Browser service not ready")
+
+    async with SEMAPHORE:
+        async with PAGE_LOCK:
+            page = PAGES[PAGE_INDEX]
+            page_idx = PAGE_INDEX
+            PAGE_INDEX = (PAGE_INDEX + 1) % len(PAGES)
+
+        trace.info(f"Use page index={page_idx}")
+        trace.info(f"Fetch start: {url}")
+
+        for attempt in range(1, max_retry + 1):
+            start = time.time()
+            text = await page.evaluate(
+                """async (url) => {
+                    const r = await fetch(url, {
+                        credentials: 'include',
+                        headers: {
+                            'Accept': '*/*',
+                            'Accept-Language': 'zh-CN,zh;q=0.9'
+                        }
+                    });
+                    return await r.text();
+                }""",
+                url,
+            )
+
+            cost = int((time.time() - start) * 1000)
+            trace.info(f"Attempt {attempt} done cost={cost}ms size={len(text)}")
+
+            parsed = parse_json_or_jsonp(text)
+            if parsed:
+                trace.info("JSON parse success")
+                return parsed
+
+            trace.warning(f"Parse failed attempt={attempt} snippet={text[:200]!r}")
+
+        trace.error("All retries failed")
+        raise HTTPException(status_code=500, detail="Upstream fetch failed")
 
 
 # =========================================================
-# Data Models（原样）
+# Models
 # =========================================================
 
 class RealtimeRequest(BaseModel):
@@ -242,20 +318,15 @@ def safe_get(dct, key):
 
 def standardize_realtime_data(data: Dict[str, Any]) -> Dict[str, Any]:
     def _div100(val):
-        if val is None:
-            return None
-        if val == "" or val == "-":
+        if val in (None, "", "-"):
             return None
         try:
             return float(val) / 100
-        except (ValueError, TypeError):
-            logger.warning(f"Invalid price value: {val}")
+        except Exception:
             return None
 
     def _numeric_or_none(val):
-        if val is None:
-            return None
-        if val == "" or val == "-":
+        if val in (None, "", "-"):
             return None
         return val
 
@@ -276,65 +347,32 @@ def standardize_realtime_data(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # =========================================================
-# Browser Fetch（逻辑不变，仅加防御）
+# Endpoints（接口不变）
 # =========================================================
 
-async def fetch_json_with_browser(url: str, max_retry=3) -> Optional[Dict[str, Any]]:
-    global BROWSER, SEMAPHORE
+@app.get("/health")
+def health():
+    return {"status": "ok", "browser": BROWSER is not None}
 
-    if not BROWSER or not SEMAPHORE:
-        raise HTTPException(status_code=500, detail="Browser service not ready")
-
-    async with SEMAPHORE:
-        context = await BROWSER.new_context(
-            locale="zh-CN",
-            user_agent=random_ua()
-        )
-        await hide_webdriver_property(context)
-        page = await context.new_page()
-
-        try:
-            for attempt in range(1, max_retry + 1):
-                try:
-                    await page.goto(url, timeout=20000, wait_until="domcontentloaded")
-                    text = (await page.evaluate(
-                        "() => document.body.innerText || ''"
-                    )).strip()
-                    parsed = parse_json_or_jsonp(text)
-                    if parsed is not None:
-                        return parsed
-                    raise Exception("JSON parse failed")
-                except Exception:
-                    if attempt == max_retry:
-                        raise
-                    await asyncio.sleep(0.5 + random.random())
-        finally:
-            await page.close()
-            await context.close()
-
-
-# =========================================================
-# Endpoints（100% 原接口）
-# =========================================================
 
 @app.post("/stock/realtime")
-async def stock_realtime(req: RealtimeRequest):
-    data_json = await fetch_json_with_browser(req.url)
+async def stock_realtime(req: RealtimeRequest, request: Request):
+    data_json = await fetch_json_with_browser(req.url, request.state.request_id)
     if not data_json or not data_json.get("data"):
         raise HTTPException(status_code=404, detail="Not Found")
     return standardize_realtime_data(data_json["data"])
 
 
 @app.post("/etf/realtime")
-async def etf_realtime(req: RealtimeRequest):
-    data_json = await fetch_json_with_browser(req.url)
+async def etf_realtime(req: RealtimeRequest, request: Request):
+    data_json = await fetch_json_with_browser(req.url, request.state.request_id)
     if not data_json or not data_json.get("data"):
         raise HTTPException(status_code=404, detail="Not Found")
     return standardize_realtime_data(data_json["data"])
 
 
 @app.post("/stock/kline")
-async def stock_kline(req: KlineRequest):
+async def stock_kline(req: KlineRequest, request: Request):
     secid = normalize_secid(req.secid)
     lookback = req.ndays * 2 + 20
     beg_date = (datetime.now() - timedelta(days=lookback)).strftime("%Y%m%d")
@@ -346,7 +384,7 @@ async def stock_kline(req: KlineRequest):
         f"beg={beg_date}&end=20500101&secid={secid}&klt=101&fqt=1"
     )
 
-    raw_json = await fetch_json_with_browser(url)
+    raw_json = await fetch_json_with_browser(url, request.state.request_id)
     if not raw_json or not raw_json.get("data"):
         raise HTTPException(status_code=404, detail="Not Found")
 
