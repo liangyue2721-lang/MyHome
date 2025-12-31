@@ -14,7 +14,8 @@ from logging.handlers import TimedRotatingFileHandler
 
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
-from playwright.async_api import async_playwright, Browser
+# 1. 引入 Playwright 的 Error 类型以便捕获
+from playwright.async_api import async_playwright, Browser, Error as PlaywrightError
 
 # =========================================================
 # Logging Setup
@@ -95,7 +96,7 @@ logging.getLogger("uvicorn.access").disabled = True
 # FastAPI
 # =========================================================
 
-app = FastAPI(title="Stock Data Service", version="1.3.0")
+app = FastAPI(title="Stock Data Service", version="1.3.1")
 
 # =========================================================
 # Global Runtime
@@ -220,10 +221,11 @@ async def startup():
 
         page = await context.new_page()
         try:
+            # 2. 增加 wait_until='networkidle' 让初始化更稳定
             await page.goto(
                 "https://quote.eastmoney.com/",
                 wait_until="domcontentloaded",
-                timeout=20000
+                timeout=30000
             )
             logger.info(f"Warmup page {i} OK")
         except Exception as e:
@@ -245,7 +247,7 @@ async def shutdown():
 
 
 # =========================================================
-# Browser Fetch (核心)
+# Browser Fetch (核心修复部分)
 # =========================================================
 
 async def fetch_json_with_browser(url: str, request_id: str, max_retry=3):
@@ -267,19 +269,48 @@ async def fetch_json_with_browser(url: str, request_id: str, max_retry=3):
 
         for attempt in range(1, max_retry + 1):
             start = time.time()
-            text = await page.evaluate(
-                """async (url) => {
-                    const r = await fetch(url, {
-                        credentials: 'include',
-                        headers: {
-                            'Accept': '*/*',
-                            'Accept-Language': 'zh-CN,zh;q=0.9'
-                        }
-                    });
-                    return await r.text();
-                }""",
-                url,
-            )
+            text = None
+
+            try:
+                # 3. 执行 JS Fetch
+                text = await page.evaluate(
+                    """async (url) => {
+                        const r = await fetch(url, {
+                            credentials: 'include',
+                            headers: {
+                                'Accept': '*/*',
+                                'Accept-Language': 'zh-CN,zh;q=0.9'
+                            }
+                        });
+                        return await r.text();
+                    }""",
+                    url,
+                )
+
+            # 4. 捕获 Playwright 特定错误
+            except PlaywrightError as e:
+                err_msg = str(e)
+                # 核心修复：如果上下文被销毁，或者页面崩溃，则重新加载页面
+                if "Execution context was destroyed" in err_msg or "Target closed" in err_msg:
+                    trace.warning(f"Page context lost (Attempt {attempt}): {err_msg}. Reloading page...")
+                    try:
+                        # 尝试刷新页面来恢复环境
+                        await page.reload(wait_until="domcontentloaded", timeout=10000)
+                        trace.info("Page reloaded successfully. Retrying fetch...")
+                        continue  # 跳过本次循环的剩余部分，直接进入下一次 attempt
+                    except Exception as reload_e:
+                        trace.error(f"Failed to reload page: {reload_e}")
+                        # 如果刷新都失败了，可能需要抛出异常或尝试下一个页面(这里选择继续抛出让上层处理)
+
+                # 如果是其他错误，记录并继续尝试
+                trace.warning(f"Playwright error on attempt {attempt}: {e}")
+
+            except Exception as e:
+                trace.warning(f"General error on attempt {attempt}: {e}")
+
+            # 5. 如果没有拿到 text (报错了)，则进入下一次重试
+            if text is None:
+                continue
 
             cost = int((time.time() - start) * 1000)
             trace.info(f"Attempt {attempt} done cost={cost}ms size={len(text)}")
