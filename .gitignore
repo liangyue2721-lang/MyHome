@@ -50,3 +50,4 @@ nbdist/
 /python/logs
 /node_modules
 config/application.yml
+*.yml
