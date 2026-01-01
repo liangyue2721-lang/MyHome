@@ -43,7 +43,7 @@ import org.springframework.web.multipart.MultipartFile;
 /**
  * 微信支付宝流水Controller
  *
- * @author è´°æ
+ * @author è´°æŸ’
  * @date 2025-05-27
  */
 @RestController
@@ -161,42 +161,18 @@ public class TransactionRecordsController extends BaseController {
 
             // 将上传的文件保存到指定路径
             multipartFile.transferTo(savedFile);
-            // 过滤和转换解析后的数据
-            List<TransactionRecords> records = new ArrayList<>();
-            if (savedFile.getName().startsWith("微信")) {
-                // 处理保存的文件，解析 CSV 数据
-                List<WeChatTransaction> weChatTransactions = CSVUtil.easyExcelParseWeChatCsv(savedFile);
 
-                if (weChatTransactions.size() > 0) {
-                    // 过滤和转换解析后的数据
-                    List<TransactionRecords> recordWeChat = weChatTransactions.stream()
-                            .filter(weChatTransaction -> weChatTransaction.getProduct() != null)
-                            .map(this::convertToWeChatTransactionRecord)
-                            .collect(Collectors.toList());
-                    records.addAll(recordWeChat);
-
-                }
-            }
-            if (savedFile.getName().startsWith("alipay")) {
-                // 处理保存的文件，解析 CSV 数据
-                List<AliPayment> aliPayTransactions = CSVUtil.easyExcelParseAlipayCsv(savedFile);
-                if (aliPayTransactions.size() > 0) {
-                    // 过滤和转换解析后的数据
-                    List<TransactionRecords> recordWeChat = aliPayTransactions.stream()
-                            .filter(aliPayTransaction -> aliPayTransaction.getTransactionType() != null) // 过滤掉产品为空的记录
-                            .map(this::convertToAliPayTransactionRecord) // 转换为 TransactionRecords 对象
-                            .collect(Collectors.toList()); // 收集到列表中
-                    records.addAll(recordWeChat);
-
-                }
-
-            }
-
+            // 使用统一的智能解析器
+            // 不再依赖文件名判断，直接解析所有内容
+            List<TransactionRecords> records = CSVUtil.parse(savedFile);
 
             // 如果转换后的记录不为空，进行后续处理
             if (!records.isEmpty()) {
                 // transactionRecordsService.insertTransactionRecordsBatch(records); // 使用批量插入方法
                 for (TransactionRecords record : records) {
+                    if (record.getProduct() == null) record.setProduct("");
+                    if (record.getTransactionType() == null) record.setTransactionType("");
+
                     if (record.getProduct().contains("一卡通充值") || record.getProduct().contains("12306消费") || record.getTransactionType().contains("滴滴") || record.getTransactionType().contains("中铁")) {
                         record.setProductType("交通出行");
                     }
@@ -233,132 +209,6 @@ public class TransactionRecordsController extends BaseController {
                 // savedFile.delete(); // 仅在必要时删除
             }
         }
-    }
-
-    /**
-     * 将 WeChatTransaction 转换为 TransactionRecords 的方法。
-     *
-     * @param weChatTransaction 待转换的 WeChatTransaction 对象
-     * @return 转换后的 TransactionRecords 对象
-     */
-    private TransactionRecords convertToWeChatTransactionRecord(WeChatTransaction weChatTransaction) {
-        // 创建新的 TransactionRecords 对象
-        TransactionRecords transactionRecords = new TransactionRecords();
-
-        // 设置交易时间，注意需要解析字符串为 Date
-        if (weChatTransaction.getTransactionTime() != null) {
-            try {
-                // 假设交易时间是字符串格式，需要转换为 Date 类型
-                SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
-                Date date = dateFormat.parse(weChatTransaction.getTransactionTime());
-                transactionRecords.setTransactionTime(date);
-            } catch (ParseException e) {
-                e.printStackTrace(); // 处理解析异常
-            }
-        }
-
-        // 设置其他字段
-        transactionRecords.setTransactionType(weChatTransaction.getTransactionType());
-        transactionRecords.setCounterparty(weChatTransaction.getCounterparty());
-        transactionRecords.setProduct(weChatTransaction.getProduct());
-        transactionRecords.setInOut(weChatTransaction.getInOut());
-
-        // 金额转换，假设 WeChatTransaction 的金额是字符串，需转换为 BigDecimal
-        String amtStr = (weChatTransaction != null) ? weChatTransaction.getAmount() : null;
-        if (weChatTransaction.getAmount() != null) {
-            BigDecimal amount;
-            if (amtStr == null || amtStr.trim().isEmpty()) {
-                amount = BigDecimal.ZERO;
-            } else {
-                // 移除所有非数字、非-、非.字符，例如 ￥、¥、逗号、空格等
-                String cleaned = amtStr.trim().replaceAll("[^0-9\\.-]", "");
-                if (cleaned.isEmpty()) {
-                    amount = BigDecimal.ZERO;
-                } else {
-                    try {
-                        amount = new BigDecimal(cleaned).setScale(6, RoundingMode.HALF_UP);
-                    } catch (NumberFormatException ex) {
-                        amount = BigDecimal.ZERO;
-                    }
-                }
-            }
-
-            transactionRecords.setAmount(amount);
-//            transactionRecords.setAmount(new BigDecimal(weChatTransaction.getAmount().replace("¥", "")));
-        }
-
-        transactionRecords.setPaymentMethod(weChatTransaction.getPaymentMethod());
-        transactionRecords.setTransactionStatus(weChatTransaction.getTransactionStatus());
-        transactionRecords.setTransactionId(weChatTransaction.getTransactionId());
-        transactionRecords.setMerchantId(weChatTransaction.getMerchantId());
-        transactionRecords.setNote(weChatTransaction.getNote());
-        transactionRecords.setSource("微信");
-        transactionRecords.setProductType(weChatTransaction.getTransactionType());
-        // 返回转换后的 TransactionRecords 对象
-        return transactionRecords;
-    }
-
-    /**
-     * 将 AliPayment 转换为 TransactionRecords 的方法。
-     *
-     * @param aliPayment 待转换的 WeChatTransaction 对象
-     * @return 转换后的 TransactionRecords 对象
-     */
-    private TransactionRecords convertToAliPayTransactionRecord(AliPayment aliPayment) {
-        // 创建新的 TransactionRecords 对象
-        TransactionRecords transactionRecords = new TransactionRecords();
-
-        // 设置交易时间，注意需要解析字符串为 Date
-        if (aliPayment.getTransactionTime() != null) {
-            try {
-                // 假设交易时间是字符串格式，需要转换为 Date 类型
-                SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
-                Date date = dateFormat.parse(aliPayment.getTransactionTime());
-                transactionRecords.setTransactionTime(date);
-            } catch (ParseException e) {
-                e.printStackTrace(); // 处理解析异常
-            }
-        }
-
-        // 设置其他字段
-        transactionRecords.setTransactionType(aliPayment.getTransactionType());
-        transactionRecords.setCounterparty(aliPayment.getCounterparty());
-        transactionRecords.setProduct(aliPayment.getProductDescription());
-        transactionRecords.setInOut(aliPayment.getInOut());
-
-        // 金额转换，假设 WeChatTransaction 的金额是字符串，需转换为 BigDecimal
-        String amtStr = (aliPayment != null) ? aliPayment.getAmount() : null;
-        if (aliPayment.getAmount() != null) {
-            BigDecimal amount;
-            if (amtStr == null || amtStr.trim().isEmpty()) {
-                amount = BigDecimal.ZERO;
-            } else {
-                // 移除所有非数字、非-、非.字符，例如 ￥、¥、逗号、空格等
-                String cleaned = amtStr.trim().replaceAll("[^0-9\\.-]", "");
-                if (cleaned.isEmpty()) {
-                    amount = BigDecimal.ZERO;
-                } else {
-                    try {
-                        amount = new BigDecimal(cleaned).setScale(6, RoundingMode.HALF_UP);
-                    } catch (NumberFormatException ex) {
-                        amount = BigDecimal.ZERO;
-                    }
-                }
-            }
-            transactionRecords.setAmount(amount);
-//            transactionRecords.setAmount(new BigDecimal(aliPayment.getAmount().replace("¥", "")));
-        }
-
-        transactionRecords.setPaymentMethod(aliPayment.getPaymentMethod());
-        transactionRecords.setCounterpartyAccount(aliPayment.getCounterpartyAccount());
-        transactionRecords.setTransactionStatus(aliPayment.getTransactionStatus());
-        transactionRecords.setTransactionId(aliPayment.getTransactionOrderId());
-        transactionRecords.setMerchantId(aliPayment.getMerchantOrderId());
-        transactionRecords.setNote(aliPayment.getNote());
-        transactionRecords.setSource("支付宝");
-        transactionRecords.setProductType(aliPayment.getTransactionType());
-        // 返回转换后的 TransactionRecords 对象
-        return transactionRecords;
     }
 
 }
