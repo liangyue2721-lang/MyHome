@@ -6,7 +6,7 @@ import com.make.quartz.domain.StockRefreshTask;
 import com.make.quartz.domain.StockTaskStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -26,6 +26,7 @@ import java.util.stream.Collectors;
  * 1.  Using independent keys per task: stock:refresh:status:{stockCode}:{traceId}
  * 2.  Using ZSET index for retrieval: stock:refresh:status:index
  * 3.  Lazy cleanup on read
+ * 4.  Switched to StringRedisTemplate to fix atomic integer operations and avoid double-JSON-encoding.
  */
 @Service
 public class StockTaskQueueService {
@@ -40,7 +41,7 @@ public class StockTaskQueueService {
     private static final String RECOVERY_LOCK_PREFIX = "stock:batch:recovery:"; // + traceId
 
     @Resource
-    private RedisTemplate<String, String> redisTemplate;
+    private StringRedisTemplate redisTemplate;
 
     /**
      * 初始化批次计数器
@@ -49,6 +50,7 @@ public class StockTaskQueueService {
         if (StringUtils.isEmpty(traceId) || total <= 0) return;
         try {
             String key = BATCH_COUNT_PREFIX + traceId;
+            // StringRedisTemplate stores "100", not "\"100\""
             redisTemplate.opsForValue().set(key, String.valueOf(total), 60, TimeUnit.MINUTES);
         } catch (Exception e) {
             log.error("Failed to init batch count: {}", traceId, e);
@@ -67,9 +69,10 @@ public class StockTaskQueueService {
             }
 
             // 2) 非整数：自愈（删掉脏数据），避免一直报错
-            // 只接受可选负号 + 数字
+            // Handle legacy double-quoted values (e.g., "\"100\"") by deleting them
+            // StringRedisTemplate reads raw bytes. "\"100\"" does not match "-?\\d+".
             if (!current.matches("-?\\d+")) {
-                log.error("Batch count key is not integer. key={}, value={}", key, current);
+                log.error("Batch count key is not integer (likely legacy format). key={}, value={}", key, current);
                 redisTemplate.delete(key);
                 return -1;
             }
@@ -133,7 +136,9 @@ public class StockTaskQueueService {
             if (StringUtils.isEmpty(json)) {
                 return null;
             }
-            return JSON.parseObject(json, StockRefreshTask.class);
+            // Handle legacy double-quoted JSON
+            String cleanJson = unquoteJSON(json);
+            return JSON.parseObject(cleanJson, StockRefreshTask.class);
         } catch (Exception e) {
             log.error("Failed to poll stock task", e);
             return null;
@@ -191,10 +196,12 @@ public class StockTaskQueueService {
             }
 
             // 1. Set Key with TTL
+            // StringRedisTemplate writes raw JSON string
             redisTemplate.opsForValue().set(key, JSON.toJSONString(status), ttlSeconds, TimeUnit.SECONDS);
 
             // 2. Add to Index (Member: stockCode:traceId, Score: lastUpdateTime)
             String member = getIndexMember(stockCode, traceId);
+            // ZSet members are strings, compatible with StringRedisTemplate
             redisTemplate.opsForZSet().add(STATUS_INDEX_KEY, member, now);
 
         } catch (Exception e) {
@@ -273,11 +280,6 @@ public class StockTaskQueueService {
 
             for (String member : memberList) {
                 // member format: stockCode:traceId
-                // key format: stock:refresh:status:stockCode:traceId
-                // We can just replace the first colon? No, constructing carefully is safer.
-                // Assuming member is stockCode:traceId, we can prepend prefix.
-                // But stockCode *might* contain colons? Unlikely for stocks.
-                // Let's rely on consistent construction.
                 keys.add(STATUS_KEY_PREFIX + member);
             }
 
@@ -293,7 +295,9 @@ public class StockTaskQueueService {
                         String missingMember = memberList.get(i);
                         redisTemplate.opsForZSet().remove(STATUS_INDEX_KEY, missingMember);
                     } else {
-                        list.add(JSON.parseObject(json, StockTaskStatus.class));
+                        // Handle legacy double-quoted JSON
+                        String cleanJson = unquoteJSON(json);
+                        list.add(JSON.parseObject(cleanJson, StockTaskStatus.class));
                     }
                 }
             }
@@ -309,5 +313,22 @@ public class StockTaskQueueService {
 
     private String getIndexMember(String stockCode, String traceId) {
         return stockCode + ":" + traceId;
+    }
+
+    /**
+     * Unquote JSON string if it's double-quoted (legacy format from FastJson2JsonRedisSerializer).
+     * e.g., "\"{\"a\":1}\"" -> "{\"a\":1}"
+     */
+    private String unquoteJSON(String json) {
+        if (json != null && json.length() > 1 && json.startsWith("\"") && json.endsWith("\"")) {
+            try {
+                // Attempt to parse as String to unquote
+                return JSON.parseObject(json, String.class);
+            } catch (Exception e) {
+                // If parsing fails (not a valid JSON string), return original
+                return json;
+            }
+        }
+        return json;
     }
 }
