@@ -41,7 +41,7 @@ public class StockTaskQueueService {
     private static final String RECOVERY_LOCK_PREFIX = "stock:batch:recovery:"; // + traceId
 
     @Resource
-    private StringRedisTemplate redisTemplate;
+    private StringRedisTemplate stringRedisTemplate;
 
     /**
      * 初始化批次计数器
@@ -51,7 +51,7 @@ public class StockTaskQueueService {
         try {
             String key = BATCH_COUNT_PREFIX + traceId;
             // StringRedisTemplate stores "100", not "\"100\""
-            redisTemplate.opsForValue().set(key, String.valueOf(total), 60, TimeUnit.MINUTES);
+            stringRedisTemplate.opsForValue().set(key, String.valueOf(total), 60, TimeUnit.MINUTES);
         } catch (Exception e) {
             log.error("Failed to init batch count: {}", traceId, e);
         }
@@ -61,7 +61,7 @@ public class StockTaskQueueService {
         if (StringUtils.isEmpty(traceId)) return -1;
         String key = BATCH_COUNT_PREFIX + traceId;
         try {
-            String current = redisTemplate.opsForValue().get(key);
+            String current = stringRedisTemplate.opsForValue().get(key);
 
             // 1) key 不存在：你可以选择返回 -1，或认为剩余 0
             if (StringUtils.isEmpty(current)) {
@@ -73,19 +73,19 @@ public class StockTaskQueueService {
             // StringRedisTemplate reads raw bytes. "\"100\"" does not match "-?\\d+".
             if (!current.matches("-?\\d+")) {
                 log.error("Batch count key is not integer (likely legacy format). key={}, value={}", key, current);
-                redisTemplate.delete(key);
+                stringRedisTemplate.delete(key);
                 return -1;
             }
 
-            Long remaining = redisTemplate.opsForValue().decrement(key);
+            Long remaining = stringRedisTemplate.opsForValue().decrement(key);
             if (remaining == null) return -1;
 
             // Renew TTL on every decrement to prevent expiration during slow batches
-            redisTemplate.expire(key, 60, TimeUnit.MINUTES);
+            stringRedisTemplate.expire(key, 60, TimeUnit.MINUTES);
 
             // 3) 可选：到 0 或以下就清理 key，避免继续递减到负数
             if (remaining <= 0) {
-                redisTemplate.delete(key);
+                stringRedisTemplate.delete(key);
             }
             return remaining;
         } catch (Exception e) {
@@ -99,7 +99,7 @@ public class StockTaskQueueService {
      */
     public boolean tryLockRecovery(String traceId) {
         String key = RECOVERY_LOCK_PREFIX + traceId;
-        Boolean success = redisTemplate.opsForValue().setIfAbsent(key, "LOCKED", 30, TimeUnit.SECONDS);
+        Boolean success = stringRedisTemplate.opsForValue().setIfAbsent(key, "LOCKED", 30, TimeUnit.SECONDS);
         return success != null && success;
     }
 
@@ -111,7 +111,7 @@ public class StockTaskQueueService {
         if (task == null) return;
         try {
             String json = JSON.toJSONString(task);
-            redisTemplate.opsForList().leftPush(QUEUE_KEY, json);
+            stringRedisTemplate.opsForList().leftPush(QUEUE_KEY, json);
 
             // Set WAITING status (Long TTL safety net)
             StockTaskStatus status = new StockTaskStatus();
@@ -132,7 +132,7 @@ public class StockTaskQueueService {
      */
     public StockRefreshTask poll() {
         try {
-            String json = redisTemplate.opsForList().rightPop(QUEUE_KEY);
+            String json = stringRedisTemplate.opsForList().rightPop(QUEUE_KEY);
             if (StringUtils.isEmpty(json)) {
                 return null;
             }
@@ -155,7 +155,7 @@ public class StockTaskQueueService {
     public boolean tryLockStock(String stockCode, String nodeId) {
         String key = LOCK_PREFIX + stockCode;
         // TTL 60s 防止死锁
-        Boolean success = redisTemplate.opsForValue().setIfAbsent(key, nodeId, 60, TimeUnit.SECONDS);
+        Boolean success = stringRedisTemplate.opsForValue().setIfAbsent(key, nodeId, 60, TimeUnit.SECONDS);
         return success != null && success;
     }
 
@@ -165,9 +165,9 @@ public class StockTaskQueueService {
     public void releaseLock(String stockCode, String nodeId) {
         String key = LOCK_PREFIX + stockCode;
         try {
-            String owner = redisTemplate.opsForValue().get(key);
+            String owner = stringRedisTemplate.opsForValue().get(key);
             if (nodeId.equals(owner)) {
-                redisTemplate.delete(key);
+                stringRedisTemplate.delete(key);
             }
         } catch (Exception e) {
             log.warn("Failed to release lock for {}", stockCode, e);
@@ -197,12 +197,12 @@ public class StockTaskQueueService {
 
             // 1. Set Key with TTL
             // StringRedisTemplate writes raw JSON string
-            redisTemplate.opsForValue().set(key, JSON.toJSONString(status), ttlSeconds, TimeUnit.SECONDS);
+            stringRedisTemplate.opsForValue().set(key, JSON.toJSONString(status), ttlSeconds, TimeUnit.SECONDS);
 
             // 2. Add to Index (Member: stockCode:traceId, Score: lastUpdateTime)
             String member = getIndexMember(stockCode, traceId);
             // ZSet members are strings, compatible with StringRedisTemplate
-            redisTemplate.opsForZSet().add(STATUS_INDEX_KEY, member, now);
+            stringRedisTemplate.opsForZSet().add(STATUS_INDEX_KEY, member, now);
 
         } catch (Exception e) {
             log.error("Failed to update status for {}", stockCode, e);
@@ -218,8 +218,8 @@ public class StockTaskQueueService {
             if (traceId != null) {
                 String key = getStatusKey(stockCode, traceId);
                 String member = getIndexMember(stockCode, traceId);
-                redisTemplate.delete(key);
-                redisTemplate.opsForZSet().remove(STATUS_INDEX_KEY, member);
+                stringRedisTemplate.delete(key);
+                stringRedisTemplate.opsForZSet().remove(STATUS_INDEX_KEY, member);
             }
         } catch (Exception e) {
             log.error("Failed to delete status for {}", stockCode, e);
@@ -268,7 +268,7 @@ public class StockTaskQueueService {
         List<StockTaskStatus> list = new ArrayList<>();
         try {
             // 1. Get all members from ZSet (ordered by time)
-            Set<String> members = redisTemplate.opsForZSet().range(STATUS_INDEX_KEY, 0, -1);
+            Set<String> members = stringRedisTemplate.opsForZSet().range(STATUS_INDEX_KEY, 0, -1);
             if (members == null || members.isEmpty()) {
                 return list;
             }
@@ -284,7 +284,7 @@ public class StockTaskQueueService {
             }
 
             // 3. MGET
-            List<String> values = redisTemplate.opsForValue().multiGet(keys);
+            List<String> values = stringRedisTemplate.opsForValue().multiGet(keys);
 
             // 4. Process Results & Lazy Cleanup
             if (values != null) {
@@ -293,7 +293,7 @@ public class StockTaskQueueService {
                     if (StringUtils.isEmpty(json)) {
                         // Key expired or missing -> Clean from ZSet
                         String missingMember = memberList.get(i);
-                        redisTemplate.opsForZSet().remove(STATUS_INDEX_KEY, missingMember);
+                        stringRedisTemplate.opsForZSet().remove(STATUS_INDEX_KEY, missingMember);
                     } else {
                         // Handle legacy double-quoted JSON
                         String cleanJson = unquoteJSON(json);
