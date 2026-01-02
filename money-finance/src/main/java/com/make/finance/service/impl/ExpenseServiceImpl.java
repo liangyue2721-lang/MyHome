@@ -239,7 +239,6 @@ public class ExpenseServiceImpl implements IExpenseService {
 
             Expense queryExpense = new Expense();
             queryExpense.setUserId(userId);
-            queryExpense.setCategory("中国招商银行");
             queryExpense.setExpenseDate(expenseDate);
 
             List<Expense> existList =
@@ -254,6 +253,7 @@ public class ExpenseServiceImpl implements IExpenseService {
                 // 新增
                 Expense expense = new Expense();
                 expense.setUserId(userId);
+                expense.setMerchant("微信/支付宝");
                 expense.setCategory("微信/支付宝");
                 expense.setAmount(totalAmount);
                 expense.setExpenseDate(expenseDate);
