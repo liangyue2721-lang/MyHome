@@ -1,17 +1,10 @@
 <template>
   <div class="app-container home">
-    <el-card shadow="never" class="page-header">
-      <div class="header-content">
-        <h2 class="page-title">儀表板</h2>
-      </div>
-    </el-card>
-
     <el-row :gutter="20">
       <el-col :span="24">
         <el-card class="chart-card" shadow="hover">
           <div slot="header" class="chart-header">
-            <span>📈 利潤趨勢分析</span>
-            <el-tag size="small" effect="plain">歷史數據</el-tag>
+            <span>📈 利润趋势分析</span>
           </div>
           <div id="profitLineChart" class="chart-box"></div>
         </el-card>
@@ -22,7 +15,7 @@
       <el-col :xs="24" :sm="24" :lg="12">
         <el-card class="chart-card" shadow="hover">
           <div slot="header" class="chart-header">
-            <span>💳 近一年還貸對比</span>
+            <span>💳 近一年还贷对比</span>
           </div>
           <div id="generateMonthlyLoanRepaymentBarChart" class="chart-box"></div>
         </el-card>
@@ -30,7 +23,7 @@
       <el-col :xs="24" :sm="24" :lg="12">
         <el-card class="chart-card" shadow="hover">
           <div slot="header" class="chart-header">
-            <span>💰 月度收支對比</span>
+            <span>💰 月度收支对比</span>
           </div>
           <div id="monthlyIncomeExpenseBarChart" class="chart-box"></div>
         </el-card>
@@ -41,14 +34,14 @@
       <el-col :xs="24" :lg="12">
         <el-card class="chart-card" shadow="hover">
           <div slot="header" class="chart-header">
-            <span>📊 交易類型分布 (微信/支付寶)</span>
+            <span>📊 交易类型分布 (微信/支付宝)</span>
           </div>
           <div id="clientPieChart" class="chart-box"></div>
         </el-card>
 
         <el-card class="chart-card" shadow="hover">
           <div slot="header" class="chart-header">
-            <span>💸 每月支出總額趨勢</span>
+            <span>💸 每月支出总额趋势</span>
           </div>
           <div id="monthlyConsumptionColumnChart" class="chart-box"></div>
         </el-card>
@@ -57,7 +50,7 @@
       <el-col :xs="24" :lg="12">
         <el-card class="chart-card" shadow="hover">
           <div slot="header" class="chart-header">
-            <span>🏦 貸款償還進度 (本金+利息)</span>
+            <span>🏦 贷款偿还进度 (本金+利息)</span>
           </div>
           <div id="totalRepaymentPieChart" class="chart-box"></div>
         </el-card>
@@ -85,21 +78,22 @@ import * as echarts from 'echarts';
 import 'echarts-liquidfill';
 // 引入 API
 import {
-  getTotalAmountChart,                // 每月支出總額趨勢
-  getMonthlyIncomeBarChart,           // 月度收支對比
-  getTotalRepaymentPieChart,          // 貸款償還進度
-  getWechatAlipayData,                // 交易類型分布
-  getYearIncomeExpenseRatio,          // 年度收支比例 (水滴圖)
-  getProfitLineData,                  // 利潤趨勢分析
-  renderLoanRepaymentComparisonChart  // 近一年還貸對比
+  getTotalAmountChart,                // 每月支出总额趋势
+  getMonthlyIncomeBarChart,           // 月度收支对比
+  getTotalRepaymentPieChart,          // 贷款偿还进度
+  getWechatAlipayData,                // 交易类型分布
+  getYearIncomeExpenseRatio,          // 年度收支比例 (水滴图)
+  getProfitLineData,                  // 利润趋势分析
+  renderLoanRepaymentComparisonChart  // 近一年还贷对比
 } from "@/api/finance/pieChart";
+
+// 定义宋体字体栈
+const FONT_FAMILY = '"SimSun", "Songti SC", "STSong", serif';
 
 export default {
   name: 'Charts',
   data() {
     return {
-      // 已移除 selectedUserId
-      // 僅保留圖表實例對象
       charts: {
         transactionType: null,
         monthlyConsumption: null,
@@ -123,7 +117,7 @@ export default {
     this.disposeCharts();
   },
   methods: {
-    // --- 基礎圖表管理 ---
+    // --- 基础图表管理 ---
     disposeCharts() {
       Object.values(this.charts).forEach(chart => chart && chart.dispose());
     },
@@ -138,35 +132,32 @@ export default {
       return this.charts[key];
     },
 
-    // --- 加載所有圖表 ---
+    // --- 加载所有图表 ---
     loadAllCharts() {
-      this.loadPieChart('transactionType', 'clientPieChart', getWechatAlipayData, '交易類型', '個');
+      this.loadPieChart('transactionType', 'clientPieChart', getWechatAlipayData, '交易类型', '个');
       this.loadBarChart('monthlyConsumption', 'monthlyConsumptionColumnChart', getTotalAmountChart, '每月支出', '元');
 
-      // 混合圖表：收支對比
-      this.loadMixedChart('monthlyIncomeExpense', 'monthlyIncomeExpenseBarChart', getMonthlyIncomeBarChart, '每月收支', '元', ['收入', '支出', '結余']);
+      // 混合图表：收支对比
+      this.loadMixedChart('monthlyIncomeExpense', 'monthlyIncomeExpenseBarChart', getMonthlyIncomeBarChart, '每月收支', '元', ['收入', '支出', '结余']);
 
-      // 混合圖表：還貸對比
-      this.loadMixedChart('generateMonthlyLoanRepayment', 'generateMonthlyLoanRepaymentBarChart', renderLoanRepaymentComparisonChart, '還貸本息', '元', ['貸款償還']);
+      // 混合图表：还贷对比
+      this.loadMixedChart('generateMonthlyLoanRepayment', 'generateMonthlyLoanRepaymentBarChart', renderLoanRepaymentComparisonChart, '还贷本息', '元', ['贷款偿还']);
 
       this.loadHeartProgressChart('totalRepayment', 'totalRepaymentPieChart', getTotalRepaymentPieChart);
 
       this.loadLiquidChart('expenseLiquid', 'expenseLiquidChart', getYearIncomeExpenseRatio, '支出');
-      this.loadLiquidChart('incomeLiquid', 'incomeLiquidChart', getYearIncomeExpenseRatio, '結余');
+      this.loadLiquidChart('incomeLiquid', 'incomeLiquidChart', getYearIncomeExpenseRatio, '结余');
 
       this.loadLineChart('profitLine', 'profitLineChart', getProfitLineData);
     },
 
     // ------------------------------------------
-    // 1. 餅圖/環形圖渲染器
+    // 1. 饼图/环形图渲染器
     // ------------------------------------------
     loadPieChart(key, domId, apiFn, title, unit) {
-      // 無參調用
       apiFn().then(data => {
         const chart = this.initChart(key, domId);
         if (!chart) return;
-
-        // 安全校驗
         if (!data || !Array.isArray(data)) return;
 
         const seriesData = data.map((i) => ({
@@ -175,19 +166,21 @@ export default {
         }));
 
         chart.setOption({
+          textStyle: {fontFamily: FONT_FAMILY}, // 全局字体
           title: {show: false},
           tooltip: {
             trigger: 'item',
             backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            textStyle: {fontFamily: FONT_FAMILY},
             formatter: (params) => {
               return `
-                <div style="font-size:14px; font-weight:bold; margin-bottom:5px;">${params.name}</div>
-                <div style="display:flex; justify-content:space-between; min-width:120px;">
-                  <span>金額:</span>
+                <div style="font-family:${FONT_FAMILY}; font-size:14px; font-weight:bold; margin-bottom:5px;">${params.name}</div>
+                <div style="font-family:${FONT_FAMILY}; display:flex; justify-content:space-between; min-width:120px;">
+                  <span>金额:</span>
                   <span style="font-weight:bold; color:${params.color}">${params.value} ${unit}</span>
                 </div>
-                <div style="display:flex; justify-content:space-between; margin-top:3px;">
-                  <span>佔比:</span>
+                <div style="font-family:${FONT_FAMILY}; display:flex; justify-content:space-between; margin-top:3px;">
+                  <span>占比:</span>
                   <span>${params.percent}%</span>
                 </div>
               `;
@@ -197,7 +190,8 @@ export default {
             type: 'scroll',
             orient: 'horizontal',
             bottom: 0,
-            itemWidth: 10, itemHeight: 10
+            itemWidth: 10, itemHeight: 10,
+            textStyle: {fontFamily: FONT_FAMILY}
           },
           series: [{
             name: title,
@@ -217,7 +211,8 @@ export default {
                 fontSize: 18,
                 fontWeight: 'bold',
                 color: '#333',
-                formatter: `{b}\n{c} ${unit}`
+                formatter: `{b}\n{c} ${unit}`,
+                fontFamily: FONT_FAMILY
               }
             },
             label: {show: false, position: 'center'},
@@ -228,10 +223,9 @@ export default {
     },
 
     // ------------------------------------------
-    // 2. 柱狀圖渲染器
+    // 2. 柱状图渲染器
     // ------------------------------------------
     loadBarChart(key, domId, apiFn, title, unit) {
-      // 無參調用
       apiFn().then(data => {
         const chart = this.initChart(key, domId);
         if (!chart) return;
@@ -243,16 +237,18 @@ export default {
         }, {offset: 1, color: end}]);
 
         chart.setOption({
+          textStyle: {fontFamily: FONT_FAMILY},
           grid: {top: 40, left: '3%', right: '4%', bottom: '10%', containLabel: true},
           tooltip: {
             trigger: 'axis',
             backgroundColor: 'rgba(255,255,255,0.95)',
+            textStyle: {fontFamily: FONT_FAMILY},
             formatter: (params) => {
-              let html = `<div style="margin-bottom:5px;font-weight:bold;border-bottom:1px solid #eee;padding-bottom:5px;">${params[0].axisValue}</div>`;
+              let html = `<div style="font-family:${FONT_FAMILY}; margin-bottom:5px;font-weight:bold;border-bottom:1px solid #eee;padding-bottom:5px;">${params[0].axisValue}</div>`;
               params.forEach(item => {
                 const color = item.color.colorStops ? item.color.colorStops[0].color : item.color;
                 html += `
-                  <div style="display:flex; align-items:center; justify-content:space-between; margin-top:5px;">
+                  <div style="font-family:${FONT_FAMILY}; display:flex; align-items:center; justify-content:space-between; margin-top:5px;">
                     <span style="display:flex; align-items:center;">
                       <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:5px;"></span>
                       ${item.seriesName}
@@ -267,9 +263,14 @@ export default {
             type: 'category',
             data: data.map(i => i.transactionTime),
             axisTick: {show: false},
-            axisLine: {lineStyle: {color: '#ccc'}}
+            axisLine: {lineStyle: {color: '#ccc'}},
+            axisLabel: {fontFamily: FONT_FAMILY}
           },
-          yAxis: {type: 'value', splitLine: {lineStyle: {type: 'dashed', color: '#eee'}}},
+          yAxis: {
+            type: 'value',
+            splitLine: {lineStyle: {type: 'dashed', color: '#eee'}},
+            axisLabel: {fontFamily: FONT_FAMILY}
+          },
           series: [{
             type: 'bar',
             name: title,
@@ -286,7 +287,8 @@ export default {
                 position: 'top',
                 formatter: `{c} ${unit}`,
                 fontWeight: 'bold',
-                color: '#3AA1FF'
+                color: '#3AA1FF',
+                fontFamily: FONT_FAMILY
               }
             }
           }]
@@ -295,15 +297,13 @@ export default {
     },
 
     // ------------------------------------------
-    // 3. 混合圖表渲染器 (已移除所有入參)
+    // 3. 混合图表渲染器
     // ------------------------------------------
     loadMixedChart(key, domId, apiFn, title, unit, legendData = []) {
-      // 修正：直接調用 apiFn()，不再傳入任何參數
       apiFn().then(data => {
         const chart = this.initChart(key, domId);
         if (!chart) return;
 
-        // 安全校驗
         if (!data || !Array.isArray(data)) {
           console.warn(`Chart [${title}] returned empty or invalid data.`);
           return;
@@ -315,8 +315,8 @@ export default {
         const createSeries = (name, colorStart, colorEnd) => {
           let amountKey = '';
           if (name === '收入') amountKey = 'supportInAmount';
-          else if (name === '支出' || name === '貸款償還') amountKey = 'supportOutAmount';
-          else if (name === '結余') amountKey = 'balanceAmount';
+          else if (name === '支出' || name === '贷款偿还') amountKey = 'supportOutAmount';
+          else if (name === '结余') amountKey = 'balanceAmount';
 
           series.push({
             name: name,
@@ -332,12 +332,19 @@ export default {
             },
             emphasis: {
               focus: 'series',
-              label: {show: true, position: 'top', formatter: `{c}`, color: colorStart, fontWeight: 'bold'}
+              label: {
+                show: true,
+                position: 'top',
+                formatter: `{c}`,
+                color: colorStart,
+                fontWeight: 'bold',
+                fontFamily: FONT_FAMILY
+              }
             }
           });
 
           series.push({
-            name: `${name}趨勢`,
+            name: `${name}趋势`,
             type: 'line',
             data: data.map(i => i[amountKey]),
             smooth: true,
@@ -350,22 +357,24 @@ export default {
         legendData.forEach(name => {
           if (name === '收入') createSeries('收入', '#67C23A', '#95D475');
           else if (name === '支出') createSeries('支出', '#F56C6C', '#FAB6B6');
-          else if (name === '貸款償還') createSeries('貸款償還', '#E6A23C', '#F3D19E');
-          else if (name === '結余') createSeries('結余', '#409EFF', '#79BBFF');
+          else if (name === '贷款偿还') createSeries('贷款偿还', '#E6A23C', '#F3D19E');
+          else if (name === '结余') createSeries('结余', '#409EFF', '#79BBFF');
         });
 
         chart.setOption({
+          textStyle: {fontFamily: FONT_FAMILY},
           tooltip: {
             trigger: 'axis',
             backgroundColor: 'rgba(255,255,255,0.95)',
+            textStyle: {fontFamily: FONT_FAMILY},
             axisPointer: {type: 'shadow'},
             formatter: (params) => {
-              let html = `<div style="font-weight:bold;margin-bottom:5px;">📅 ${params[0].axisValue}</div>`;
+              let html = `<div style="font-family:${FONT_FAMILY}; font-weight:bold;margin-bottom:5px;">📅 ${params[0].axisValue}</div>`;
               params.filter(p => p.seriesType === 'bar').forEach(item => {
                 let color = item.color;
                 if (typeof color === 'object' && color.colorStops) color = color.colorStops[0].color;
                 html += `
-                  <div style="display:flex; justify-content:space-between; margin:3px 0;">
+                  <div style="font-family:${FONT_FAMILY}; display:flex; justify-content:space-between; margin:3px 0;">
                     <span style="margin-right:15px;">
                       <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:5px;"></span>
                       ${item.seriesName}
@@ -376,10 +385,24 @@ export default {
               return html;
             }
           },
-          legend: {data: legendData, top: 0},
+          legend: {
+            data: legendData,
+            top: 0,
+            textStyle: {fontFamily: FONT_FAMILY}
+          },
           grid: {top: 40, left: '3%', right: '4%', bottom: 40, containLabel: true},
-          xAxis: {type: 'category', data: xData, axisLine: {lineStyle: {color: '#ddd'}}},
-          yAxis: {type: 'value', name: unit, splitLine: {lineStyle: {type: 'dashed', color: '#f0f0f0'}}},
+          xAxis: {
+            type: 'category',
+            data: xData,
+            axisLine: {lineStyle: {color: '#ddd'}},
+            axisLabel: {fontFamily: FONT_FAMILY}
+          },
+          yAxis: {
+            type: 'value',
+            name: unit,
+            splitLine: {lineStyle: {type: 'dashed', color: '#f0f0f0'}},
+            axisLabel: {fontFamily: FONT_FAMILY}
+          },
           dataZoom: [{
             type: 'slider',
             height: 15,
@@ -394,10 +417,9 @@ export default {
     },
 
     // ------------------------------------------
-    // 4. 利潤折線圖渲染器
+    // 4. 利润折线图渲染器
     // ------------------------------------------
     loadLineChart(key, domId, apiFn) {
-      // 無參調用
       apiFn().then(data => {
         const chart = this.initChart(key, domId);
         if (!chart) return;
@@ -407,28 +429,40 @@ export default {
         const yData = data.map(item => item.profit);
 
         chart.setOption({
+          textStyle: {fontFamily: FONT_FAMILY},
           backgroundColor: '#fff',
           tooltip: {
             trigger: 'axis',
             backgroundColor: 'rgba(255,255,255,0.95)',
             padding: 12,
-            axisPointer: {type: 'cross', label: {backgroundColor: '#6a7985'}},
+            textStyle: {fontFamily: FONT_FAMILY},
+            axisPointer: {type: 'cross', label: {backgroundColor: '#6a7985', fontFamily: FONT_FAMILY}},
             formatter: (params) => {
               const p = params[0];
               return `
-                <div style="font-weight:bold; margin-bottom:5px;">📅 ${p.axisValue}</div>
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                  <span>${p.marker} 利潤</span>
+                <div style="font-family:${FONT_FAMILY}; font-weight:bold; margin-bottom:5px;">📅 ${p.axisValue}</div>
+                <div style="font-family:${FONT_FAMILY}; display:flex; justify-content:space-between; align-items:center;">
+                  <span>${p.marker} 利润</span>
                   <span style="font-weight:bold; color:#409EFF; margin-left:15px; font-size:16px;">${p.value} 元</span>
                 </div>
               `;
             }
           },
           grid: {left: '3%', right: '4%', bottom: '3%', containLabel: true},
-          xAxis: {type: 'category', boundaryGap: false, data: xData, axisLine: {lineStyle: {color: '#ccc'}}},
-          yAxis: {type: 'value', splitLine: {lineStyle: {color: '#f0f0f0'}}},
+          xAxis: {
+            type: 'category',
+            boundaryGap: false,
+            data: xData,
+            axisLine: {lineStyle: {color: '#ccc'}},
+            axisLabel: {fontFamily: FONT_FAMILY}
+          },
+          yAxis: {
+            type: 'value',
+            splitLine: {lineStyle: {color: '#f0f0f0'}},
+            axisLabel: {fontFamily: FONT_FAMILY}
+          },
           series: [{
-            name: '利潤',
+            name: '利润',
             type: 'line',
             smooth: true,
             symbol: 'circle',
@@ -444,9 +478,10 @@ export default {
             data: yData,
             markPoint: {
               data: [
-                {type: 'max', name: '最高', label: {formatter: '{c}'}},
-                {type: 'min', name: '最低', label: {formatter: '{c}'}}
-              ]
+                {type: 'max', name: '最高', label: {formatter: '{c}', fontFamily: FONT_FAMILY}},
+                {type: 'min', name: '最低', label: {formatter: '{c}', fontFamily: FONT_FAMILY}}
+              ],
+              label: {fontFamily: FONT_FAMILY}
             }
           }]
         });
@@ -454,18 +489,21 @@ export default {
     },
 
     // ------------------------------------------
-    // 5. 水滴圖渲染器
+    // 5. 水滴图渲染器
     // ------------------------------------------
     loadLiquidChart(key, domId, apiFn, categoryLabel) {
-      // 無參調用
       apiFn().then(raw => {
         if (!raw || !Array.isArray(raw)) return;
 
         const chart = this.initChart(key, domId);
         if (!chart) return;
 
+        // 兼容后端返回的繁体或简体 Key
         const keywords = [categoryLabel];
-        if (categoryLabel === '結余') keywords.push('结余');
+        if (categoryLabel === '结余') {
+          keywords.push('结余'); // 简体
+          keywords.push('結余'); // 繁体兼容
+        }
 
         const item = raw.find(i => keywords.some(k => i.category && i.category.includes(k)));
         const amount = item ? Number(item.amount) : 0;
@@ -491,7 +529,8 @@ export default {
               fontSize: 22,
               color: color[0],
               insideColor: '#fff',
-              fontWeight: 'bold'
+              fontWeight: 'bold',
+              fontFamily: FONT_FAMILY
             },
             outline: {
               show: true,
@@ -501,20 +540,20 @@ export default {
           }],
           tooltip: {
             show: true,
-            formatter: () => `${categoryLabel}: <b>${amount} 元</b><br/>總流動: ${total} 元`
+            textStyle: {fontFamily: FONT_FAMILY},
+            formatter: () => `<div style="font-family:${FONT_FAMILY}">${categoryLabel}: <b>${amount} 元</b><br/>总流动: ${total} 元</div>`
           }
         });
-      }).catch(e => console.error("水滴圖加載失敗:", e));
+      }).catch(e => console.error("水滴图加载失败:", e));
     },
 
     // ------------------------------------------
-    // 6. 心形進度條渲染器 (貸款償還進度)
+    // 6. 心形进度条渲染器 (贷款偿还进度)
     // ------------------------------------------
     loadHeartProgressChart(key, domId, apiFn) {
-      // 無參調用
       apiFn().then(rawList => {
         if (!rawList || !Array.isArray(rawList)) {
-          console.warn(`${key} API 返回數據為空或格式錯誤`, rawList);
+          console.warn(`${key} API 返回数据为空或格式错误`, rawList);
           return;
         }
 
@@ -529,6 +568,7 @@ export default {
           return item ? Number(item.amount) : 0;
         };
 
+        // 兼容繁简关键字
         const principalPaid = findVal(['已償還本金', '已偿还本金']);
         const principalUnpaid = findVal(['未還本金', '未还本金']);
         const interestPaid = findVal(['已償還利息', '已偿还利息']);
@@ -542,10 +582,12 @@ export default {
         const bgColor = '#FFE6EB';
 
         chart.setOption({
+          textStyle: {fontFamily: FONT_FAMILY},
           grid: {left: '5%', right: '15%', top: '10%', bottom: '5%', containLabel: true},
           tooltip: {
             trigger: 'item',
             backgroundColor: 'rgba(255,255,255,0.98)',
+            textStyle: {fontFamily: FONT_FAMILY},
             formatter: (params) => {
               const isInterest = params.dataIndex === 0;
               const type = isInterest ? '利息' : '本金';
@@ -553,14 +595,14 @@ export default {
               const unpaid = isInterest ? interestUnpaid : principalUnpaid;
               const percent = isInterest ? iPercent : pPercent;
 
-              if (params.seriesName === '已償還') {
-                return `<div style="font-weight:bold">${type} - 已償還</div>
-                        <div>金額：${paid.toLocaleString()} 元</div>
-                        <div>進度：${percent}%</div>`;
+              if (params.seriesName === '已偿还') {
+                return `<div style="font-family:${FONT_FAMILY}"><span style="font-weight:bold">${type} - 已偿还</span><br/>
+                        金额：${paid.toLocaleString()} 元<br/>
+                        进度：${percent}%</div>`;
               } else {
-                return `<div style="font-weight:bold">${type} - 未償還</div>
-                        <div>金額：${unpaid.toLocaleString()} 元</div>
-                        <div>剩餘：${(100 - percent).toFixed(1)}%</div>`;
+                return `<div style="font-family:${FONT_FAMILY}"><span style="font-weight:bold">${type} - 未偿还</span><br/>
+                        金额：${unpaid.toLocaleString()} 元<br/>
+                        剩余：${(100 - percent).toFixed(1)}%</div>`;
               }
             }
           },
@@ -569,11 +611,11 @@ export default {
             data: ['利息', '本金'],
             axisLine: {show: false},
             axisTick: {show: false},
-            axisLabel: {fontWeight: 'bold', color: '#666', fontSize: 14}
+            axisLabel: {fontWeight: 'bold', color: '#666', fontSize: 14, fontFamily: FONT_FAMILY}
           },
           series: [
             {
-              name: '已償還',
+              name: '已偿还',
               type: 'bar',
               stack: 'total',
               data: [iPercent, pPercent],
@@ -590,11 +632,12 @@ export default {
                 position: 'inside',
                 color: '#fff',
                 fontWeight: 'bold',
+                fontFamily: FONT_FAMILY,
                 formatter: (p) => p.value > 10 ? `${p.value}%` : ''
               }
             },
             {
-              name: '未償還',
+              name: '未偿还',
               type: 'bar',
               stack: 'total',
               data: [100 - iPercent, 100 - pPercent],
@@ -612,23 +655,29 @@ export default {
                 offset: [-5, -2],
                 formatter: '❤️',
                 fontSize: 24,
-                color: '#FF1E4D'
+                color: '#FF1E4D',
+                fontFamily: FONT_FAMILY
               },
               z: 10
             }
           ]
         });
-      }).catch(e => console.error("貸款圖表加載失敗:", e));
+      }).catch(e => console.error("贷款图表加载失败:", e));
     },
   }
 };
 </script>
 
 <style lang="scss" scoped>
-// 定義變量防止 SCSS 編譯報錯
+// 定义变量防止 SCSS 编译报错
 $text-primary: #303133;
+// 定义中文字体：宋体
+$font-family-song: "SimSun", "Songti SC", "STSong", "AR PL New Sung", "NSimSun", serif;
 
 .home {
+  // 应用宋体到整个页面容器
+  font-family: $font-family-song;
+
   .page-header {
     margin-bottom: 20px;
     border: none;
@@ -644,6 +693,7 @@ $text-primary: #303133;
       font-size: 24px;
       font-weight: 600;
       color: $text-primary;
+      font-family: $font-family-song; // 确保标题使用宋体
     }
   }
 
@@ -677,7 +727,13 @@ $text-primary: #303133;
       font-size: 16px;
       font-weight: 600;
       color: $text-primary;
+      font-family: $font-family-song; // 确保卡片标题使用宋体
     }
+  }
+
+  // Element UI 标签内部字体覆盖
+  ::v-deep .el-tag {
+    font-family: $font-family-song;
   }
 
   .chart-box {
