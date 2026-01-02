@@ -68,7 +68,7 @@
             <if test="updatedAt != null ">and updated_at = #{updatedAt}</if>
             <if test="userId != null ">and user_id = #{userId}</if>
         </where>
-        order by  transaction_time desc
+        order by transaction_time desc
     </select>
 
     <select id="selectTransactionRecordsById" parameterType="Long" resultMap="TransactionRecordsResult">
@@ -118,6 +118,50 @@
         </trim>
     </insert>
 
+    <insert id="insertBatch" parameterType="java.util.List">
+        INSERT INTO transaction_records
+        (
+        transaction_time,
+        transaction_type,
+        counterparty,
+        counterparty_account,
+        product,
+        product_type,
+        source,
+        in_out,
+        amount,
+        payment_method,
+        transaction_status,
+        transaction_id,
+        merchant_id,
+        note,
+        created_at,
+        user_id
+        )
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (
+            #{item.transactionTime},
+            #{item.transactionType},
+            #{item.counterparty},
+            #{item.counterpartyAccount},
+            #{item.product},
+            #{item.productType},
+            #{item.source},
+            #{item.inOut},
+            #{item.amount},
+            #{item.paymentMethod},
+            #{item.transactionStatus},
+            #{item.transactionId},
+            #{item.merchantId},
+            #{item.note},
+            #{item.createdAt},
+            #{item.userId}
+            )
+        </foreach>
+    </insert>
+
+
     <update id="updateTransactionRecords" parameterType="TransactionRecords">
         update transaction_records
         <trim prefix="SET" suffixOverrides=",">
@@ -159,7 +203,7 @@
         SELECT product_type AS type, COUNT(*) AS amount
         FROM transaction_records
         WHERE transaction_time >= DATE_SUB(CURDATE(), INTERVAL 1 YEAR)
-        AND user_id = #{userId}
+          AND user_id = #{userId}
         GROUP BY product_type;
     </select>
 
@@ -167,21 +211,21 @@
         SELECT product_type as category, SUM(amount) AS amount
         FROM transaction_records
         WHERE transaction_time >= DATE_SUB(CURDATE(), INTERVAL 1 YEAR)
-        AND user_id = #{userId}
+          AND user_id = #{userId}
         GROUP BY product_type;
     </select>
 
     <select id="getTotalAmountChartData" resultType="java.util.Map">
-        SELECT
-            DATE_FORMAT(transaction_time, '%Y-%m') AS month,  -- 提取年-月格式
+        SELECT DATE_FORMAT(transaction_time, '%Y-%m') AS month,  -- 提取年-月格式
         SUM(amount) AS totalAmount  -- 每月总金额
         FROM
             transaction_records
         WHERE
-            transaction_time >= DATE_SUB(CURDATE(), INTERVAL 1 YEAR)  -- 过去一年的数据
-        AND user_id = #{userId}
+            transaction_time >= DATE_SUB(CURDATE()
+            , INTERVAL 1 YEAR) -- 过去一年的数据
+          AND user_id = #{userId}
         GROUP BY
-            month  -- 按月份分组
+            month -- 按月份分组
         ORDER BY
             month DESC;
 
@@ -191,7 +235,7 @@
         SELECT counterparty as category, SUM(amount) AS amount
         FROM transaction_records
         WHERE transaction_time >= DATE_SUB(CURDATE(), INTERVAL 1 YEAR)
-        AND user_id = #{userId}
+          AND user_id = #{userId}
         GROUP BY counterparty;
     </select>
 

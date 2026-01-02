@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import com.make.finance.mapper.TransactionRecordsMapper;
 import com.make.finance.domain.TransactionRecords;
 import com.make.finance.service.ITransactionRecordsService;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 微信支付宝流水Service业务层处理
@@ -83,5 +84,17 @@ public class TransactionRecordsServiceImpl implements ITransactionRecordsService
     @Override
     public int deleteTransactionRecordsById(Long id) {
         return transactionRecordsMapper.deleteTransactionRecordsById(id);
+    }
+
+    /**
+     * 批量插入交易记录
+     */
+    @Override
+    @Transactional
+    public int insertTransactionRecordsBatch(List<TransactionRecords> records) {
+        if (records == null || records.isEmpty()) {
+            return 0;
+        }
+        return transactionRecordsMapper.insertBatch(records);
     }
 }

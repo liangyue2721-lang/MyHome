@@ -58,4 +58,9 @@ public interface ITransactionRecordsService {
      * @return 结果
      */
     public int deleteTransactionRecordsById(Long id);
+
+    /**
+     * 批量插入交易记录
+     */
+    public int insertTransactionRecordsBatch(List<TransactionRecords> records);
 }

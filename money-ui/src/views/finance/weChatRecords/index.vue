@@ -116,7 +116,7 @@
           :auto-upload="false"
           :show-file-list="false"
           :on-change="handleFileChange"
-          accept=".csv, .xlsx"
+          accept=".xlsx"
         >
           <el-button
             type="success"
