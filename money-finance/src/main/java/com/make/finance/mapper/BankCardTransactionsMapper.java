@@ -67,4 +67,11 @@ public interface BankCardTransactionsMapper {
      */
     public List<BankCardTransactions> selectBankCardTransactionsYearList(@Param("userId") Long userId, @Param("startDate") String startDate, @Param("endDate") String endDate);
 
+    /**
+     * 批量插入银行流水交易记录
+     *
+     * @param transactions 流水记录列表
+     * @return 插入成功的记录数
+     */
+    int batchInsertBankCardTransactions(List<BankCardTransactions> transactions);
 }
