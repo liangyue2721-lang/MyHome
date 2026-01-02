@@ -78,7 +78,8 @@ public class CSVUtil {
             if (detectedType != null) {
                 try {
                     TransactionRecords record = parseRow(rowData, detectedType);
-                    if (record != null) {
+                    // 只有当记录有效且核心字段（如时间）不为空时才添加
+                    if (record != null && record.getTransactionTime() != null) {
                         enrichRecord(record); // 3. 数据清洗与分类
                         records.add(record);
                     }
@@ -129,11 +130,18 @@ public class CSVUtil {
 
         private TransactionRecords parseRow(Map<Integer, String> row, TransactionType type) {
             Integer timeIdx = findColumnIndex("交易时间");
-            if (timeIdx == null || row.get(timeIdx) == null) return null;
+            if (timeIdx == null) return null;
+
+            String timeStr = row.get(timeIdx);
+            if (timeStr == null || timeStr.trim().isEmpty()) return null;
+
+            Date transactionTime = parseDate(timeStr);
+            // 如果时间解析失败，说明这可能不是有效的数据行（例如尾部的统计行）
+            if (transactionTime == null) return null;
 
             TransactionRecords record = new TransactionRecords();
+            record.setTransactionTime(transactionTime);
 
-            record.setTransactionTime(parseDate(row.get(timeIdx)));
             record.setTransactionType(getValue(row, "交易类型", "交易分类"));
             record.setCounterparty(getValue(row, "交易对方", "交易对象"));
             record.setProduct(getValue(row, "商品", "商品说明", "商品名称"));
@@ -210,11 +218,14 @@ public class CSVUtil {
             if (dateStr == null) return null;
             try {
                 dateStr = dateStr.trim();
+                // 支持 "2025-12-31 20:29:36" (标准) 和 "2025-12-22 4:08:34" (单位数时间)
+                // SimpleDateFormat 默认 lenient=true，可以解析单个数字的月/日/时/分
                 if (dateStr.contains(":")) {
                      return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(dateStr);
                 }
                 return new SimpleDateFormat("yyyy-MM-dd").parse(dateStr);
             } catch (Exception e) {
+                // 如果解析失败，返回 null，由调用方决定忽略该行
                 return null;
             }
         }
