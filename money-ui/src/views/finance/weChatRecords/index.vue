@@ -111,8 +111,10 @@
         <el-upload
           ref="upload"
           size="mini"
+          :limit="1"
+          action="#"
+          :auto-upload="false"
           :show-file-list="false"
-          :before-upload="beforeUpload"
           :on-change="handleFileChange"
           accept=".csv, .xlsx"
         >
@@ -121,11 +123,9 @@
             plain
             icon="el-icon-upload"
             size="mini"
-            action=""
             v-hasPermi="['finance:weChatRecords:import']"
           >导入
           </el-button>
-          <input type="file" style="display: none;"/>
         </el-upload>
       </el-col>
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
@@ -532,25 +532,32 @@ export default {
     },
     /** 导入按钮操作 */
     handleFileChange(file, fileList) {
-      // 只在用户选择文件后保存文件并显示确认框
-      this.selectedFile = file.raw; // 获取选中的文件
-      if (this.selectedFile) {
-        // 弹出确认框
-        this.$modal.confirm(`是否确认导入文件 "${this.selectedFile.name}" ?`).then(() => {
-          this.confirmImport(); // 用户确认后调用导入方法
-        }).catch(() => {
-          this.resetUpload(); // 用户取消后重置状态
-        });
-      }
-    },
+      if (file.status === 'ready') {
+        // 验证文件格式
+        const isCsv = file.raw.type === 'text/csv' || file.raw.type === 'application/vnd.ms-excel';
+        const isXlsx = file.raw.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        // 有些系统可能 mime type 为空，可以降级检查后缀名
+        const fileName = file.name.toLowerCase();
+        const isCsvExt = fileName.endsWith('.csv');
+        const isXlsxExt = fileName.endsWith('.xlsx');
 
-    beforeUpload(file) {
-      const isCsv = file.type === 'text/csv' || file.type === 'application/vnd.ms-excel';
-      const isXlsx = file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      if (!isCsv && !isXlsx) {
-        this.$message.error('上传文件只能是 .csv 或 .xlsx 格式!');
+        if (!(isCsv || isXlsx || isCsvExt || isXlsxExt)) {
+          this.$message.error('上传文件只能是 .csv 或 .xlsx 格式!');
+          this.$refs.upload.clearFiles();
+          return;
+        }
+
+        // 只在用户选择文件后保存文件并显示确认框
+        this.selectedFile = file.raw; // 获取选中的文件
+        if (this.selectedFile) {
+          // 弹出确认框
+          this.$modal.confirm(`是否确认导入文件 "${this.selectedFile.name}" ?`).then(() => {
+            this.confirmImport(); // 用户确认后调用导入方法
+          }).catch(() => {
+            this.resetUpload(); // 用户取消后重置状态
+          });
+        }
       }
-      return isCsv || isXlsx;
     },
     confirmImport() {
       if (!this.selectedFile) return; // 确保文件已选中
