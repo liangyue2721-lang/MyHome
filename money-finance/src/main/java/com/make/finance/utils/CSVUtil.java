@@ -4,8 +4,6 @@ import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.event.AnalysisEventListener;
 import com.make.finance.domain.TransactionRecords;
-import com.make.finance.domain.dto.AliPayment;
-import com.make.finance.domain.dto.WeChatTransaction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -113,7 +111,7 @@ public class CSVUtil {
             for (String value : headerRow.values()) {
                 if (value == null) continue;
                 if (value.contains("微信支付单号")) return TransactionType.WECHAT;
-                if (value.contains("支付宝交易号") || value.contains("交易订单号")) return TransactionType.ALIPAY;
+                if (value.contains("支付宝交易号") || value.contains("交易订单号") || value.contains("交易号")) return TransactionType.ALIPAY;
             }
             return TransactionType.WECHAT;
         }
