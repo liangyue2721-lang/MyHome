@@ -61,9 +61,9 @@ export function getAssetStatus() {
 }
 
 // 获取扇形图数据
-export function getAssetRecordColumnChart(userId) {
+export function getAssetRecordColumnChart() {
   return request({
-    url: '/finance/asset_record/getRecordColumnChart/' + userId,
+    url: '/finance/asset_record/getRecordColumnChart',
     method: 'get'
   })
 }

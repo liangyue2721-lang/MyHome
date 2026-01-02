@@ -1,19 +1,8 @@
 <template>
-  <div class="app-container home">
-    <!-- Page Header -->
+  <div class="app-container home song-font">
     <el-card shadow="never" class="page-header">
       <div class="header-content">
         <h2 class="page-title">儀表板</h2>
-        <div class="header-controls">
-          <el-select v-model="selectedUserId" placeholder="選擇用戶" @change="handleUserChange" filterable clearable>
-            <el-option
-              v-for="user in userList"
-              :key="user.id"
-              :label="user.name"
-              :value="user.id"
-            />
-          </el-select>
-        </div>
       </div>
     </el-card>
 
@@ -103,21 +92,16 @@ import {
   getProfitLineData,
   renderLoanRepaymentComparisonChart
 } from "@/api/finance/pieChart";
-import {listUser} from "@/api/stock/dropdown_component";
-import Cookies from 'js-cookie';
 
 export default {
   name: 'Charts',
   data() {
     return {
-      // 莫蘭迪色系 + 鮮亮色系混合
-      colors: [
-        '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc'
-      ],
-      pageSize: 1000,
-      userLoading: false,
-      userList: [],
-      selectedUserId: null,
+      // 查询参数，防止未定义报错
+      queryParams: {
+        userId: null
+      },
+      // 图表实例容器
       charts: {
         transactionType: null,
         monthlyConsumption: null,
@@ -131,8 +115,8 @@ export default {
     };
   },
   mounted() {
-    this.initUserList().then(() => {
-      this.loadAllCharts(this.selectedUserId);
+    this.$nextTick(() => {
+      this.loadAllCharts();
       window.addEventListener('resize', this.resizeCharts);
     });
   },
@@ -141,40 +125,23 @@ export default {
     this.disposeCharts();
   },
   methods: {
-    // --- 基礎方法 ---
-    async initUserList() {
-      this.userLoading = true;
-      try {
-        const response = await listUser({pageSize: this.pageSize});
-        const payload = response.data || response;
-        const rawUsers = Array.isArray(payload.rows) ? payload.rows : Array.isArray(payload) ? payload : [];
-        this.userList = rawUsers.map(u => ({
-          id: u.userId,
-          name: u.userName || u.nickName || `用戶${u.userId}`
-        }));
-        if (this.userList.length) {
-          const savedUsername = Cookies.get('username');
-          const matchedUser = this.userList.find(u => u.name === savedUsername);
-          this.selectedUserId = matchedUser ? matchedUser.id : this.userList[0].id;
-        } else {
-          this.selectedUserId = null;
-        }
-      } catch (err) {
-        console.error('用戶列表加載失敗:', err);
-      } finally {
-        this.userLoading = false;
-      }
-    },
-    handleUserChange() {
-      this.disposeCharts();
-      this.loadAllCharts();
-    },
+    /**
+     * 销毁所有图表实例
+     */
     disposeCharts() {
       Object.values(this.charts).forEach(chart => chart && chart.dispose());
     },
+
+    /**
+     * 调整所有图表大小
+     */
     resizeCharts() {
       Object.values(this.charts).forEach(chart => chart && chart.resize());
     },
+
+    /**
+     * 初始化图表通用方法
+     */
     initChart(key, domId) {
       const dom = document.getElementById(domId);
       if (!dom) return null;
@@ -183,76 +150,65 @@ export default {
       return this.charts[key];
     },
 
-    // --- 加載所有圖表 ---
-    loadAllCharts(selectedUserId) {
-      this.loadPieChart('transactionType', 'clientPieChart', () => getWechatAlipayData(selectedUserId), '交易類型', '個');
-      this.loadBarChart('monthlyConsumption', 'monthlyConsumptionColumnChart', () => getTotalAmountChart(selectedUserId), '每月支出', '元');
+    /**
+     * 加载所有图表
+     */
+    loadAllCharts() {
+      const params = this.queryParams;
 
-      // 混合圖表：收支對比
-      this.loadMixedChart('monthlyIncomeExpense', 'monthlyIncomeExpenseBarChart', () => getMonthlyIncomeBarChart(selectedUserId), '每月收支', '元', ['收入', '支出', '結余']);
+      // 1. 交易类型分布
+      this.loadPieChart('transactionType', 'clientPieChart', () => getWechatAlipayData(params), '交易類型', '個');
 
-      // 混合圖表：還貸對比
-      this.loadMixedChart('generateMonthlyLoanRepayment', 'generateMonthlyLoanRepaymentBarChart', () => renderLoanRepaymentComparisonChart(selectedUserId), '還貸本息', '元', ['貸款償還']);
+      // 2. 每月支出趋势
+      this.loadBarChart('monthlyConsumption', 'monthlyConsumptionColumnChart', () => getTotalAmountChart(params), '每月支出', '元');
 
-      this.loadHeartProgressChart('totalRepayment', 'totalRepaymentPieChart', () => getTotalRepaymentPieChart(selectedUserId));
+      // 3. 月度收支对比
+      this.loadMixedChart('monthlyIncomeExpense', 'monthlyIncomeExpenseBarChart', () => getMonthlyIncomeBarChart(params), '每月收支', '元', ['收入', '支出', '結余']);
 
-      this.loadLiquidChart('expenseLiquid', 'expenseLiquidChart', () => getYearIncomeExpenseRatio(selectedUserId), '支出');
-      this.loadLiquidChart('incomeLiquid', 'incomeLiquidChart', () => getYearIncomeExpenseRatio(selectedUserId), '結余');
+      // 4. 还贷对比
+      this.loadMixedChart('generateMonthlyLoanRepayment', 'generateMonthlyLoanRepaymentBarChart', () => renderLoanRepaymentComparisonChart(params), '還貸本息', '元', ['貸款償還']);
 
-      this.loadLineChart('profitLine', 'profitLineChart', () => getProfitLineData(selectedUserId));
+      // 5. 贷款偿还进度 (心形)
+      this.loadHeartProgressChart('totalRepayment', 'totalRepaymentPieChart', () => getTotalRepaymentPieChart(params));
+
+      // 6. 年度水滴图
+      this.loadLiquidChart('expenseLiquid', 'expenseLiquidChart', () => getYearIncomeExpenseRatio(params), '支出');
+      this.loadLiquidChart('incomeLiquid', 'incomeLiquidChart', () => getYearIncomeExpenseRatio(params), '結余');
+
+      // 7. 利润趋势
+      this.loadLineChart('profitLine', 'profitLineChart', () => getProfitLineData(params));
     },
 
-    // ------------------------------------------
-    // 1. 餅圖/環形圖 (Pie Chart) - 優化 Tooltip 顯示金額
-    // ------------------------------------------
+    // --- 图表渲染逻辑 ---
+
     loadPieChart(key, domId, apiFn, title, unit) {
-      apiFn({userId: this.selectedUserId}).then(data => {
+      apiFn().then(data => {
         const chart = this.initChart(key, domId);
         if (!chart) return;
 
-        const seriesData = data.map((i) => ({
-          name: i.category,
-          value: i.amount,
-        }));
-
+        const seriesData = data.map((i) => ({ name: i.category, value: i.amount }));
         chart.setOption({
-          title: {show: false}, // 使用卡片標題
+          title: { show: false },
           tooltip: {
             trigger: 'item',
             backgroundColor: 'rgba(255, 255, 255, 0.95)',
-            textStyle: {color: '#333'},
-            formatter: (params) => {
-              // 自定義 Tooltip：顯示 名稱、金額(粗體)、佔比
-              return `
+            textStyle: { color: '#333', fontFamily: '"SimSun", serif' },
+            formatter: (params) => `
                 <div style="font-size:14px; font-weight:bold; margin-bottom:5px;">${params.name}</div>
                 <div style="display:flex; justify-content:space-between; min-width:120px;">
-                  <span>金額:</span>
-                  <span style="font-weight:bold; color:${params.color}">${params.value} ${unit}</span>
+                  <span>金額:</span><span style="font-weight:bold; color:${params.color}">${params.value} ${unit}</span>
                 </div>
                 <div style="display:flex; justify-content:space-between; margin-top:3px;">
-                  <span>佔比:</span>
-                  <span>${params.percent}%</span>
-                </div>
-              `;
-            }
+                  <span>佔比:</span><span>${params.percent}%</span>
+                </div>`
           },
-          legend: {
-            type: 'scroll',
-            orient: 'horizontal',
-            bottom: 0,
-            itemWidth: 10, itemHeight: 10
-          },
+          legend: { type: 'scroll', bottom: 0, itemWidth: 10, itemHeight: 10, textStyle: { fontFamily: '"SimSun", serif' } },
           series: [{
             name: title,
             type: 'pie',
-            radius: ['45%', '70%'], // 環形
+            radius: ['45%', '70%'],
             center: ['50%', '45%'],
-            itemStyle: {
-              borderRadius: 8,
-              borderColor: '#fff',
-              borderWidth: 2
-            },
-            // 高亮樣式：鼠標移上去放大，中間顯示數值
+            itemStyle: { borderRadius: 8, borderColor: '#fff', borderWidth: 2 },
             emphasis: {
               scale: true,
               scaleSize: 10,
@@ -260,59 +216,39 @@ export default {
                 show: true,
                 fontSize: 18,
                 fontWeight: 'bold',
-                color: '#333',
-                formatter: `{b}\n{c} ${unit}` // 中間顯示：類別 + 換行 + 數值
+                fontFamily: '"SimSun", serif',
+                formatter: `{b}\n{c} ${unit}`
               }
             },
-            label: {show: false, position: 'center'}, // 默認隱藏標籤
+            label: { show: false, position: 'center' },
             data: seriesData
           }]
         });
       }).catch(e => console.error(e));
     },
 
-    // ------------------------------------------
-    // 2. 柱狀圖 (Bar Chart) - 優化 Tooltip 和 頭部數值
-    // ------------------------------------------
     loadBarChart(key, domId, apiFn, title, unit) {
-      apiFn({userId: this.selectedUserId}).then(data => {
+      apiFn().then(data => {
         const chart = this.initChart(key, domId);
         if (!chart) return;
 
-        // 漸變色生成器
-        const getGradient = (start, end) => new echarts.graphic.LinearGradient(0, 0, 0, 1, [{
-          offset: 0,
-          color: start
-        }, {offset: 1, color: end}]);
-
         chart.setOption({
-          grid: {top: 40, left: '3%', right: '4%', bottom: '10%', containLabel: true},
+          grid: { top: 40, left: '3%', right: '4%', bottom: '10%', containLabel: true },
           tooltip: {
             trigger: 'axis',
             backgroundColor: 'rgba(255,255,255,0.95)',
+            textStyle: { fontFamily: '"SimSun", serif' },
             formatter: (params) => {
-              let html = `<div style="margin-bottom:5px;font-weight:bold;border-bottom:1px solid #eee;padding-bottom:5px;">${params[0].axisValue}</div>`;
+              let html = `<div style="margin-bottom:5px;font-weight:bold;border-bottom:1px solid #eee;">${params[0].axisValue}</div>`;
               params.forEach(item => {
                 const color = item.color.colorStops ? item.color.colorStops[0].color : item.color;
-                html += `
-                  <div style="display:flex; align-items:center; justify-content:space-between; margin-top:5px;">
-                    <span style="display:flex; align-items:center;">
-                      <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:5px;"></span>
-                      ${item.seriesName}
-                    </span>
-                    <span style="font-weight:bold; margin-left:15px;">${item.value} ${unit}</span>
-                  </div>`;
+                html += `<div style="margin-top:5px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:5px;"></span>${item.seriesName}: <b>${item.value} ${unit}</b></div>`;
               });
               return html;
             }
           },
-          xAxis: {
-            type: 'category',
-            data: data.map(i => i.transactionTime),
-            axisTick: {show: false},
-            axisLine: {lineStyle: {color: '#ccc'}}
-          },
-          yAxis: {type: 'value', splitLine: {lineStyle: {type: 'dashed', color: '#eee'}}},
+          xAxis: { type: 'category', data: data.map(i => i.transactionTime), axisTick: { show: false }, axisLabel: { fontFamily: '"SimSun", serif' } },
+          yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed' } }, axisLabel: { fontFamily: '"SimSun", serif' } },
           series: [{
             type: 'bar',
             name: title,
@@ -320,29 +256,16 @@ export default {
             barWidth: '50%',
             itemStyle: {
               borderRadius: [4, 4, 0, 0],
-              color: getGradient('#3AA1FF', '#36D1DC')
+              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: '#3AA1FF' }, { offset: 1, color: '#36D1DC' }])
             },
-            // 高亮配置：鼠標懸停時，柱子上方顯示具體數值
-            emphasis: {
-              focus: 'series',
-              label: {
-                show: true,
-                position: 'top',
-                formatter: `{c} ${unit}`,
-                fontWeight: 'bold',
-                color: '#3AA1FF'
-              }
-            }
+            emphasis: { focus: 'series', label: { show: true, position: 'top', formatter: `{c} ${unit}` } }
           }]
         });
       }).catch(e => console.error(e));
     },
 
-    // ------------------------------------------
-    // 3. 混合圖表 (Mixed Chart) - 支持多系列數值顯示
-    // ------------------------------------------
     loadMixedChart(key, domId, apiFn, title, unit, legendData = []) {
-      apiFn({userId: this.selectedUserId}).then(data => {
+      apiFn().then(data => {
         const chart = this.initChart(key, domId);
         if (!chart) return;
 
@@ -350,47 +273,13 @@ export default {
         const series = [];
 
         const createSeries = (name, colorStart, colorEnd) => {
-          let amountKey = '';
-          if (name === '收入') amountKey = 'supportInAmount';
-          else if (name === '支出' || name === '貸款償還') amountKey = 'supportOutAmount';
-          else if (name === '結余') amountKey = 'balanceAmount';
-
-          // 柱狀圖部分
+          let amountKey = name === '收入' ? 'supportInAmount' : (name === '結余' ? 'balanceAmount' : 'supportOutAmount');
           series.push({
-            name: name,
-            type: 'bar',
-            data: data.map(i => i[amountKey]),
-            barWidth: '30%',
-            itemStyle: {
-              borderRadius: [4, 4, 0, 0],
-              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                {offset: 0, color: colorStart},
-                {offset: 1, color: colorEnd}
-              ])
-            },
-            // 柱狀圖高亮：顯示數值
-            emphasis: {
-              focus: 'series',
-              label: {
-                show: true,
-                position: 'top',
-                formatter: `{c}`,
-                color: colorStart,
-                fontWeight: 'bold'
-              }
-            }
+            name: name, type: 'bar', data: data.map(i => i[amountKey]), barWidth: '30%',
+            itemStyle: { borderRadius: [4, 4, 0, 0], color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: colorStart }, { offset: 1, color: colorEnd }]) },
+            emphasis: { label: { show: true, position: 'top' } }
           });
-
-          // 折線圖部分
-          series.push({
-            name: `${name}趨勢`,
-            type: 'line',
-            data: data.map(i => i[amountKey]),
-            smooth: true,
-            symbol: 'none',
-            lineStyle: {width: 3, color: colorStart},
-            tooltip: {show: false} // 折線圖不重複顯示 tooltip，以柱狀圖為主
-          });
+          series.push({ name: `${name}趨勢`, type: 'line', data: data.map(i => i[amountKey]), smooth: true, symbol: 'none', lineStyle: { width: 3, color: colorStart }, tooltip: { show: false } });
         };
 
         legendData.forEach(name => {
@@ -400,348 +289,183 @@ export default {
           else if (name === '結余') createSeries('結余', '#409EFF', '#79BBFF');
         });
 
-        // 過濾圖例顯示（只顯示柱狀圖的名稱，簡化界面）
-        const legendNames = legendData;
-
         chart.setOption({
           tooltip: {
             trigger: 'axis',
             backgroundColor: 'rgba(255,255,255,0.95)',
-            axisPointer: {type: 'shadow'},
+            textStyle: { fontFamily: '"SimSun", serif' },
             formatter: (params) => {
               let html = `<div style="font-weight:bold;margin-bottom:5px;">📅 ${params[0].axisValue}</div>`;
-              // 只顯示 bar 類型的數據，防止重複
               params.filter(p => p.seriesType === 'bar').forEach(item => {
-                // 獲取顏色
-                let color = item.color;
-                if (typeof color === 'object' && color.colorStops) color = color.colorStops[0].color;
-
-                html += `
-                  <div style="display:flex; justify-content:space-between; margin:3px 0;">
-                    <span style="margin-right:15px;">
-                      <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:5px;"></span>
-                      ${item.seriesName}
-                    </span>
-                    <span style="font-weight:bold;">${item.value} ${unit}</span>
-                  </div>`;
+                let color = typeof item.color === 'object' ? item.color.colorStops[0].color : item.color;
+                html += `<div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:5px;"></span>${item.seriesName}: <b>${item.value} ${unit}</b></div>`;
               });
               return html;
             }
           },
-          legend: {data: legendNames, top: 0},
-          grid: {top: 40, left: '3%', right: '4%', bottom: 40, containLabel: true},
-          xAxis: {type: 'category', data: xData, axisLine: {lineStyle: {color: '#ddd'}}},
-          yAxis: {type: 'value', name: unit, splitLine: {lineStyle: {type: 'dashed', color: '#f0f0f0'}}},
-          dataZoom: [{
-            type: 'slider',
-            height: 15,
-            bottom: 5,
-            borderColor: 'transparent',
-            backgroundColor: '#f5f7fa',
-            handleStyle: {color: '#409EFF'}
-          }],
+          legend: { data: legendData, top: 0, textStyle: { fontFamily: '"SimSun", serif' } },
+          grid: { top: 40, left: '3%', right: '4%', bottom: 40, containLabel: true },
+          xAxis: { type: 'category', data: xData, axisLabel: { fontFamily: '"SimSun", serif' } },
+          yAxis: { type: 'value', name: unit, splitLine: { lineStyle: { type: 'dashed' } }, axisLabel: { fontFamily: '"SimSun", serif' }, nameTextStyle: { fontFamily: '"SimSun", serif' } },
+          dataZoom: [{ type: 'slider', height: 15, bottom: 5, backgroundColor: '#f5f7fa', handleStyle: { color: '#409EFF' } }],
           series
         });
       }).catch(e => console.error(e));
     },
 
-    // ------------------------------------------
-    // 4. 利潤折線圖 (Line Chart) - 優化交互
-    // ------------------------------------------
     loadLineChart(key, domId, apiFn) {
-      apiFn({userId: this.selectedUserId}).then(data => {
+      apiFn().then(data => {
         const chart = this.initChart(key, domId);
         if (!chart) return;
-
-        const xData = data.map(item => item.recordDate);
-        const yData = data.map(item => item.profit);
-
         chart.setOption({
           backgroundColor: '#fff',
           tooltip: {
-            trigger: 'axis',
-            backgroundColor: 'rgba(255,255,255,0.95)',
-            padding: 12,
-            axisPointer: {type: 'cross', label: {backgroundColor: '#6a7985'}},
-            formatter: (params) => {
-              const p = params[0];
-              return `
-                <div style="font-weight:bold; margin-bottom:5px;">📅 ${p.axisValue}</div>
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                  <span>${p.marker} 利潤</span>
-                  <span style="font-weight:bold; color:#409EFF; margin-left:15px; font-size:16px;">${p.value} 元</span>
-                </div>
-              `;
-            }
+            trigger: 'axis', backgroundColor: 'rgba(255,255,255,0.95)', padding: 12,
+            textStyle: { fontFamily: '"SimSun", serif' },
+            formatter: (params) => `
+              <div style="font-weight:bold; margin-bottom:5px;">📅 ${params[0].axisValue}</div>
+              <div>${params[0].marker} 利潤: <span style="font-weight:bold; color:#409EFF; margin-left:10px;">${params[0].value} 元</span></div>
+            `
           },
-          grid: {left: '3%', right: '4%', bottom: '3%', containLabel: true},
-          xAxis: {type: 'category', boundaryGap: false, data: xData, axisLine: {lineStyle: {color: '#ccc'}}},
-          yAxis: {type: 'value', splitLine: {lineStyle: {color: '#f0f0f0'}}},
+          grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+          xAxis: { type: 'category', boundaryGap: false, data: data.map(i => i.recordDate), axisLabel: { fontFamily: '"SimSun", serif' } },
+          yAxis: { type: 'value', splitLine: { lineStyle: { color: '#f0f0f0' } }, axisLabel: { fontFamily: '"SimSun", serif' } },
           series: [{
-            name: '利潤',
-            type: 'line',
-            smooth: true,
-            symbol: 'circle',
-            symbolSize: 8,
-            itemStyle: {color: '#409EFF', borderColor: '#fff', borderWidth: 2},
-            lineStyle: {width: 3, color: '#409EFF'},
-            areaStyle: {
-              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                {offset: 0, color: 'rgba(64, 158, 255, 0.4)'},
-                {offset: 1, color: 'rgba(64, 158, 255, 0.05)'}
-              ])
-            },
-            data: yData,
-            markPoint: {
-              data: [
-                {type: 'max', name: '最高', label: {formatter: '{c}'}},
-                {type: 'min', name: '最低', label: {formatter: '{c}'}}
-              ]
-            }
+            name: '利潤', type: 'line', smooth: true, symbol: 'circle', symbolSize: 8,
+            itemStyle: { color: '#409EFF', borderColor: '#fff', borderWidth: 2 },
+            areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: 'rgba(64, 158, 255, 0.4)' }, { offset: 1, color: 'rgba(64, 158, 255, 0.05)' }]) },
+            data: data.map(i => i.profit),
+            markPoint: { data: [{ type: 'max', name: '最高' }, { type: 'min', name: '最低' }], label: { fontFamily: '"SimSun", serif' } }
           }]
         });
       }).catch(e => console.error(e));
     },
 
-    // ------------------------------------------
-    // 5. 水滴圖 (Liquid Fill) - 修復兼容性
-    // ------------------------------------------
     loadLiquidChart(key, domId, apiFn, categoryLabel) {
-      // categoryLabel: 傳入 '支出' 或 '結余'
-      apiFn({userId: this.selectedUserId}).then(raw => {
+      apiFn().then(raw => {
         if (!raw || !Array.isArray(raw)) return;
-
         const chart = this.initChart(key, domId);
         if (!chart) return;
 
-        // 1. 模糊匹配數據 (兼容繁體 '結余' 和簡體 '结余')
-        // 如果傳入 '結余'，我們嘗試同時匹配 '結余' 和 '结余'
-        const keywords = [categoryLabel];
-        if (categoryLabel === '結余') keywords.push('结余');
-
-        const item = raw.find(i => keywords.some(k => i.category && i.category.includes(k)));
-
+        const keywords = [categoryLabel, categoryLabel === '結余' ? '结余' : ''];
+        const item = raw.find(i => keywords.some(k => k && i.category && i.category.includes(k)));
         const amount = item ? Number(item.amount) : 0;
         const total = raw.reduce((sum, i) => sum + Number(i.amount), 0);
-
-        // 防止除以 0
         const ratio = total > 0 ? amount / total : 0;
+        const color = categoryLabel.includes('支出') ? ['#F56C6C', 'rgba(245, 108, 108, 0.6)'] : ['#67C23A', 'rgba(103, 194, 58, 0.6)'];
 
-        // 顏色配置
-        const color = categoryLabel.includes('支出')
-          ? ['#F56C6C', 'rgba(245, 108, 108, 0.6)']
-          : ['#67C23A', 'rgba(103, 194, 58, 0.6)'];
-
-        console.log(`水滴圖 [${categoryLabel}]: 金額=${amount}, 總額=${total}, 比例=${ratio}`);
-
-        // 2. 渲染配置
         chart.setOption({
           series: [{
-            type: 'liquidFill',
-            radius: '85%',
-            center: ['50%', '50%'],
-            data: [ratio, ratio > 0.1 ? ratio - 0.05 : ratio], // 雙波浪
+            type: 'liquidFill', radius: '85%', center: ['50%', '50%'],
+            data: [ratio, ratio > 0.1 ? ratio - 0.05 : ratio],
             color: color,
-            backgroundStyle: {color: '#fff', borderWidth: 1, borderColor: '#e0e0e0'},
+            backgroundStyle: { color: '#fff', borderWidth: 1, borderColor: '#e0e0e0' },
             label: {
-              formatter: () => {
-                // 如果沒有數據，顯示 0%
-                return `${(ratio * 100).toFixed(1)}%\n${categoryLabel}`;
-              },
-              fontSize: 22,
-              color: color[0],
-              insideColor: '#fff',
-              fontWeight: 'bold'
+              formatter: () => `${(ratio * 100).toFixed(1)}%\n${categoryLabel}`,
+              fontSize: 22, color: color[0], insideColor: '#fff', fontWeight: 'bold', fontFamily: '"SimSun", serif'
             },
-            outline: {
-              show: true,
-              borderDistance: 4,
-              itemStyle: {borderWidth: 2, borderColor: color[0]}
-            }
+            outline: { show: true, borderDistance: 4, itemStyle: { borderWidth: 2, borderColor: color[0] } }
           }],
-          // 增加 Tooltip 以便查看詳情
-          tooltip: {
-            show: true,
-            formatter: () => `${categoryLabel}: <b>${amount} 元</b><br/>總流動: ${total} 元`
-          }
+          tooltip: { show: true, textStyle: { fontFamily: '"SimSun", serif' }, formatter: () => `${categoryLabel}: <b>${amount} 元</b><br/>總流動: ${total} 元` }
         });
-      }).catch(e => console.error("水滴圖加載失敗:", e));
+      }).catch(e => console.error(e));
     },
 
-    // ------------------------------------------
-    // 6. 心形進度條 (Custom Bar) - 修復數據匹配與渲染
-    // ------------------------------------------
     loadHeartProgressChart(key, domId, apiFn) {
-      apiFn({userId: this.selectedUserId}).then(rawList => {
-        // 1. 安全檢查
-        if (!rawList || !Array.isArray(rawList)) {
-          console.warn(`${key} API 返回數據為空或格式錯誤`, rawList);
-          return;
-        }
-
+      apiFn().then(rawList => {
+        if (!rawList || !Array.isArray(rawList)) return;
         const chart = this.initChart(key, domId);
         if (!chart) return;
 
-        console.log("貸款償還原始數據:", rawList);
-
-        // 2. 模糊匹配輔助函數（兼容繁簡體與包含關係）
-        // 例如：keyword="已償還本金"，可以匹配後端的 "已偿还本金" 或 "已償還本金"
         const findVal = (keywords) => {
-          const item = rawList.find(i => {
-            const cat = i.category || "";
-            // 只要包含關鍵字中的任意一個詞，就視為匹配
-            return keywords.some(k => cat.includes(k));
-          });
+          const item = rawList.find(i => keywords.some(k => i.category && i.category.includes(k)));
           return item ? Number(item.amount) : 0;
         };
 
-        // 3. 獲取數值 (定義繁簡體關鍵字數組)
         const principalPaid = findVal(['已償還本金', '已偿还本金']);
         const principalUnpaid = findVal(['未還本金', '未还本金']);
         const interestPaid = findVal(['已償還利息', '已偿还利息']);
         const interestUnpaid = findVal(['未還利息', '未还利息']);
 
-        // 4. 計算總額與百分比
-        const pTotal = principalPaid + principalUnpaid;
-        const iTotal = interestPaid + interestUnpaid;
-
-        // 防止除以 0 導致 NaN
-        const pPercent = pTotal > 0 ? +((principalPaid / pTotal) * 100).toFixed(1) : 0;
-        const iPercent = iTotal > 0 ? +((interestPaid / iTotal) * 100).toFixed(1) : 0;
-
-        console.log(`本金: ${principalPaid}/${pTotal} (${pPercent}%), 利息: ${interestPaid}/${iTotal} (${iPercent}%)`);
-
-        const mainColor = '#FF4D6D';
-        const bgColor = '#FFE6EB'; // 淺粉色背景
+        const pPercent = (principalPaid + principalUnpaid) > 0 ? +((principalPaid / (principalPaid + principalUnpaid)) * 100).toFixed(1) : 0;
+        const iPercent = (interestPaid + interestUnpaid) > 0 ? +((interestPaid / (interestPaid + interestUnpaid)) * 100).toFixed(1) : 0;
 
         chart.setOption({
-          grid: {left: '5%', right: '15%', top: '10%', bottom: '5%', containLabel: true},
+          grid: { left: '5%', right: '15%', top: '10%', bottom: '5%', containLabel: true },
           tooltip: {
-            trigger: 'item',
-            backgroundColor: 'rgba(255,255,255,0.98)',
+            trigger: 'item', backgroundColor: 'rgba(255,255,255,0.98)', textStyle: { fontFamily: '"SimSun", serif' },
             formatter: (params) => {
               const isInterest = params.dataIndex === 0;
-              const type = isInterest ? '利息' : '本金';
               const paid = isInterest ? interestPaid : principalPaid;
               const unpaid = isInterest ? interestUnpaid : principalUnpaid;
-              const percent = isInterest ? iPercent : pPercent;
-
-              if (params.seriesName === '已償還') {
-                return `<div style="font-weight:bold">${type} - 已償還</div>
-                        <div>金額：${paid.toLocaleString()} 元</div>
-                        <div>進度：${percent}%</div>`;
-              } else {
-                return `<div style="font-weight:bold">${type} - 未償還</div>
-                        <div>金額：${unpaid.toLocaleString()} 元</div>
-                        <div>剩餘：${(100 - percent).toFixed(1)}%</div>`;
-              }
+              return params.seriesName === '已償還'
+                ? `<div style="font-weight:bold">${isInterest ? '利息' : '本金'} - 已償還</div><div>金額：${paid.toLocaleString()}</div><div>進度：${isInterest ? iPercent : pPercent}%</div>`
+                : `<div style="font-weight:bold">${isInterest ? '利息' : '本金'} - 未償還</div><div>金額：${unpaid.toLocaleString()}</div>`;
             }
           },
-          xAxis: {max: 100, show: false},
-          yAxis: {
-            data: ['利息', '本金'],
-            axisLine: {show: false},
-            axisTick: {show: false},
-            axisLabel: {fontWeight: 'bold', color: '#666', fontSize: 14}
-          },
+          xAxis: { max: 100, show: false },
+          yAxis: { data: ['利息', '本金'], axisLine: { show: false }, axisTick: { show: false }, axisLabel: { fontWeight: 'bold', color: '#666', fontSize: 14, fontFamily: '"SimSun", serif' } },
           series: [
             {
-              name: '已償還',
-              type: 'bar',
-              stack: 'total',
-              data: [iPercent, pPercent],
-              barWidth: 30, // 加寬一點
-              itemStyle: {
-                borderRadius: [15, 0, 0, 15],
-                color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [{offset: 0, color: '#FF4D6D'}, {
-                  offset: 1,
-                  color: '#FF8FA3'
-                }])
-              },
-              label: {
-                show: true,
-                position: 'inside',
-                color: '#fff',
-                fontWeight: 'bold',
-                formatter: (p) => {
-                  const val = p.dataIndex === 0 ? interestPaid : principalPaid;
-                  // 空間太小不顯示文字
-                  return p.value > 10 ? `${p.value}%` : '';
-                }
-              }
+              name: '已償還', type: 'bar', stack: 'total', data: [iPercent, pPercent], barWidth: 30,
+              itemStyle: { borderRadius: [15, 0, 0, 15], color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [{ offset: 0, color: '#FF4D6D' }, { offset: 1, color: '#FF8FA3' }]) },
+              label: { show: true, position: 'inside', color: '#fff', fontWeight: 'bold', fontFamily: '"SimSun", serif', formatter: p => p.value > 10 ? `${p.value}%` : '' }
             },
             {
-              name: '未償還',
-              type: 'bar',
-              stack: 'total',
-              data: [100 - iPercent, 100 - pPercent],
-              barWidth: 30,
-              itemStyle: {color: bgColor, borderRadius: [0, 15, 15, 0]},
-              label: {show: false}
+              name: '未償還', type: 'bar', stack: 'total', data: [100 - iPercent, 100 - pPercent], barWidth: 30,
+              itemStyle: { color: '#FFE6EB', borderRadius: [0, 15, 15, 0] }, label: { show: false }
             },
-            // 心形圖標
             {
-              type: 'scatter',
-              data: [[iPercent, 0], [pPercent, 1]],
-              symbolSize: 1,
-              label: {
-                show: true,
-                position: 'right',
-                offset: [-5, -2],
-                formatter: '❤️',
-                fontSize: 24,
-                color: '#FF1E4D'
-              },
-              z: 10
+              type: 'scatter', data: [[iPercent, 0], [pPercent, 1]], symbolSize: 1,
+              label: { show: true, position: 'right', offset: [-5, -2], formatter: '❤️', fontSize: 24, color: '#FF1E4D' }, z: 10
             }
           ]
         });
-      }).catch(e => console.error("貸款圖表加載失敗:", e));
+      }).catch(e => console.error(e));
     },
   }
 };
 </script>
 
 <style lang="scss" scoped>
+// 统一应用中文宋体
+.song-font {
+  font-family: "SimSun", "Songti SC", "STSong", serif;
+
+  ::v-deep * {
+    font-family: "SimSun", "Songti SC", "STSong", serif;
+  }
+}
 
 .home {
-  // Page Header styles
   .page-header {
     margin-bottom: 20px;
     border: none;
-    .header-content {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
     .page-title {
       margin: 0;
       font-size: 24px;
       font-weight: 600;
-      color: $text-primary;
+      color: #303133;
     }
   }
 
-  // Use a consistent margin for rows
   .el-row + .el-row {
     margin-top: 20px;
   }
 
   .chart-card {
-    // el-card styles from global.scss are already applied
-    // We just add specific overrides or extensions here
     transition: transform 0.3s ease, box-shadow 0.3s ease;
     &:hover {
       transform: translateY(-5px);
     }
-
-    // Remove bottom margin for the last card in a column to avoid double spacing
-    &:last-child {
-        margin-bottom: 0;
+    // 修复底部边距叠加问题
+    margin-bottom: 20px;
+    @media (min-width: 1200px) {
+      margin-bottom: 0;
     }
   }
 
-  // Refined Chart Header
+  // 优化 Card Header
   ::v-deep .el-card__header {
     border-bottom: 1px solid #e8eaec;
     padding: 16px 20px;
@@ -754,13 +478,13 @@ export default {
     span {
       font-size: 16px;
       font-weight: 600;
-      color: $text-primary;
+      color: #303133;
     }
   }
 
   .chart-box {
     width: 100%;
-    height: 360px; // Slightly increase height for better visuals
+    height: 360px;
   }
 
   .chart-box-small {
@@ -768,21 +492,9 @@ export default {
     height: 260px;
   }
 
-  // Responsive adjustments
   @media (max-width: 768px) {
-    .header-content {
-      flex-direction: column;
-      align-items: flex-start;
-    }
-    .page-title {
-      margin-bottom: 10px;
-    }
-    .chart-box {
-      height: 300px;
-    }
-    .chart-box-small {
-      height: 220px;
-    }
+    .chart-box { height: 300px; }
+    .chart-box-small { height: 220px; }
   }
 }
 </style>

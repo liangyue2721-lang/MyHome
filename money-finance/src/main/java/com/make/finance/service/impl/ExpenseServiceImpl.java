@@ -141,8 +141,8 @@ public class ExpenseServiceImpl implements IExpenseService {
     @Override
     public void syncExpense() {
 
-        Long userId = SecurityUtils.getUserId();
 
+        Long userId = SecurityUtils.getUserId();
         // =========================
         // 1. 查询所有交易
         // =========================
