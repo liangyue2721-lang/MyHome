@@ -82,7 +82,7 @@
           :show-file-list="false"
           :before-upload="beforeUpload"
           :on-change="handleFileChange"
-          accept=".xlsx,.xls"
+          accept=".xlsx,.xls,.pdf"
         >
           <el-button
             type="success"
@@ -98,9 +98,10 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table v-loading="loading" :data="transactionsList" @selection-change="handleSelectionChange" :stripe="true" :border="false">
+    <el-table v-loading="loading" :data="transactionsList" @selection-change="handleSelectionChange" :stripe="true"
+              :border="false">
       <el-table-column type="selection" width="55" align="center"/>
-<!--      <el-table-column label="主键" align="center" prop="id"/>-->
+      <!--      <el-table-column label="主键" align="center" prop="id"/>-->
       <el-table-column label="账户号码" align="center" prop="accountNo">
         <template slot-scope="scope">
           <el-tag size="mini" type="info">{{ scope.row.accountNo }}</el-tag>
@@ -458,33 +459,60 @@ export default {
     },
     /** 导入按钮操作 */
     handleFileChange(file, fileList) {
-      // 只在用户选择文件后保存文件并显示确认框
-      this.selectedFile = file.raw; // 获取选中的文件
-      if (this.selectedFile) {
-        // 确保文件类型为 Excel
-        if (
-          this.selectedFile.type !== 'application/vnd.ms-excel' &&
-          this.selectedFile.type !== 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        ) {
-          this.$message.error('上传文件只能是 Excel 格式!');
-          return;
-        }
+      // 只在文件刚被选择（ready 状态）时处理，防止重复触发
+      if (file.status !== 'ready') {
+        return;
+      }
 
-        // 弹出确认框
-        this.$modal.confirm(`是否确认导入文件 "${this.selectedFile.name}" ?`).then(() => {
+      this.selectedFile = file.raw;
+      if (!this.selectedFile) {
+        return;
+      }
+
+      const fileName = this.selectedFile.name.toLowerCase();
+      const fileType = this.selectedFile.type;
+
+      // Excel 判断
+      const isExcelByName =
+        fileName.endsWith('.xls') || fileName.endsWith('.xlsx');
+      const isExcelByType =
+        fileType === 'application/vnd.ms-excel' ||
+        fileType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+      // PDF 判断
+      const isPdfByName = fileName.endsWith('.pdf');
+      const isPdfByType = fileType === 'application/pdf';
+
+      if (!(isExcelByName || isExcelByType || isPdfByName || isPdfByType)) {
+        this.$message.error('上传文件只能是 Excel 或 PDF 格式!');
+        this.resetUpload();
+        return;
+      }
+
+      // 弹出确认框
+      this.$modal
+        .confirm(`是否确认导入文件 "${this.selectedFile.name}" ?`)
+        .then(() => {
           this.confirmImport(); // 用户确认后调用导入方法
-        }).catch(() => {
+        })
+        .catch(() => {
           this.resetUpload(); // 用户取消后重置状态
         });
-      }
     },
 
     beforeUpload(file) {
-      const isExcel = file.type === 'application/vnd.ms-excel' || file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      if (!isExcel) {
-        this.$message.error('上传文件只能是 Excel 格式!');
+      const isExcel =
+        file.type === 'application/vnd.ms-excel' ||
+        file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+      const isPdf = file.type === 'application/pdf';
+
+      if (!isExcel && !isPdf) {
+        this.$message.error('上传文件只能是 Excel 或 PDF 格式!');
+        return false;
       }
-      return isExcel;
+
+      return true;
     },
     confirmImport() {
       if (!this.selectedFile) return; // 确保文件已选中

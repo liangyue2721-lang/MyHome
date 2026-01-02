@@ -2,6 +2,7 @@ package com.make.finance.service.impl;
 
 import java.util.List;
 
+import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import com.make.finance.mapper.BankCardTransactionsMapper;
@@ -94,4 +95,26 @@ public class BankCardTransactionsServiceImpl implements IBankCardTransactionsSer
     public List<BankCardTransactions> queryBankCardTransactionsYearList(Long id, String startDate, String endDate) {
         return bankCardTransactionsMapper.selectBankCardTransactionsYearList(id, startDate, endDate);
     }
+    @Override
+    public int batchInsertBankCardTransactions(List<BankCardTransactions> transactions) {
+        if (CollectionUtils.isEmpty(transactions)) {
+            return 0;
+        }
+
+        // 使用 MyBatis 的批量操作或分批处理以提高性能
+        int total = 0;
+        int batchSize = 1000; // 每批处理1000条记录
+
+        for (int i = 0; i < transactions.size(); i += batchSize) {
+            int endIndex = Math.min(i + batchSize, transactions.size());
+            List<BankCardTransactions> batch = transactions.subList(i, endIndex);
+
+            // 调用批量插入的Mapper方法
+            total += bankCardTransactionsMapper.batchInsertBankCardTransactions(batch);
+        }
+
+        return total;
+    }
+
+
 }

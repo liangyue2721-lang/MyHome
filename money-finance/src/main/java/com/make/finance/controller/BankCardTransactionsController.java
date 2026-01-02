@@ -11,6 +11,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import javax.servlet.http.HttpServletResponse;
+
+import com.make.common.utils.SecurityUtils;
 import com.make.common.utils.file.EasyExcelUtil;
 import com.make.common.utils.file.PdfUtil;
 import com.alibaba.fastjson2.JSONObject;
@@ -181,12 +183,6 @@ public class BankCardTransactionsController extends BaseController {
             } else {
                 //存储数据库
                 for (BankCardTransactions bankCardTransaction : bankCardTransactions) {
-                    BigDecimal amount = bankCardTransaction.getAmount();
-                    if (amount.compareTo(BigDecimal.ZERO) >= 0) {
-                        bankCardTransaction.setTransactionType("收入");
-                    } else {
-                        bankCardTransaction.setTransactionType("支出");
-                    }
                     bankCardTransactionsService.insertBankCardTransactions(bankCardTransaction);
                 }
             }
@@ -292,23 +288,46 @@ public class BankCardTransactionsController extends BaseController {
         return transactionsList;
     }
 
-    private List<BankCardTransactions> convertCMBMapListToTransactions(List<Map<String, Object>> list) throws ParseException {
+    private List<BankCardTransactions> convertCMBMapListToTransactions(
+            List<Map<String, Object>> list) throws ParseException {
+
         List<BankCardTransactions> transactions = new ArrayList<>();
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+
         for (Map<String, Object> map : list) {
             BankCardTransactions tx = new BankCardTransactions();
-            // NOTE: Hardcoded account details to match existing Excel import logic for CMB
+
+            // 固定信息（与 Excel 导入逻辑保持一致）
             tx.setAccountNo("6214831061297492");
             tx.setSubBranch("北京回龙观支行");
             tx.setBank("招商银行");
+
+            // 日期
             tx.setDate(sdf.parse((String) map.get("date")));
+
+            // 币种
             tx.setCurrency((String) map.get("currency"));
-            tx.setAmount(new BigDecimal((String) map.get("amount")));
+
+            // 金额
+            BigDecimal amount = new BigDecimal((String) map.get("amount"));
+            tx.setAmount(amount);
+
+            // 余额
             tx.setBalance(new BigDecimal((String) map.get("balance")));
-            tx.setTransaction((String) map.get("transactionType"));
+
+            tx.setTransactionType(
+                    amount.compareTo(BigDecimal.ZERO) >= 0 ? "收入" : "支出"
+            );
+            // 摘要 / 对手方
+            tx.setTransaction((String) map.get("transactionType")); // 交易摘要
             tx.setCounterParty((String) map.get("counterParty"));
+
+            // 用户
+            tx.setUserId(SecurityUtils.getUserId());
+
             transactions.add(tx);
         }
+
         return transactions;
     }
 
@@ -339,6 +358,10 @@ public class BankCardTransactionsController extends BaseController {
             }
             tx.setTransaction((String) map.get("transactionType"));
             tx.setCounterParty((String) map.get("counterParty"));
+            tx.setTransactionType(
+                    tx.getAmount().compareTo(BigDecimal.ZERO) >= 0 ? "收入" : "支出"
+            );
+            tx.setUserId(SecurityUtils.getUserId());
             transactions.add(tx);
         }
         return transactions;

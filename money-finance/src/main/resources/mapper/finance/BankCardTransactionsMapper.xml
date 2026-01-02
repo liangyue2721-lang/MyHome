@@ -91,6 +91,31 @@
             <if test="userId != null">#{userId},</if>
         </trim>
     </insert>
+    <insert id="batchInsertBankCardTransactions" parameterType="java.util.List">
+        insert into bank_card_transactions
+        (AccountNo, SubBranch, Date, Currency, Transaction, Amount, bank, Balance, TransactionType, CounterParty, note,
+        created_at, updated_at, user_id)
+        values
+        <foreach collection="list" item="item" separator=",">
+            (
+            #{item.AccountNo},
+            #{item.SubBranch},
+            #{item.Date},
+            #{item.Currency},
+            #{item.Transaction},
+            #{item.Amount},
+            #{item.bank},
+            #{item.Balance},
+            #{item.TransactionType},
+            #{item.CounterParty},
+            #{item.note},
+            #{item.createdAt},
+            #{item.updatedAt},
+            #{item.userId}
+            )
+        </foreach>
+    </insert>
+
 
     <update id="updateBankCardTransactions" parameterType="BankCardTransactions">
         update bank_card_transactions
