@@ -12,6 +12,7 @@ import javax.servlet.http.HttpServletResponse;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
+import com.make.common.utils.SecurityUtils;
 import com.make.common.utils.file.EasyExcelUtil;
 import com.make.common.utils.file.FileUploadUtils;
 import com.make.finance.domain.vo.LoanRepaymentsChart;
@@ -193,8 +194,8 @@ public class LoanRepaymentsController extends BaseController {
     }
 
     @PreAuthorize("@ss.hasPermi('finance:loan_repayments:list')")
-    @GetMapping("/getLoanRepaymentsLineChart/{userId}")
-    public List<LoanRepaymentsChart> getLoanRepaymentsLineChart(@PathVariable Long userId) {
-        return loanRepaymentsService.queryLoanRepaymentsChartList(userId);
+    @GetMapping("/getLoanRepaymentsLineChart")
+    public List<LoanRepaymentsChart> getLoanRepaymentsLineChart() {
+        return loanRepaymentsService.queryLoanRepaymentsChartList(SecurityUtils.getUserId());
     }
 }

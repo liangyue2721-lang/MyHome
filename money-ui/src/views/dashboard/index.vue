@@ -1,19 +1,8 @@
 <template>
   <div class="app-container home">
-    <!-- Page Header -->
     <el-card shadow="never" class="page-header">
       <div class="header-content">
         <h2 class="page-title">儀表板</h2>
-        <div class="header-controls">
-          <el-select v-model="selectedUserId" placeholder="選擇用戶" @change="handleUserChange" filterable clearable>
-            <el-option
-              v-for="user in userList"
-              :key="user.id"
-              :label="user.name"
-              :value="user.id"
-            />
-          </el-select>
-        </div>
       </div>
     </el-card>
 
@@ -94,30 +83,23 @@
 <script>
 import * as echarts from 'echarts';
 import 'echarts-liquidfill';
+// 引入 API
 import {
-  getTotalAmountChart,
-  getMonthlyIncomeBarChart,
-  getTotalRepaymentPieChart,
-  getWechatAlipayData,
-  getYearIncomeExpenseRatio,
-  getProfitLineData,
-  renderLoanRepaymentComparisonChart
+  getTotalAmountChart,                // 每月支出總額趨勢
+  getMonthlyIncomeBarChart,           // 月度收支對比
+  getTotalRepaymentPieChart,          // 貸款償還進度
+  getWechatAlipayData,                // 交易類型分布
+  getYearIncomeExpenseRatio,          // 年度收支比例 (水滴圖)
+  getProfitLineData,                  // 利潤趨勢分析
+  renderLoanRepaymentComparisonChart  // 近一年還貸對比
 } from "@/api/finance/pieChart";
-import {listUser} from "@/api/stock/dropdown_component";
-import Cookies from 'js-cookie';
 
 export default {
   name: 'Charts',
   data() {
     return {
-      // 莫蘭迪色系 + 鮮亮色系混合
-      colors: [
-        '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc'
-      ],
-      pageSize: 1000,
-      userLoading: false,
-      userList: [],
-      selectedUserId: null,
+      // 已移除 selectedUserId
+      // 僅保留圖表實例對象
       charts: {
         transactionType: null,
         monthlyConsumption: null,
@@ -131,8 +113,8 @@ export default {
     };
   },
   mounted() {
-    this.initUserList().then(() => {
-      this.loadAllCharts(this.selectedUserId);
+    this.$nextTick(() => {
+      this.loadAllCharts();
       window.addEventListener('resize', this.resizeCharts);
     });
   },
@@ -141,34 +123,7 @@ export default {
     this.disposeCharts();
   },
   methods: {
-    // --- 基礎方法 ---
-    async initUserList() {
-      this.userLoading = true;
-      try {
-        const response = await listUser({pageSize: this.pageSize});
-        const payload = response.data || response;
-        const rawUsers = Array.isArray(payload.rows) ? payload.rows : Array.isArray(payload) ? payload : [];
-        this.userList = rawUsers.map(u => ({
-          id: u.userId,
-          name: u.userName || u.nickName || `用戶${u.userId}`
-        }));
-        if (this.userList.length) {
-          const savedUsername = Cookies.get('username');
-          const matchedUser = this.userList.find(u => u.name === savedUsername);
-          this.selectedUserId = matchedUser ? matchedUser.id : this.userList[0].id;
-        } else {
-          this.selectedUserId = null;
-        }
-      } catch (err) {
-        console.error('用戶列表加載失敗:', err);
-      } finally {
-        this.userLoading = false;
-      }
-    },
-    handleUserChange() {
-      this.disposeCharts();
-      this.loadAllCharts();
-    },
+    // --- 基礎圖表管理 ---
     disposeCharts() {
       Object.values(this.charts).forEach(chart => chart && chart.dispose());
     },
@@ -184,31 +139,35 @@ export default {
     },
 
     // --- 加載所有圖表 ---
-    loadAllCharts(selectedUserId) {
-      this.loadPieChart('transactionType', 'clientPieChart', () => getWechatAlipayData(selectedUserId), '交易類型', '個');
-      this.loadBarChart('monthlyConsumption', 'monthlyConsumptionColumnChart', () => getTotalAmountChart(selectedUserId), '每月支出', '元');
+    loadAllCharts() {
+      this.loadPieChart('transactionType', 'clientPieChart', getWechatAlipayData, '交易類型', '個');
+      this.loadBarChart('monthlyConsumption', 'monthlyConsumptionColumnChart', getTotalAmountChart, '每月支出', '元');
 
       // 混合圖表：收支對比
-      this.loadMixedChart('monthlyIncomeExpense', 'monthlyIncomeExpenseBarChart', () => getMonthlyIncomeBarChart(selectedUserId), '每月收支', '元', ['收入', '支出', '結余']);
+      this.loadMixedChart('monthlyIncomeExpense', 'monthlyIncomeExpenseBarChart', getMonthlyIncomeBarChart, '每月收支', '元', ['收入', '支出', '結余']);
 
       // 混合圖表：還貸對比
-      this.loadMixedChart('generateMonthlyLoanRepayment', 'generateMonthlyLoanRepaymentBarChart', () => renderLoanRepaymentComparisonChart(selectedUserId), '還貸本息', '元', ['貸款償還']);
+      this.loadMixedChart('generateMonthlyLoanRepayment', 'generateMonthlyLoanRepaymentBarChart', renderLoanRepaymentComparisonChart, '還貸本息', '元', ['貸款償還']);
 
-      this.loadHeartProgressChart('totalRepayment', 'totalRepaymentPieChart', () => getTotalRepaymentPieChart(selectedUserId));
+      this.loadHeartProgressChart('totalRepayment', 'totalRepaymentPieChart', getTotalRepaymentPieChart);
 
-      this.loadLiquidChart('expenseLiquid', 'expenseLiquidChart', () => getYearIncomeExpenseRatio(selectedUserId), '支出');
-      this.loadLiquidChart('incomeLiquid', 'incomeLiquidChart', () => getYearIncomeExpenseRatio(selectedUserId), '結余');
+      this.loadLiquidChart('expenseLiquid', 'expenseLiquidChart', getYearIncomeExpenseRatio, '支出');
+      this.loadLiquidChart('incomeLiquid', 'incomeLiquidChart', getYearIncomeExpenseRatio, '結余');
 
-      this.loadLineChart('profitLine', 'profitLineChart', () => getProfitLineData(selectedUserId));
+      this.loadLineChart('profitLine', 'profitLineChart', getProfitLineData);
     },
 
     // ------------------------------------------
-    // 1. 餅圖/環形圖 (Pie Chart) - 優化 Tooltip 顯示金額
+    // 1. 餅圖/環形圖渲染器
     // ------------------------------------------
     loadPieChart(key, domId, apiFn, title, unit) {
-      apiFn({userId: this.selectedUserId}).then(data => {
+      // 無參調用
+      apiFn().then(data => {
         const chart = this.initChart(key, domId);
         if (!chart) return;
+
+        // 安全校驗
+        if (!data || !Array.isArray(data)) return;
 
         const seriesData = data.map((i) => ({
           name: i.category,
@@ -216,13 +175,11 @@ export default {
         }));
 
         chart.setOption({
-          title: {show: false}, // 使用卡片標題
+          title: {show: false},
           tooltip: {
             trigger: 'item',
             backgroundColor: 'rgba(255, 255, 255, 0.95)',
-            textStyle: {color: '#333'},
             formatter: (params) => {
-              // 自定義 Tooltip：顯示 名稱、金額(粗體)、佔比
               return `
                 <div style="font-size:14px; font-weight:bold; margin-bottom:5px;">${params.name}</div>
                 <div style="display:flex; justify-content:space-between; min-width:120px;">
@@ -245,14 +202,13 @@ export default {
           series: [{
             name: title,
             type: 'pie',
-            radius: ['45%', '70%'], // 環形
+            radius: ['45%', '70%'],
             center: ['50%', '45%'],
             itemStyle: {
               borderRadius: 8,
               borderColor: '#fff',
               borderWidth: 2
             },
-            // 高亮樣式：鼠標移上去放大，中間顯示數值
             emphasis: {
               scale: true,
               scaleSize: 10,
@@ -261,10 +217,10 @@ export default {
                 fontSize: 18,
                 fontWeight: 'bold',
                 color: '#333',
-                formatter: `{b}\n{c} ${unit}` // 中間顯示：類別 + 換行 + 數值
+                formatter: `{b}\n{c} ${unit}`
               }
             },
-            label: {show: false, position: 'center'}, // 默認隱藏標籤
+            label: {show: false, position: 'center'},
             data: seriesData
           }]
         });
@@ -272,14 +228,15 @@ export default {
     },
 
     // ------------------------------------------
-    // 2. 柱狀圖 (Bar Chart) - 優化 Tooltip 和 頭部數值
+    // 2. 柱狀圖渲染器
     // ------------------------------------------
     loadBarChart(key, domId, apiFn, title, unit) {
-      apiFn({userId: this.selectedUserId}).then(data => {
+      // 無參調用
+      apiFn().then(data => {
         const chart = this.initChart(key, domId);
         if (!chart) return;
+        if (!data || !Array.isArray(data)) return;
 
-        // 漸變色生成器
         const getGradient = (start, end) => new echarts.graphic.LinearGradient(0, 0, 0, 1, [{
           offset: 0,
           color: start
@@ -322,7 +279,6 @@ export default {
               borderRadius: [4, 4, 0, 0],
               color: getGradient('#3AA1FF', '#36D1DC')
             },
-            // 高亮配置：鼠標懸停時，柱子上方顯示具體數值
             emphasis: {
               focus: 'series',
               label: {
@@ -339,12 +295,19 @@ export default {
     },
 
     // ------------------------------------------
-    // 3. 混合圖表 (Mixed Chart) - 支持多系列數值顯示
+    // 3. 混合圖表渲染器 (已移除所有入參)
     // ------------------------------------------
     loadMixedChart(key, domId, apiFn, title, unit, legendData = []) {
-      apiFn({userId: this.selectedUserId}).then(data => {
+      // 修正：直接調用 apiFn()，不再傳入任何參數
+      apiFn().then(data => {
         const chart = this.initChart(key, domId);
         if (!chart) return;
+
+        // 安全校驗
+        if (!data || !Array.isArray(data)) {
+          console.warn(`Chart [${title}] returned empty or invalid data.`);
+          return;
+        }
 
         const xData = data.map(i => i.transactionTime);
         const series = [];
@@ -355,7 +318,6 @@ export default {
           else if (name === '支出' || name === '貸款償還') amountKey = 'supportOutAmount';
           else if (name === '結余') amountKey = 'balanceAmount';
 
-          // 柱狀圖部分
           series.push({
             name: name,
             type: 'bar',
@@ -368,20 +330,12 @@ export default {
                 {offset: 1, color: colorEnd}
               ])
             },
-            // 柱狀圖高亮：顯示數值
             emphasis: {
               focus: 'series',
-              label: {
-                show: true,
-                position: 'top',
-                formatter: `{c}`,
-                color: colorStart,
-                fontWeight: 'bold'
-              }
+              label: {show: true, position: 'top', formatter: `{c}`, color: colorStart, fontWeight: 'bold'}
             }
           });
 
-          // 折線圖部分
           series.push({
             name: `${name}趨勢`,
             type: 'line',
@@ -389,7 +343,7 @@ export default {
             smooth: true,
             symbol: 'none',
             lineStyle: {width: 3, color: colorStart},
-            tooltip: {show: false} // 折線圖不重複顯示 tooltip，以柱狀圖為主
+            tooltip: {show: false}
           });
         };
 
@@ -400,9 +354,6 @@ export default {
           else if (name === '結余') createSeries('結余', '#409EFF', '#79BBFF');
         });
 
-        // 過濾圖例顯示（只顯示柱狀圖的名稱，簡化界面）
-        const legendNames = legendData;
-
         chart.setOption({
           tooltip: {
             trigger: 'axis',
@@ -410,12 +361,9 @@ export default {
             axisPointer: {type: 'shadow'},
             formatter: (params) => {
               let html = `<div style="font-weight:bold;margin-bottom:5px;">📅 ${params[0].axisValue}</div>`;
-              // 只顯示 bar 類型的數據，防止重複
               params.filter(p => p.seriesType === 'bar').forEach(item => {
-                // 獲取顏色
                 let color = item.color;
                 if (typeof color === 'object' && color.colorStops) color = color.colorStops[0].color;
-
                 html += `
                   <div style="display:flex; justify-content:space-between; margin:3px 0;">
                     <span style="margin-right:15px;">
@@ -428,7 +376,7 @@ export default {
               return html;
             }
           },
-          legend: {data: legendNames, top: 0},
+          legend: {data: legendData, top: 0},
           grid: {top: 40, left: '3%', right: '4%', bottom: 40, containLabel: true},
           xAxis: {type: 'category', data: xData, axisLine: {lineStyle: {color: '#ddd'}}},
           yAxis: {type: 'value', name: unit, splitLine: {lineStyle: {type: 'dashed', color: '#f0f0f0'}}},
@@ -446,12 +394,14 @@ export default {
     },
 
     // ------------------------------------------
-    // 4. 利潤折線圖 (Line Chart) - 優化交互
+    // 4. 利潤折線圖渲染器
     // ------------------------------------------
     loadLineChart(key, domId, apiFn) {
-      apiFn({userId: this.selectedUserId}).then(data => {
+      // 無參調用
+      apiFn().then(data => {
         const chart = this.initChart(key, domId);
         if (!chart) return;
+        if (!data || !Array.isArray(data)) return;
 
         const xData = data.map(item => item.recordDate);
         const yData = data.map(item => item.profit);
@@ -504,48 +454,38 @@ export default {
     },
 
     // ------------------------------------------
-    // 5. 水滴圖 (Liquid Fill) - 修復兼容性
+    // 5. 水滴圖渲染器
     // ------------------------------------------
     loadLiquidChart(key, domId, apiFn, categoryLabel) {
-      // categoryLabel: 傳入 '支出' 或 '結余'
-      apiFn({userId: this.selectedUserId}).then(raw => {
+      // 無參調用
+      apiFn().then(raw => {
         if (!raw || !Array.isArray(raw)) return;
 
         const chart = this.initChart(key, domId);
         if (!chart) return;
 
-        // 1. 模糊匹配數據 (兼容繁體 '結余' 和簡體 '结余')
-        // 如果傳入 '結余'，我們嘗試同時匹配 '結余' 和 '结余'
         const keywords = [categoryLabel];
         if (categoryLabel === '結余') keywords.push('结余');
 
         const item = raw.find(i => keywords.some(k => i.category && i.category.includes(k)));
-
         const amount = item ? Number(item.amount) : 0;
         const total = raw.reduce((sum, i) => sum + Number(i.amount), 0);
-
-        // 防止除以 0
         const ratio = total > 0 ? amount / total : 0;
 
-        // 顏色配置
         const color = categoryLabel.includes('支出')
           ? ['#F56C6C', 'rgba(245, 108, 108, 0.6)']
           : ['#67C23A', 'rgba(103, 194, 58, 0.6)'];
 
-        console.log(`水滴圖 [${categoryLabel}]: 金額=${amount}, 總額=${total}, 比例=${ratio}`);
-
-        // 2. 渲染配置
         chart.setOption({
           series: [{
             type: 'liquidFill',
             radius: '85%',
             center: ['50%', '50%'],
-            data: [ratio, ratio > 0.1 ? ratio - 0.05 : ratio], // 雙波浪
+            data: [ratio, ratio > 0.1 ? ratio - 0.05 : ratio],
             color: color,
             backgroundStyle: {color: '#fff', borderWidth: 1, borderColor: '#e0e0e0'},
             label: {
               formatter: () => {
-                // 如果沒有數據，顯示 0%
                 return `${(ratio * 100).toFixed(1)}%\n${categoryLabel}`;
               },
               fontSize: 22,
@@ -559,7 +499,6 @@ export default {
               itemStyle: {borderWidth: 2, borderColor: color[0]}
             }
           }],
-          // 增加 Tooltip 以便查看詳情
           tooltip: {
             show: true,
             formatter: () => `${categoryLabel}: <b>${amount} 元</b><br/>總流動: ${total} 元`
@@ -569,11 +508,11 @@ export default {
     },
 
     // ------------------------------------------
-    // 6. 心形進度條 (Custom Bar) - 修復數據匹配與渲染
+    // 6. 心形進度條渲染器 (貸款償還進度)
     // ------------------------------------------
     loadHeartProgressChart(key, domId, apiFn) {
-      apiFn({userId: this.selectedUserId}).then(rawList => {
-        // 1. 安全檢查
+      // 無參調用
+      apiFn().then(rawList => {
         if (!rawList || !Array.isArray(rawList)) {
           console.warn(`${key} API 返回數據為空或格式錯誤`, rawList);
           return;
@@ -582,37 +521,25 @@ export default {
         const chart = this.initChart(key, domId);
         if (!chart) return;
 
-        console.log("貸款償還原始數據:", rawList);
-
-        // 2. 模糊匹配輔助函數（兼容繁簡體與包含關係）
-        // 例如：keyword="已償還本金"，可以匹配後端的 "已偿还本金" 或 "已償還本金"
         const findVal = (keywords) => {
           const item = rawList.find(i => {
             const cat = i.category || "";
-            // 只要包含關鍵字中的任意一個詞，就視為匹配
             return keywords.some(k => cat.includes(k));
           });
           return item ? Number(item.amount) : 0;
         };
 
-        // 3. 獲取數值 (定義繁簡體關鍵字數組)
         const principalPaid = findVal(['已償還本金', '已偿还本金']);
         const principalUnpaid = findVal(['未還本金', '未还本金']);
         const interestPaid = findVal(['已償還利息', '已偿还利息']);
         const interestUnpaid = findVal(['未還利息', '未还利息']);
 
-        // 4. 計算總額與百分比
         const pTotal = principalPaid + principalUnpaid;
         const iTotal = interestPaid + interestUnpaid;
 
-        // 防止除以 0 導致 NaN
         const pPercent = pTotal > 0 ? +((principalPaid / pTotal) * 100).toFixed(1) : 0;
         const iPercent = iTotal > 0 ? +((interestPaid / iTotal) * 100).toFixed(1) : 0;
-
-        console.log(`本金: ${principalPaid}/${pTotal} (${pPercent}%), 利息: ${interestPaid}/${iTotal} (${iPercent}%)`);
-
-        const mainColor = '#FF4D6D';
-        const bgColor = '#FFE6EB'; // 淺粉色背景
+        const bgColor = '#FFE6EB';
 
         chart.setOption({
           grid: {left: '5%', right: '15%', top: '10%', bottom: '5%', containLabel: true},
@@ -650,7 +577,7 @@ export default {
               type: 'bar',
               stack: 'total',
               data: [iPercent, pPercent],
-              barWidth: 30, // 加寬一點
+              barWidth: 30,
               itemStyle: {
                 borderRadius: [15, 0, 0, 15],
                 color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [{offset: 0, color: '#FF4D6D'}, {
@@ -663,11 +590,7 @@ export default {
                 position: 'inside',
                 color: '#fff',
                 fontWeight: 'bold',
-                formatter: (p) => {
-                  const val = p.dataIndex === 0 ? interestPaid : principalPaid;
-                  // 空間太小不顯示文字
-                  return p.value > 10 ? `${p.value}%` : '';
-                }
+                formatter: (p) => p.value > 10 ? `${p.value}%` : ''
               }
             },
             {
@@ -679,7 +602,6 @@ export default {
               itemStyle: {color: bgColor, borderRadius: [0, 15, 15, 0]},
               label: {show: false}
             },
-            // 心形圖標
             {
               type: 'scatter',
               data: [[iPercent, 0], [pPercent, 1]],
@@ -703,17 +625,20 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+// 定義變量防止 SCSS 編譯報錯
+$text-primary: #303133;
 
 .home {
-  // Page Header styles
   .page-header {
     margin-bottom: 20px;
     border: none;
+
     .header-content {
       display: flex;
-      justify-content: space-between;
+      justify-content: flex-start;
       align-items: center;
     }
+
     .page-title {
       margin: 0;
       font-size: 24px;
@@ -722,26 +647,22 @@ export default {
     }
   }
 
-  // Use a consistent margin for rows
   .el-row + .el-row {
     margin-top: 20px;
   }
 
   .chart-card {
-    // el-card styles from global.scss are already applied
-    // We just add specific overrides or extensions here
     transition: transform 0.3s ease, box-shadow 0.3s ease;
+
     &:hover {
       transform: translateY(-5px);
     }
 
-    // Remove bottom margin for the last card in a column to avoid double spacing
     &:last-child {
-        margin-bottom: 0;
+      margin-bottom: 0;
     }
   }
 
-  // Refined Chart Header
   ::v-deep .el-card__header {
     border-bottom: 1px solid #e8eaec;
     padding: 16px 20px;
@@ -751,6 +672,7 @@ export default {
     display: flex;
     justify-content: space-between;
     align-items: center;
+
     span {
       font-size: 16px;
       font-weight: 600;
@@ -760,7 +682,7 @@ export default {
 
   .chart-box {
     width: 100%;
-    height: 360px; // Slightly increase height for better visuals
+    height: 360px;
   }
 
   .chart-box-small {
@@ -768,12 +690,7 @@ export default {
     height: 260px;
   }
 
-  // Responsive adjustments
   @media (max-width: 768px) {
-    .header-content {
-      flex-direction: column;
-      align-items: flex-start;
-    }
     .page-title {
       margin-bottom: 10px;
     }

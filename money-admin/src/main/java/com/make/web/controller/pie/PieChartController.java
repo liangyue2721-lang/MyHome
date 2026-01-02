@@ -113,7 +113,7 @@ public class PieChartController {
      *
      * @return 贷款总额加利息偿还比例数据
      */
-    @GetMapping("/totalRepaymentPieChart/{ids}")
+    @GetMapping("/totalRepaymentPieChart")
     public List<LoanTotalWithInterestRepaymentPieChart> getTotalRepaymentPieChart() {
         return pieChartService.getTotalRepaymentPieChart(SecurityUtils.getUserId());
     }

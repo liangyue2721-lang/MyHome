@@ -3,6 +3,7 @@ package com.make.finance.controller;
 import java.util.List;
 import javax.servlet.http.HttpServletResponse;
 
+import com.make.common.utils.SecurityUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -115,12 +116,9 @@ public class AssetRecordController extends BaseController {
     /**
      * 获取资产扇形图
      */
-    @GetMapping("/getRecordColumnChart/{userId}")
-    public AjaxResult getRecordColumnChart(@PathVariable Long userId) {
-        if (userId == null) {
-            return new AjaxResult(100, "失败", "userID is empty");
-        }
-        return new AjaxResult(200, "成功", assetRecordService.getRecordColumnChart(userId));
+    @GetMapping("/getRecordColumnChart")
+    public AjaxResult getRecordColumnChart() {
+        return new AjaxResult(200, "成功", assetRecordService.getRecordColumnChart(SecurityUtils.getUserId()));
     }
 
 

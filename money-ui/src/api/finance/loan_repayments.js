@@ -18,9 +18,9 @@ export function getLoanRepayments(id) {
 }
 
 // 查询贷款剩余详细
-export function getLoanRepaymentsLineChart(userId) {
+export function getLoanRepaymentsLineChart() {
   return request({
-    url: '/finance/loan_repayments/getLoanRepaymentsLineChart/' + userId,
+    url: '/finance/loan_repayments/getLoanRepaymentsLineChart',
     method: 'get'
   })
 }
