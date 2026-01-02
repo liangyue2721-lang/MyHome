@@ -2,21 +2,12 @@ package com.make.finance.controller;
 
 import java.io.File;
 import java.io.IOException;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
-import java.util.stream.Collectors;
 import javax.servlet.http.HttpServletResponse;
 
 import com.make.common.utils.file.FileUploadUtils;
-import com.make.finance.domain.dto.AliPayment;
-import com.make.finance.domain.dto.WeChatTransaction;
 import com.make.finance.utils.CSVUtil;
 import com.make.finance.utils.OSValidatorUtil;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -163,39 +154,14 @@ public class TransactionRecordsController extends BaseController {
             multipartFile.transferTo(savedFile);
 
             // 使用统一的智能解析器
-            // 不再依赖文件名判断，直接解析所有内容
-            List<TransactionRecords> records = CSVUtil.parse(savedFile);
+            // 自动解析并应用分类逻辑和 userId
+            List<TransactionRecords> records = CSVUtil.parse(savedFile, userId);
 
             // 如果转换后的记录不为空，进行后续处理
             if (!records.isEmpty()) {
-                // transactionRecordsService.insertTransactionRecordsBatch(records); // 使用批量插入方法
                 for (TransactionRecords record : records) {
-                    if (record.getProduct() == null) record.setProduct("");
-                    if (record.getTransactionType() == null) record.setTransactionType("");
-
-                    if (record.getProduct().contains("一卡通充值") || record.getProduct().contains("12306消费") || record.getTransactionType().contains("滴滴") || record.getTransactionType().contains("中铁")) {
-                        record.setProductType("交通出行");
-                    }
-                    if (record.getProduct().contains("衣") || record.getProduct().contains("口红") || record.getProduct().contains("唇")
-                            || record.getProduct().contains("靴") || record.getProduct().contains("唯品会") || record.getTransactionType().contains("唯品会")) {
-                        record.setProductType("服饰装扮");
-                    }
-                    if (record.getProduct().contains("扫二维码") || record.getTransactionType().contains("平台商户") || record.getTransactionType().contains("拼多多")) {
-                        record.setProductType("商户消费");
-                    }
-                    if (record.getProduct().contains("交费")) {
-                        record.setProductType("手机话费");
-                    }
-                    if (record.getProduct().contains("租房订单")) {
-                        record.setProductType("租房费用");
-                    }
-                    if (record.getProduct().contains("转账") || record.getProduct().contains("红包") || record.getTransactionType().contains("转账") || record.getTransactionType().contains("红包")) {
-                        record.setProductType("转账");
-                    }
-                    record.setUserId(userId);
                     transactionRecordsService.insertTransactionRecords(record); // 使用批量插入方法
                 }
-
             }
 
             // 返回成功信息，包含导入的数据条数
