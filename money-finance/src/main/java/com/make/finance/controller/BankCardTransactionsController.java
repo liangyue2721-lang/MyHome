@@ -9,8 +9,10 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import javax.servlet.http.HttpServletResponse;
 import com.make.common.utils.file.EasyExcelUtil;
+import com.make.common.utils.file.PdfUtil;
 import com.alibaba.fastjson2.JSONObject;
 import com.make.common.utils.file.FileUploadUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -143,18 +145,39 @@ public class BankCardTransactionsController extends BaseController {
 
             // 将上传的文件保存到指定路径
             multipartFile.transferTo(savedFile);
-            //解析Excel
-            List<Object> objects = EasyExcelUtil.readExcel(savedFile.getPath());
-            //数据转实体
+
             List<BankCardTransactions> bankCardTransactions = new ArrayList<>();
-            if (savedFile.getName().contains("招商")) {
-                bankCardTransactions = convertCMBJSONArrayToBankCardTransactionsList(objects);
-            } else if (savedFile.getName().contains("建设")) {
-                bankCardTransactions = convertJSYHJSONArrayToBankCardTransactionsList(objects);
+
+            // Check if it's a PDF
+            if (savedFile.getName().toLowerCase().endsWith(".pdf")) {
+                String bankType = "";
+                if (savedFile.getName().contains("招商")) {
+                    bankType = "CMB";
+                } else if (savedFile.getName().contains("建设")) {
+                    bankType = "CCB";
+                }
+
+                if (!bankType.isEmpty()) {
+                    List<Map<String, Object>> pdfData = PdfUtil.parsePdf(savedFile, bankType);
+                    if ("CMB".equals(bankType)) {
+                        bankCardTransactions = convertCMBMapListToTransactions(pdfData);
+                    } else if ("CCB".equals(bankType)) {
+                        bankCardTransactions = convertCCBMapListToTransactions(pdfData);
+                    }
+                }
+            } else {
+                //解析Excel
+                List<Object> objects = EasyExcelUtil.readExcel(savedFile.getPath());
+                //数据转实体
+                if (savedFile.getName().contains("招商")) {
+                    bankCardTransactions = convertCMBJSONArrayToBankCardTransactionsList(objects);
+                } else if (savedFile.getName().contains("建设")) {
+                    bankCardTransactions = convertJSYHJSONArrayToBankCardTransactionsList(objects);
+                }
             }
 
             if (CollectionUtils.isEmpty(bankCardTransactions)) {
-                return AjaxResult.error("导入失败：不支持的文件");
+                return AjaxResult.error("导入失败：不支持的文件或文件为空");
             } else {
                 //存储数据库
                 for (BankCardTransactions bankCardTransaction : bankCardTransactions) {
@@ -267,5 +290,57 @@ public class BankCardTransactionsController extends BaseController {
             count++;
         }
         return transactionsList;
+    }
+
+    private List<BankCardTransactions> convertCMBMapListToTransactions(List<Map<String, Object>> list) throws ParseException {
+        List<BankCardTransactions> transactions = new ArrayList<>();
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+        for (Map<String, Object> map : list) {
+            BankCardTransactions tx = new BankCardTransactions();
+            // NOTE: Hardcoded account details to match existing Excel import logic for CMB
+            tx.setAccountNo("6214831061297492");
+            tx.setSubBranch("北京回龙观支行");
+            tx.setBank("招商银行");
+            tx.setDate(sdf.parse((String) map.get("date")));
+            tx.setCurrency((String) map.get("currency"));
+            tx.setAmount(new BigDecimal((String) map.get("amount")));
+            tx.setBalance(new BigDecimal((String) map.get("balance")));
+            tx.setTransaction((String) map.get("transactionType"));
+            tx.setCounterParty((String) map.get("counterParty"));
+            transactions.add(tx);
+        }
+        return transactions;
+    }
+
+    private List<BankCardTransactions> convertCCBMapListToTransactions(List<Map<String, Object>> list) throws ParseException {
+        List<BankCardTransactions> transactions = new ArrayList<>();
+        // CCB uses yyyyMMdd in PDF based on heuristics in PdfUtil, but date in Map is string.
+        // PdfUtil for CCB returns "yyyyMMdd" as "date".
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
+        for (Map<String, Object> map : list) {
+            BankCardTransactions tx = new BankCardTransactions();
+            // NOTE: Hardcoded account details to match existing Excel import logic for CCB
+            tx.setAccountNo("6217000210014252752");
+            tx.setSubBranch("河北分行");
+            tx.setBank("建设银行");
+
+            String dateStr = (String) map.get("date");
+            // Basic validation to avoid ParseException if parsing failed
+            if (dateStr != null) {
+                tx.setDate(sdf.parse(dateStr));
+            }
+
+            tx.setCurrency("CNY");
+            if (map.get("amount") != null) {
+                tx.setAmount(new BigDecimal((String) map.get("amount")));
+            }
+            if (map.get("balance") != null) {
+                tx.setBalance(new BigDecimal((String) map.get("balance")));
+            }
+            tx.setTransaction((String) map.get("transactionType"));
+            tx.setCounterParty((String) map.get("counterParty"));
+            transactions.add(tx);
+        }
+        return transactions;
     }
 }
