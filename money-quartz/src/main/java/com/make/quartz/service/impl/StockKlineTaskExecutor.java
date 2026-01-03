@@ -66,7 +66,7 @@ public class StockKlineTaskExecutor {
 
             for (int i = 0; i < futures.size(); i++) {
                 try {
-                    ProcessResult r = futures.get(i).get(5, TimeUnit.MINUTES); // 单个任务超时
+                    ProcessResult r = futures.get(i).get(5, TimeUnit.HOURS); // 单个任务超时
                     if (r.success) {
                         batchInsert.addAll(r.insertList);
                         batchUpdate.addAll(r.updateList);

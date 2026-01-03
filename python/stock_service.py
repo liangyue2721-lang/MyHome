@@ -121,6 +121,8 @@ class TraceAdapter(logging.LoggerAdapter):
         kwargs["extra"]["request_id"] = self.extra["request_id"]
         return msg, kwargs
 
+class GenericJsonRequest(BaseModel):
+    url: str
 
 # =========================================================
 # Middleware
@@ -420,3 +422,12 @@ async def stock_kline(req: KlineRequest, request: Request):
         raise HTTPException(status_code=404, detail="Not Found")
 
     return raw_json["data"].get("klines", [])
+
+@app.post("/proxy/json")
+async def proxy_json(req: GenericJsonRequest, request: Request):
+    data_json = await fetch_json_with_browser(req.url, request.state.request_id)
+
+    if data_json is None:
+        raise HTTPException(status_code=502, detail="Invalid upstream JSON")
+
+    return data_json

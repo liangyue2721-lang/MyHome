@@ -7,7 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.make.common.constant.CacheConstants;
 import com.make.common.exception.business.BusinessException;
 import com.make.common.utils.ThreadPoolUtil;
-import com.make.quartz.domain.StockConfigProperties;
+import com.make.stock.domain.StockConfigProperties;
 import com.make.quartz.service.IRealTimeStockService;
 import com.make.quartz.util.DateUtil;
 import com.make.quartz.util.email.SendEmail;

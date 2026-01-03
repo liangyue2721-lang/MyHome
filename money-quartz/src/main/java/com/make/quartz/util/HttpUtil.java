@@ -3,7 +3,7 @@ package com.make.quartz.util;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.make.common.core.redis.RedisCache;
-import com.make.quartz.domain.StockConfigProperties;
+import com.make.stock.domain.StockConfigProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

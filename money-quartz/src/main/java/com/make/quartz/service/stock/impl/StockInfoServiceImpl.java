@@ -42,6 +42,7 @@ public class StockInfoServiceImpl implements StockInfoService {
     @Override
     public void refreshNewStockInformation() {
         log.info("【StockInfoService】开始刷新新股信息");
+        stockIssueInfoService.queryStockIssueInfo();
         // 注意：这里原类型可能是 NewStock，现修正为 StockIssueInfo
         // KlineDataFetcher.fetchNewStockInfo() 返回类型需要确认，假设它兼容或需适配
         // 暂时注释掉具体逻辑以保证编译，待后续确认 KlineDataFetcher 返回类型

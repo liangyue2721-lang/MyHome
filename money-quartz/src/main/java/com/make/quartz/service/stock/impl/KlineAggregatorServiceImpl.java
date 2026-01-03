@@ -82,7 +82,7 @@ public class KlineAggregatorServiceImpl implements KlineAggregatorService {
             // join() will throw CompletionException if any future failed (and wasn't handled by exceptionally,
             // but we added exceptionally which returns null, so join() will succeed but log errors)
             // If we want the main task to reflect partial success, this is fine.
-            CompletableFuture.allOf(watchTask, etfTask, klineTask).join();
+//            CompletableFuture.allOf(watchTask, etfTask, klineTask).join();
         } catch (Exception e) {
             log.error("=====【KlineAggregator】任务聚合异常 | TraceId: {} =====", traceId, e);
         }

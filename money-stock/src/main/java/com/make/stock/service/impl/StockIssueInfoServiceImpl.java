@@ -2,7 +2,12 @@ package com.make.stock.service.impl;
 
 import java.util.List;
 
+import com.alibaba.fastjson2.JSON;
 import com.make.common.utils.DateUtils;
+import com.make.stock.domain.StockConfigProperties;
+import com.make.stock.util.KlineDataFetcher;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import com.make.stock.mapper.StockIssueInfoMapper;
@@ -17,6 +22,9 @@ import com.make.stock.service.IStockIssueInfoService;
  */
 @Service
 public class StockIssueInfoServiceImpl implements IStockIssueInfoService {
+
+
+    private static final Logger log = LoggerFactory.getLogger(StockIssueInfoServiceImpl.class);
 
     @Autowired
     private StockIssueInfoMapper stockIssueInfoMapper;
@@ -90,8 +98,15 @@ public class StockIssueInfoServiceImpl implements IStockIssueInfoService {
     }
 
     @Override
-    public String queryStockIssueInfoCode(String applyCode){
+    public String queryStockIssueInfoCode(String applyCode) {
         return stockIssueInfoMapper.selectStockIssueInfoExistCode(applyCode);
+    }
+
+    @Override
+    public void queryStockIssueInfo() {
+        String stockIssueInfoApiUrl = StockConfigProperties.getInstance().getStockIssueInfoApiUrl();
+        Object o = KlineDataFetcher.fetchRawJson(stockIssueInfoApiUrl);
+        log.info("【stockIssueInfoApiUrl】查询新股发行信息: {}", JSON.toJSONString(o));
     }
 
 }

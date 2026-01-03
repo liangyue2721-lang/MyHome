@@ -1,7 +1,9 @@
 package com.make.stock.util;
 
 import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONException;
+import com.alibaba.fastjson2.JSONObject;
 import com.alibaba.fastjson2.TypeReference;
 import com.make.stock.domain.KlineData;
 import com.make.stock.domain.dto.EtfRealtimeInfo;
@@ -24,55 +26,44 @@ import java.util.*;
  * 类名：KlineDataFetcher
  * =========================================================
  * <p>
- * 【职责说明】
+ * 【核心职责】
  * Java ↔ Python 股票数据服务的统一访问入口，负责：
- * - K 线数据（返回 JSON 数组）
- * - 股票 / ETF 实时行情（返回 JSON 对象）
  * <p>
- * 【Python 服务真实返回结构】
+ * 1️⃣ K 线数据（JSON Array → 强类型 List<KlineData>）
+ * 2️⃣ 股票 / ETF 实时行情（JSON Object → 强类型 DTO）
+ * 3️⃣ 🔥 通用 JSON 代理（JSON Object / Array → 自动识别）
  * <p>
- * 1️⃣ K线接口：/stock/kline /stock/kline/range /stock/kline/us
- * ----------------------------------------------------------
- * 返回：JSON Array
+ * 【设计约束（非常重要）】
+ * - Python 端不使用统一 Response 包装
+ * - Java 端必须解析“裸 JSON”
+ * - 不能假设返回一定是 Object 或 Array
  * <p>
- * [
- * {
- * "trade_date": "2025-12-22",
- * "stock_code": "600000",
- * "open": 11.65,
- * "close": 11.64
- * }
- * ]
- * <p>
- * 2️⃣ 实时行情接口：/stock/realtime /etf/realtime
- * ----------------------------------------------------------
- * 返回：JSON Object
- * <p>
- * {
- * "stockCode": "601138",
- * "price": 63.84
- * }
- * <p>
- * ❗ Python 当前未使用统一 Response 包装，
- * Java 端必须直接解析裸 JSON，严禁假设 PythonResponse。
+ * 【已验证支持的结构】
+ * - 东财 IPO：Object → Object → Array
+ * - K 线：Array
+ * - 实时行情：Object
  * =========================================================
  */
 @Slf4j
 @Component
 public class KlineDataFetcher {
 
+    /* =====================================================
+     * 基础配置
+     * ===================================================== */
+
     /**
-     * Python 服务地址
+     * Python 服务基础地址（如：http://localhost:8000）
      */
     private static String pythonServiceUrl;
 
     /**
-     * HTTP 客户端
+     * Spring RestTemplate（同步调用）
      */
     private static RestTemplate restTemplate;
 
     /**
-     * 日期格式
+     * K 线日期格式
      */
     private static final DateTimeFormatter DATE_FORMATTER =
             DateTimeFormatter.ofPattern("yyyyMMdd");
@@ -100,18 +91,20 @@ public class KlineDataFetcher {
                 pythonServiceUrl, timeoutMillis);
     }
 
-    // =========================================================
-    // 核心调用方法（解析裸 JSON）
-    // =========================================================
+    /* =====================================================
+     * 一、原有强类型调用（保持不变）
+     * ===================================================== */
 
     /**
-     * 调用 Python 服务并解析裸 JSON 数据
+     * 调用 Python 服务并解析为指定强类型
+     * <p>
+     * ⚠ 使用前提：
+     * - 明确知道 Python 返回的是 Object 或 Array
+     * - 并且能直接映射为目标 TypeReference
      *
      * @param path    Python 接口路径
-     * @param body    请求参数
+     * @param body    请求体
      * @param typeRef 返回类型
-     * @param <T>     泛型
-     * @return 解析后的数据对象
      */
     private static <T> T callPythonSyncData(
             String path,
@@ -138,30 +131,99 @@ public class KlineDataFetcher {
                     response.getStatusCodeValue(), response.getBody());
         }
 
-        String json = response.getBody().trim();
-
         try {
-            return JSON.parseObject(json, typeRef);
+            return JSON.parseObject(response.getBody(), typeRef);
         } catch (JSONException e) {
-            log.error("JSON parse error, path={}, body={}", path, truncate(json), e);
+            log.error("JSON parse error, path={}, body={}", path, truncate(response.getBody()), e);
             throw new PythonServiceException(502, "Invalid JSON from python");
         }
     }
 
-    // =========================================================
-    // 对外 API —— K线
-    // =========================================================
+    /* =====================================================
+     * 二、🔥 新增：通用 JSON 代理能力
+     * ===================================================== */
 
     /**
-     * 获取沪深股票日线（不指定区间）
+     * 调用 Python /proxy/json
+     * <p>
+     * 【返回说明】
+     * - JSONObject：如 IPO / 实时行情
+     * - JSONArray ：如 K 线 / 列表接口
+     * <p>
+     * ⚠ 不做任何结构假设
      */
+    public static Object fetchRawJson(String targetUrl) {
+        String url = pythonServiceUrl + "/proxy/json";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        HttpEntity<Object> entity =
+                new HttpEntity<>(Map.of("url", targetUrl), headers);
+
+        ResponseEntity<String> response;
+        try {
+            response = restTemplate.postForEntity(url, entity, String.class);
+        } catch (Exception e) {
+            log.error("Python proxy call failed", e);
+            throw new PythonServiceException(500, "Python service unreachable");
+        }
+
+        if (!response.getStatusCode().is2xxSuccessful()
+                || response.getBody() == null) {
+            throw new PythonServiceException(
+                    response.getStatusCodeValue(), response.getBody());
+        }
+
+        try {
+            return JSON.parse(response.getBody());
+        } catch (JSONException e) {
+            throw new PythonServiceException(502, "Invalid JSON from python");
+        }
+    }
+
+    /**
+     * 要求返回必须是 JSONObject
+     */
+    public static JSONObject requireObject(Object raw) {
+        if (raw instanceof JSONObject obj) {
+            return obj;
+        }
+        throw new PythonServiceException(502, "Expected JSON Object");
+    }
+
+    /**
+     * 要求返回必须是 JSONArray
+     */
+    public static JSONArray requireArray(Object raw) {
+        if (raw instanceof JSONArray arr) {
+            return arr;
+        }
+        throw new PythonServiceException(502, "Expected JSON Array");
+    }
+
+    /**
+     * JSONObject → Java Entity
+     */
+    public static <T> T mapObject(Object raw, Class<T> clazz) {
+        return requireObject(raw).toJavaObject(clazz);
+    }
+
+    /**
+     * JSONArray → List<Entity>
+     */
+    public static <T> List<T> mapArray(Object raw, Class<T> clazz) {
+        return requireArray(raw).toJavaList(clazz);
+    }
+
+    /* =====================================================
+     * 三、对外业务 API（原样保留）
+     * ===================================================== */
+
     public static List<KlineData> fetchKlineData(String secid, String market) {
         return fetchKlineDataRange(secid, market, null, null);
     }
 
-    /**
-     * 获取沪深股票区间 K 线
-     */
     public static List<KlineData> fetchKlineDataRange(
             String secid, String market,
             String startDate, String endDate) {
@@ -179,26 +241,17 @@ public class KlineDataFetcher {
         );
     }
 
-    /**
-     * 获取今日（近 3 日）K 线
-     */
     public static List<KlineData> fetchTodayKlineData(String secid, String market) {
         String today = LocalDate.now().format(DATE_FORMATTER);
         String threeDaysAgo = LocalDate.now().minusDays(3).format(DATE_FORMATTER);
         return fetchKlineDataRange(secid, market, threeDaysAgo, today);
     }
 
-    /**
-     * 获取美股今日 K 线（⚠ 原始代码中的方法，已补齐）
-     */
     public static List<KlineData> fetchTodayUSKlineData(String secid, String market) {
         String today = LocalDate.now().format(DATE_FORMATTER);
         return fetchUSKlineData(secid, market, today, today);
     }
 
-    /**
-     * 获取美股区间 K 线
-     */
     public static List<KlineData> fetchUSKlineData(
             String secid, String market,
             String startDate, String endDate) {
@@ -217,9 +270,6 @@ public class KlineDataFetcher {
         );
     }
 
-    /**
-     * 获取最近 5 日 K 线
-     */
     public static List<KlineData> fetchKlineDataFiveDay(String secid, String market) {
         Map<String, Object> body = new HashMap<>();
         body.put("secid", formatFullSecid(secid, market));
@@ -233,9 +283,6 @@ public class KlineDataFetcher {
         );
     }
 
-    /**
-     * 获取全部历史 K 线
-     */
     public static List<KlineData> fetchKlineDataAll(String secid, String market) {
         Map<String, Object> body = new HashMap<>();
         body.put("secid", formatFullSecid(secid, market));
@@ -249,39 +296,27 @@ public class KlineDataFetcher {
         );
     }
 
-    // =========================================================
-    // 对外 API —— 实时行情
-    // =========================================================
-
-    /**
-     * 股票实时行情
-     */
     public static StockRealtimeInfo fetchRealtimeInfo(String apiUrl) {
-        Map<String, Object> body = Map.of("url", apiUrl);
         return callPythonSyncData(
                 "/stock/realtime",
-                body,
+                Map.of("url", apiUrl),
                 new TypeReference<StockRealtimeInfo>() {
                 }
         );
     }
 
-    /**
-     * ETF 实时行情
-     */
     public static EtfRealtimeInfo fetchEtfRealtimeInfo(String apiUrl) {
-        Map<String, Object> body = Map.of("url", apiUrl);
         return callPythonSyncData(
                 "/etf/realtime",
-                body,
+                Map.of("url", apiUrl),
                 new TypeReference<EtfRealtimeInfo>() {
                 }
         );
     }
 
-    // =========================================================
-    // 工具方法
-    // =========================================================
+    /* =====================================================
+     * 工具方法
+     * ===================================================== */
 
     /**
      * 生成完整 secid，如 SH.600000
@@ -291,7 +326,7 @@ public class KlineDataFetcher {
     }
 
     /**
-     * 截断日志，避免刷屏
+     * 日志截断，防止刷屏
      */
     private static String truncate(String s) {
         return s.length() > 2000 ? s.substring(0, 2000) + "..." : s;

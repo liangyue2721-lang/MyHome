@@ -72,4 +72,6 @@ public interface IStockIssueInfoService {
      */
     String queryStockIssueInfoCode(String applyCode);
 
+    void queryStockIssueInfo();
+
 }
