@@ -17,7 +17,7 @@ Logback Version: 1.2.13
 Spring Security Version: 5.7.12
 Spring Framework Version: 5.3.39
 Maven JAR Plugin Version: 3.1.1
-Java Version: 1.8
+Java Version: 17
 Project Build Source Encoding: UTF-8
 Project Reporting Output Encoding: UTF-8
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
