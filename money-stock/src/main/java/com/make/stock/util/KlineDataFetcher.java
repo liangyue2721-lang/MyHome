@@ -119,12 +119,14 @@ public class KlineDataFetcher {
 
         ResponseEntity<String> response;
         try {
+            // 发起 HTTP POST 请求
             response = restTemplate.postForEntity(url, entity, String.class);
         } catch (Exception e) {
             log.error("HTTP call failed: {}", url, e);
             throw new PythonServiceException(500, "Python service unreachable");
         }
 
+        // 检查 HTTP 状态码
         if (!response.getStatusCode().is2xxSuccessful()
                 || response.getBody() == null) {
             throw new PythonServiceException(
@@ -132,6 +134,7 @@ public class KlineDataFetcher {
         }
 
         try {
+            // 解析 JSON 响应
             return JSON.parseObject(response.getBody(), typeRef);
         } catch (JSONException e) {
             log.error("JSON parse error, path={}, body={}", path, truncate(response.getBody()), e);
@@ -158,6 +161,7 @@ public class KlineDataFetcher {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
 
+        // 构造请求体，包含目标 URL
         HttpEntity<Object> entity =
                 new HttpEntity<>(Map.of("url", targetUrl), headers);
 
@@ -176,6 +180,7 @@ public class KlineDataFetcher {
         }
 
         try {
+            // 自动解析为 JSONObject 或 JSONArray
             return JSON.parse(response.getBody());
         } catch (JSONException e) {
             throw new PythonServiceException(502, "Invalid JSON from python");
@@ -224,15 +229,29 @@ public class KlineDataFetcher {
         return fetchKlineDataRange(secid, market, null, null);
     }
 
+    /**
+     * 获取指定时间范围的 K 线数据
+     * <p>
+     * 调用 Python 的 /stock/kline/range 接口
+     *
+     * @param secid     股票代码
+     * @param market    市场代码
+     * @param startDate 开始日期 (yyyyMMdd)
+     * @param endDate   结束日期 (yyyyMMdd)
+     * @return K 线数据列表
+     */
     public static List<KlineData> fetchKlineDataRange(
             String secid, String market,
             String startDate, String endDate) {
 
         Map<String, Object> body = new HashMap<>();
+        // 构造完整 secid (market.code)
         body.put("secid", formatFullSecid(secid, market));
+        // 添加起止时间参数
         if (startDate != null) body.put("beg", startDate);
         if (endDate != null) body.put("end", endDate);
 
+        // 调用 Python 接口获取区间 K 线
         return callPythonSyncData(
                 "/stock/kline/range",
                 body,
@@ -252,16 +271,29 @@ public class KlineDataFetcher {
         return fetchUSKlineData(secid, market, today, today);
     }
 
+    /**
+     * 获取美股 K 线数据
+     * <p>
+     * 调用 Python 的 /stock/kline/us 接口
+     *
+     * @param secid     股票代码
+     * @param market    市场标识 (105/106)
+     * @param startDate 开始日期
+     * @param endDate   结束日期
+     * @return K 线数据列表
+     */
     public static List<KlineData> fetchUSKlineData(
             String secid, String market,
             String startDate, String endDate) {
 
         Map<String, Object> body = new HashMap<>();
+        // 美股接口参数：secid 和 market 分开传递
         body.put("secid", secid);
         body.put("market", market);
         body.put("beg", startDate);
         body.put("end", endDate);
 
+        // 调用 Python 美股 K 线接口
         return callPythonSyncData(
                 "/stock/kline/us",
                 body,

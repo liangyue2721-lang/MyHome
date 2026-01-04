@@ -341,6 +341,19 @@ class KlineRequest(BaseModel):
     ndays: int
 
 
+class KlineRangeRequest(BaseModel):
+    secid: str
+    beg: Optional[str] = None
+    end: Optional[str] = None
+
+
+class USKlineRequest(BaseModel):
+    secid: str
+    market: str
+    beg: Optional[str] = None
+    end: Optional[str] = None
+
+
 # =========================================================
 # Business Helpers（原样）
 # =========================================================
@@ -422,6 +435,51 @@ async def stock_kline(req: KlineRequest, request: Request):
         raise HTTPException(status_code=404, detail="Not Found")
 
     return raw_json["data"].get("klines", [])
+
+
+@app.post("/stock/kline/range")
+async def stock_kline_range(req: KlineRangeRequest, request: Request):
+    secid = normalize_secid(req.secid)
+    # 默认起止时间
+    beg_date = req.beg if req.beg else "19900101"
+    end_date = req.end if req.end else "20500101"
+
+    url = (
+        "https://push2his.eastmoney.com/api/qt/stock/kline/get?"
+        "fields1=f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12,f13&"
+        "fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&"
+        f"beg={beg_date}&end={end_date}&secid={secid}&klt=101&fqt=1"
+    )
+
+    raw_json = await fetch_json_with_browser(url, request.state.request_id)
+    if not raw_json or not raw_json.get("data"):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    return raw_json["data"].get("klines", [])
+
+
+@app.post("/stock/kline/us")
+async def stock_kline_us(req: USKlineRequest, request: Request):
+    # 美股 secid 格式 usually "105.MSFT" or "106.IBM"
+    # req.market typically "105" or "106"
+    full_secid = f"{req.market}.{req.secid}"
+
+    beg_date = req.beg if req.beg else "19900101"
+    end_date = req.end if req.end else "20500101"
+
+    url = (
+        "https://push2his.eastmoney.com/api/qt/stock/kline/get?"
+        "fields1=f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12,f13&"
+        "fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&"
+        f"beg={beg_date}&end={end_date}&secid={full_secid}&klt=101&fqt=1"
+    )
+
+    raw_json = await fetch_json_with_browser(url, request.state.request_id)
+    if not raw_json or not raw_json.get("data"):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    return raw_json["data"].get("klines", [])
+
 
 @app.post("/proxy/json")
 async def proxy_json(req: GenericJsonRequest, request: Request):
