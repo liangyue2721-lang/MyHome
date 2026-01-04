@@ -406,7 +406,35 @@ async def stock_kline_range(req: KlineRangeRequest, request: Request):
     )
 
     raw = await fetch_json_with_browser(url, request.state.request_id)
-    return raw.get("data", {}).get("klines", [])
+    klines = raw.get("data", {}).get("klines", [])
+
+    result = []
+    for line in klines:
+        try:
+            arr = line.split(",")
+            if len(arr) < 11:
+                continue
+
+            result.append({
+                "trade_date": arr[0],
+                "trade_time": None,  # Java Date，可为空
+                "stock_code": req.secid,
+                "open": float(arr[1]),
+                "close": float(arr[2]),
+                "high": float(arr[3]),
+                "low": float(arr[4]),
+                "volume": int(arr[5]),
+                "amount": float(arr[6]),
+                "change": float(arr[9]),
+                "change_percent": float(arr[8]),
+                "turnover_ratio": float(arr[10]),
+                "pre_close": None  # 东方财富未提供
+            })
+        except Exception:
+            # 单条异常直接跳过，避免整体失败
+            continue
+
+    return result
 
 
 @app.post("/stock/kline/us")
