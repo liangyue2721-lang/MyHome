@@ -14,7 +14,6 @@ from logging.handlers import TimedRotatingFileHandler
 
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
-# 1. 引入 Playwright 的 Error 类型以便捕获
 from playwright.async_api import async_playwright, Browser, Error as PlaywrightError
 
 # =========================================================
@@ -25,70 +24,43 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_DIR = os.path.join(BASE_DIR, "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 
-# ---------- main logger ----------
-logger = logging.getLogger("stock-service")
-logger.setLevel(logging.INFO)
 
-formatter = logging.Formatter(
-    "[%(asctime)s] [%(levelname)s] %(message)s",
-    "%Y-%m-%d %H:%M:%S"
+def _build_logger(name, filename, fmt):
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
+    logger.handlers.clear()
+
+    fh = TimedRotatingFileHandler(
+        os.path.join(LOG_DIR, filename),
+        when="midnight",
+        interval=1,
+        backupCount=14,
+        encoding="utf-8"
+    )
+    fh.setFormatter(fmt)
+    logger.addHandler(fh)
+    return logger
+
+
+logger = _build_logger(
+    "stock-service",
+    "stock_service.log",
+    logging.Formatter("[%(asctime)s] [%(levelname)s] %(message)s")
 )
 
-for h in list(logger.handlers):
-    logger.removeHandler(h)
-
-ch = logging.StreamHandler()
-ch.setFormatter(formatter)
-logger.addHandler(ch)
-
-fh = TimedRotatingFileHandler(
-    os.path.join(LOG_DIR, "stock_service.log"),
-    when="midnight",
-    interval=1,
-    backupCount=30,
-    encoding="utf-8"
+access_logger = _build_logger(
+    "access",
+    "access.log",
+    logging.Formatter("%(message)s")
 )
-fh.setFormatter(formatter)
-logger.addHandler(fh)
 
-# ---------- access logger ----------
-access_logger = logging.getLogger("access")
-access_logger.setLevel(logging.INFO)
-
-for h in list(access_logger.handlers):
-    access_logger.removeHandler(h)
-
-access_fh = TimedRotatingFileHandler(
-    os.path.join(LOG_DIR, "access.log"),
-    when="midnight",
-    interval=1,
-    backupCount=14,
-    encoding="utf-8"
-)
-access_fh.setFormatter(logging.Formatter("%(message)s"))
-access_logger.addHandler(access_fh)
-
-# ---------- trace logger ----------
-trace_logger = logging.getLogger("trace")
-trace_logger.setLevel(logging.INFO)
-
-for h in list(trace_logger.handlers):
-    trace_logger.removeHandler(h)
-
-trace_fh = TimedRotatingFileHandler(
-    os.path.join(LOG_DIR, "trace.log"),
-    when="midnight",
-    interval=1,
-    backupCount=14,
-    encoding="utf-8"
-)
-trace_fh.setFormatter(
+trace_logger = _build_logger(
+    "trace",
+    "trace.log",
     logging.Formatter(
-        "[%(asctime)s] [%(levelname)s] [%(request_id)s] %(message)s",
-        "%Y-%m-%d %H:%M:%S"
+        "[%(asctime)s] [%(levelname)s] [%(request_id)s] %(message)s"
     )
 )
-trace_logger.addHandler(trace_fh)
 
 logging.getLogger("uvicorn.access").disabled = True
 
@@ -99,7 +71,7 @@ logging.getLogger("uvicorn.access").disabled = True
 app = FastAPI(title="Stock Data Service", version="1.3.1")
 
 # =========================================================
-# Global Runtime
+# Runtime Globals
 # =========================================================
 
 PLAYWRIGHT: Optional[Any] = None
@@ -121,8 +93,6 @@ class TraceAdapter(logging.LoggerAdapter):
         kwargs["extra"]["request_id"] = self.extra["request_id"]
         return msg, kwargs
 
-class GenericJsonRequest(BaseModel):
-    url: str
 
 # =========================================================
 # Middleware
@@ -133,7 +103,7 @@ async def access_log_middleware(request: Request, call_next):
     request_id = uuid.uuid4().hex[:12]
     request.state.request_id = request_id
 
-    start_time = time.time()
+    start = time.time()
     status_code = 500
     error = None
 
@@ -145,16 +115,13 @@ async def access_log_middleware(request: Request, call_next):
         error = str(e)
         raise
     finally:
-        duration_ms = int((time.time() - start_time) * 1000)
-
         access_logger.info(json.dumps({
             "ts": datetime.utcnow().isoformat() + "Z",
             "rid": request_id,
-            "ip": request.client.host if request.client else None,
-            "method": request.method,
             "path": request.url.path,
+            "method": request.method,
             "status": status_code,
-            "cost_ms": duration_ms,
+            "cost_ms": int((time.time() - start) * 1000),
             "error": error,
         }, ensure_ascii=False))
 
@@ -207,7 +174,6 @@ async def startup():
 
     SEMAPHORE = asyncio.Semaphore(10)
 
-    # 创建长期页面
     for i in range(2):
         context = await BROWSER.new_context(
             locale="zh-CN",
@@ -223,7 +189,6 @@ async def startup():
 
         page = await context.new_page()
         try:
-            # 2. 增加 wait_until='networkidle' 让初始化更稳定
             await page.goto(
                 "https://quote.eastmoney.com/",
                 wait_until="domcontentloaded",
@@ -249,32 +214,30 @@ async def shutdown():
 
 
 # =========================================================
-# Browser Fetch (核心修复部分)
+# Browser Fetch (日志增强)
 # =========================================================
 
 async def fetch_json_with_browser(url: str, request_id: str, max_retry=3):
     global PAGE_INDEX
 
     trace = TraceAdapter(trace_logger, {"request_id": request_id})
+    trace.info(f"Fetch start url={url}")
 
     if not PAGES:
+        trace.error("Browser not ready")
         raise HTTPException(status_code=500, detail="Browser service not ready")
 
     async with SEMAPHORE:
         async with PAGE_LOCK:
             page = PAGES[PAGE_INDEX]
-            page_idx = PAGE_INDEX
+            idx = PAGE_INDEX
             PAGE_INDEX = (PAGE_INDEX + 1) % len(PAGES)
 
-        trace.info(f"Use page index={page_idx}")
-        trace.info(f"Fetch start: {url}")
+        trace.info(f"Use page index={idx}")
 
         for attempt in range(1, max_retry + 1):
-            start = time.time()
-            text = None
-
             try:
-                # 3. 执行 JS Fetch
+                start = time.time()
                 text = await page.evaluate(
                     """async (url) => {
                         const r = await fetch(url, {
@@ -289,42 +252,33 @@ async def fetch_json_with_browser(url: str, request_id: str, max_retry=3):
                     url,
                 )
 
-            # 4. 捕获 Playwright 特定错误
-            except PlaywrightError as e:
-                err_msg = str(e)
-                # 核心修复：如果上下文被销毁，或者页面崩溃，则重新加载页面
-                if "Execution context was destroyed" in err_msg or "Target closed" in err_msg:
-                    trace.warning(f"Page context lost (Attempt {attempt}): {err_msg}. Reloading page...")
-                    try:
-                        # 尝试刷新页面来恢复环境
-                        await page.reload(wait_until="domcontentloaded", timeout=10000)
-                        trace.info("Page reloaded successfully. Retrying fetch...")
-                        continue  # 跳过本次循环的剩余部分，直接进入下一次 attempt
-                    except Exception as reload_e:
-                        trace.error(f"Failed to reload page: {reload_e}")
-                        # 如果刷新都失败了，可能需要抛出异常或尝试下一个页面(这里选择继续抛出让上层处理)
+                cost = int((time.time() - start) * 1000)
+                trace.info(f"[Attempt {attempt}] fetch ok cost={cost}ms len={len(text)}")
 
-                # 如果是其他错误，记录并继续尝试
-                trace.warning(f"Playwright error on attempt {attempt}: {e}")
+                parsed = parse_json_or_jsonp(text)
+                if parsed:
+                    trace.info(f"[Attempt {attempt}] JSON parse success")
+                    return parsed
+
+                trace.warning(
+                    f"[Attempt {attempt}] JSON parse failed "
+                    f"head={text[:120]!r} tail={text[-120:]!r}"
+                )
+
+            except PlaywrightError as e:
+                trace.warning(
+                    f"[Attempt {attempt}] PlaywrightError {type(e).__name__}: {e}"
+                )
+                if "Execution context was destroyed" in str(e) or "Target closed" in str(e):
+                    trace.warning("Reloading page...")
+                    await page.reload(wait_until="domcontentloaded", timeout=10000)
 
             except Exception as e:
-                trace.warning(f"General error on attempt {attempt}: {e}")
+                trace.error(
+                    f"[Attempt {attempt}] GeneralError {type(e).__name__}: {e}"
+                )
 
-            # 5. 如果没有拿到 text (报错了)，则进入下一次重试
-            if text is None:
-                continue
-
-            cost = int((time.time() - start) * 1000)
-            trace.info(f"Attempt {attempt} done cost={cost}ms size={len(text)}")
-
-            parsed = parse_json_or_jsonp(text)
-            if parsed:
-                trace.info("JSON parse success")
-                return parsed
-
-            trace.warning(f"Parse failed attempt={attempt} snippet={text[:200]!r}")
-
-        trace.error("All retries failed")
+        trace.error(f"All retries failed url={url}")
         raise HTTPException(status_code=500, detail="Upstream fetch failed")
 
 
@@ -354,8 +308,12 @@ class USKlineRequest(BaseModel):
     end: Optional[str] = None
 
 
+class GenericJsonRequest(BaseModel):
+    url: str
+
+
 # =========================================================
-# Business Helpers（原样）
+# Business Helpers
 # =========================================================
 
 def safe_get(dct, key):
@@ -371,7 +329,7 @@ def standardize_realtime_data(data: Dict[str, Any]) -> Dict[str, Any]:
         except Exception:
             return None
 
-    def _numeric_or_none(val):
+    def _num(val):
         if val in (None, "", "-"):
             return None
         return val
@@ -384,16 +342,16 @@ def standardize_realtime_data(data: Dict[str, Any]) -> Dict[str, Any]:
         "openPrice": _div100(safe_get(data, "f46")),
         "highPrice": _div100(safe_get(data, "f44")),
         "lowPrice": _div100(safe_get(data, "f45")),
-        "volume": _numeric_or_none(safe_get(data, "f47")),
-        "turnover": _numeric_or_none(safe_get(data, "f48")),
-        "volumeRatio": _numeric_or_none(safe_get(data, "f52")),
-        "commissionRatio": _numeric_or_none(safe_get(data, "f20")),
-        "mainFundsInflow": _numeric_or_none(safe_get(data, "f152")),
+        "volume": _num(safe_get(data, "f47")),
+        "turnover": _num(safe_get(data, "f48")),
+        "volumeRatio": _num(safe_get(data, "f52")),
+        "commissionRatio": _num(safe_get(data, "f20")),
+        "mainFundsInflow": _num(safe_get(data, "f152")),
     }
 
 
 # =========================================================
-# Endpoints（接口不变）
+# Endpoints (全部保留)
 # =========================================================
 
 @app.get("/health")
@@ -403,89 +361,74 @@ def health():
 
 @app.post("/stock/realtime")
 async def stock_realtime(req: RealtimeRequest, request: Request):
-    data_json = await fetch_json_with_browser(req.url, request.state.request_id)
-    if not data_json or not data_json.get("data"):
+    raw = await fetch_json_with_browser(req.url, request.state.request_id)
+    if not raw or not raw.get("data"):
         raise HTTPException(status_code=404, detail="Not Found")
-    return standardize_realtime_data(data_json["data"])
+    return standardize_realtime_data(raw["data"])
 
 
 @app.post("/etf/realtime")
 async def etf_realtime(req: RealtimeRequest, request: Request):
-    data_json = await fetch_json_with_browser(req.url, request.state.request_id)
-    if not data_json or not data_json.get("data"):
+    raw = await fetch_json_with_browser(req.url, request.state.request_id)
+    if not raw or not raw.get("data"):
         raise HTTPException(status_code=404, detail="Not Found")
-    return standardize_realtime_data(data_json["data"])
+    return standardize_realtime_data(raw["data"])
 
 
 @app.post("/stock/kline")
 async def stock_kline(req: KlineRequest, request: Request):
     secid = normalize_secid(req.secid)
     lookback = req.ndays * 2 + 20
-    beg_date = (datetime.now() - timedelta(days=lookback)).strftime("%Y%m%d")
+    beg = (datetime.now() - timedelta(days=lookback)).strftime("%Y%m%d")
 
     url = (
         "https://push2his.eastmoney.com/api/qt/stock/kline/get?"
         "fields1=f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12,f13&"
         "fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&"
-        f"beg={beg_date}&end=20500101&secid={secid}&klt=101&fqt=1"
+        f"beg={beg}&end=20500101&secid={secid}&klt=101&fqt=1"
     )
 
-    raw_json = await fetch_json_with_browser(url, request.state.request_id)
-    if not raw_json or not raw_json.get("data"):
-        raise HTTPException(status_code=404, detail="Not Found")
-
-    return raw_json["data"].get("klines", [])
+    raw = await fetch_json_with_browser(url, request.state.request_id)
+    return raw.get("data", {}).get("klines", [])
 
 
 @app.post("/stock/kline/range")
 async def stock_kline_range(req: KlineRangeRequest, request: Request):
     secid = normalize_secid(req.secid)
-    # 默认起止时间
-    beg_date = req.beg if req.beg else "19900101"
-    end_date = req.end if req.end else "20500101"
+    beg = req.beg or "19900101"
+    end = req.end or "20500101"
 
     url = (
         "https://push2his.eastmoney.com/api/qt/stock/kline/get?"
         "fields1=f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12,f13&"
         "fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&"
-        f"beg={beg_date}&end={end_date}&secid={secid}&klt=101&fqt=1"
+        f"beg={beg}&end={end}&secid={secid}&klt=101&fqt=1"
     )
 
-    raw_json = await fetch_json_with_browser(url, request.state.request_id)
-    if not raw_json or not raw_json.get("data"):
-        raise HTTPException(status_code=404, detail="Not Found")
-
-    return raw_json["data"].get("klines", [])
+    raw = await fetch_json_with_browser(url, request.state.request_id)
+    return raw.get("data", {}).get("klines", [])
 
 
 @app.post("/stock/kline/us")
 async def stock_kline_us(req: USKlineRequest, request: Request):
-    # 美股 secid 格式 usually "105.MSFT" or "106.IBM"
-    # req.market typically "105" or "106"
-    full_secid = f"{req.market}.{req.secid}"
-
-    beg_date = req.beg if req.beg else "19900101"
-    end_date = req.end if req.end else "20500101"
+    secid = f"{req.market}.{req.secid}"
+    beg = req.beg or "19900101"
+    end = req.end or "20500101"
 
     url = (
         "https://push2his.eastmoney.com/api/qt/stock/kline/get?"
         "fields1=f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12,f13&"
         "fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&"
-        f"beg={beg_date}&end={end_date}&secid={full_secid}&klt=101&fqt=1"
+        f"beg={beg}&end={end}&secid={secid}&klt=101&fqt=1"
     )
 
-    raw_json = await fetch_json_with_browser(url, request.state.request_id)
-    if not raw_json or not raw_json.get("data"):
-        raise HTTPException(status_code=404, detail="Not Found")
-
-    return raw_json["data"].get("klines", [])
+    raw = await fetch_json_with_browser(url, request.state.request_id)
+    return raw.get("data", {}).get("klines", [])
 
 
 @app.post("/proxy/json")
 async def proxy_json(req: GenericJsonRequest, request: Request):
-    data_json = await fetch_json_with_browser(req.url, request.state.request_id)
-
-    if data_json is None:
+    data = await fetch_json_with_browser(req.url, request.state.request_id)
+    if data is None:
         raise HTTPException(status_code=502, detail="Invalid upstream JSON")
-
-    return data_json
+    return data

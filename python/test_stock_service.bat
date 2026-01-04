@@ -1,155 +1,236 @@
 @echo off
+@if "%~1" neq "__child" (
+    cmd /k "%~f0" __child
+    exit /b
+)
+
 chcp 65001 >nul
 setlocal EnableDelayedExpansion
 
-REM ==========================================================
-REM test_stock_service.bat
-REM 全面验证 stock_service.py 及关联脚本功能（UTF-8 控制台）
-REM ==========================================================
-
-REM --------------------
-REM 配置
-REM --------------------
+REM ================= CONFIG =================
 set "HOST=localhost"
 set "PORT=8000"
 set "BASE_URL=http://%HOST%:%PORT%"
+set "DEBUG=1"
 
-REM --------------------
-REM 统计变量
-REM --------------------
-set "PASS_COUNT=0"
-set "FAIL_COUNT=0"
+set PASS_COUNT=0
+set FAIL_COUNT=0
 
-REM ==========================================================
-REM 1) Health Check
-REM ==========================================================
+goto :MAIN
 
-echo.
-echo ----------------------------------------------------------
-echo [TEST] Health Check
-echo ----------------------------------------------------------
-
-curl -s "%BASE_URL%/health" > health_out.json
-
-set "LINES=0"
-for /f %%A in ('findstr /R /V "^$" health_out.json ^| find /C /V ""') do (
-    set "LINES=%%A"
-)
-
-if !LINES! GTR 0 (
-    echo [PASS] Health returned !LINES! lines
-    set /a PASS_COUNT+=1
-) else (
-    echo [FAIL] Health returned no output
+REM ================= FUNCTION =================
+:check_json_field
+REM %1=file %2=field
+findstr /C:"\"%2\"" "%1" >nul
+if errorlevel 1 (
+    echo     [FAIL] Missing JSON field: %2
     set /a FAIL_COUNT+=1
+    exit /b 1
 )
+exit /b 0
 
-echo Output:
-type health_out.json
-del health_out.json
-
-REM ==========================================================
-REM 2) Stock Realtime
-REM ==========================================================
-
-echo.
-echo ----------------------------------------------------------
-echo [TEST] Stock Realtime
-echo ----------------------------------------------------------
-
-echo {"url":"https://push2.eastmoney.com/api/qt/stock/get?invt=2&fltt=1&fields=f58,f734,f107,f57,f43,f59,f169,f301,f60,f170,f152,f177,f111,f46,f44,f45,f47,f260,f48,f261,f279,f277,f278,f288,f19,f17,f531,f15,f13,f11,f20,f18,f16,f14,f12,f39,f37,f35,f33,f31,f40,f38,f36,f34,f32,f211,f212,f213,f214,f215,f210,f209,f208,f207,f206,f161,f49,f171,f50,f86,f84,f85,f168,f108,f116,f167,f164,f162,f163,f92,f71,f117,f292,f51,f52,f191,f192,f262,f294,f295,f269,f270,f256,f257,f285,f286,f748,f747&secid=1.601138&ut=fa5fd1943c7b386f172d6893dbfba10b&wbp2u=|0|1|0|web&dect=1"} > stock_realtime_req.json
-
-curl -s -H "Content-Type: application/json" -d @stock_realtime_req.json "%BASE_URL%/stock/realtime" > stock_realtime_out.json
-
-set "LINES=0"
-for /f %%A in ('findstr /R /V "^$" stock_realtime_out.json ^| find /C /V ""') do (
-    set "LINES=%%A"
-)
-
-if !LINES! GTR 0 (
-    echo [PASS] Stock Realtime API returned !LINES! lines
-    set /a PASS_COUNT+=1
-) else (
-    echo [FAIL] Stock Realtime API returned no output
-    set /a FAIL_COUNT+=1
-)
-
-echo Output:
-type stock_realtime_out.json
-del stock_realtime_out.json
-del stock_realtime_req.json
-
-REM ==========================================================
-REM 3) ETF Realtime
-REM ==========================================================
-
-echo.
-echo ----------------------------------------------------------
-echo [TEST] ETF Realtime
-echo ----------------------------------------------------------
-
-echo {"url":"https://push2.eastmoney.com/api/qt/stock/get?secid=1.510050"} > etf_realtime_req.json
-
-curl -s -H "Content-Type: application/json" -d @etf_realtime_req.json "%BASE_URL%/etf/realtime" > etf_realtime_out.json
-
-set "LINES=0"
-for /f %%A in ('findstr /R /V "^$" etf_realtime_out.json ^| find /C /V ""') do (
-    set "LINES=%%A"
-)
-
-if !LINES! GTR 0 (
-    echo [PASS] ETF Realtime API returned !LINES! lines
-    set /a PASS_COUNT+=1
-) else (
-    echo [FAIL] ETF Realtime API returned no output
-    set /a FAIL_COUNT+=1
-)
-
-echo Output:
-type etf_realtime_out.json
-del etf_realtime_out.json
-del etf_realtime_req.json
-
-REM ==========================================================
-REM 4) Stock Kline
-REM ==========================================================
-
-echo.
-echo ----------------------------------------------------------
-echo [TEST] Stock Kline
-echo ----------------------------------------------------------
-
-echo {"secid":"1.600000","ndays":5} > kline_req.json
-
-curl -s -H "Content-Type: application/json" -d @kline_req.json "%BASE_URL%/stock/kline" > kline_out.json
-
-set "LINES=0"
-for /f %%A in ('findstr /R /V "^$" kline_out.json ^| find /C /V ""') do (
-    set "LINES=%%A"
-)
-
-if !LINES! GTR 0 (
-    echo [PASS] Stock Kline API returned !LINES! lines
-    set /a PASS_COUNT+=1
-) else (
-    echo [FAIL] Stock Kline API returned no output
-    set /a FAIL_COUNT+=1
-)
-
-echo Output:
-type kline_out.json
-del kline_out.json
-del kline_req.json
-
-REM ==========================================================
-REM 汇总
-REM ==========================================================
+REM ================= MAIN =================
+:MAIN
 
 echo.
 echo ==========================================================
-echo Test Summary:
-echo  Passed: !PASS_COUNT!
-echo  Failed: !FAIL_COUNT!
+echo   Stock Service Self-Test (Windows CMD)
 echo ==========================================================
+echo   Target : %BASE_URL%
+echo ==========================================================
+echo.
+
+REM ==========================================================
+REM 1/7 Health
+REM ==========================================================
+echo ----------------------------------------------------------
+echo [1/7] Health
+echo ----------------------------------------------------------
+
+curl -s "%BASE_URL%/health" -o health.json -w "%{http_code}" > status.txt
+set /p STATUS=<status.txt
+
+if "%STATUS%"=="200" (
+    call :check_json_field health.json status || goto :h_done
+    call :check_json_field health.json browser || goto :h_done
+    echo   [PASS] /health
+    set /a PASS_COUNT+=1
+) else (
+    echo   [FAIL] /health http=%STATUS%
+    type health.json
+    set /a FAIL_COUNT+=1
+)
+:h_done
+del health.json status.txt
+
+REM ==========================================================
+REM 2/7 Stock Realtime
+REM ==========================================================
+echo.
+echo ----------------------------------------------------------
+echo [2/7] Stock Realtime
+echo ----------------------------------------------------------
+
+echo {"url":"https://push2.eastmoney.com/api/qt/stock/get?secid=1.601138"} > req.json
+curl -s "%BASE_URL%/stock/realtime" -H "Content-Type: application/json" -d @req.json -o out.json -w "%{http_code}" > status.txt
+set /p STATUS=<status.txt
+
+if "%STATUS%"=="200" (
+    call :check_json_field out.json stockCode || goto :sr_done
+    call :check_json_field out.json price || goto :sr_done
+    echo   [PASS] /stock/realtime
+    set /a PASS_COUNT+=1
+) else (
+    echo   [FAIL] /stock/realtime http=%STATUS%
+    type out.json
+    set /a FAIL_COUNT+=1
+)
+:sr_done
+del req.json out.json status.txt
+
+REM ==========================================================
+REM 3/7 ETF Realtime
+REM ==========================================================
+echo.
+echo ----------------------------------------------------------
+echo [3/7] ETF Realtime
+echo ----------------------------------------------------------
+
+echo {"url":"https://push2.eastmoney.com/api/qt/stock/get?secid=1.510050"} > req.json
+curl -s "%BASE_URL%/etf/realtime" -H "Content-Type: application/json" -d @req.json -o out.json -w "%{http_code}" > status.txt
+set /p STATUS=<status.txt
+
+if "%STATUS%"=="200" (
+    call :check_json_field out.json price || goto :etf_done
+    echo   [PASS] /etf/realtime
+    set /a PASS_COUNT+=1
+) else (
+    echo   [FAIL] /etf/realtime http=%STATUS%
+    type out.json
+    set /a FAIL_COUNT+=1
+)
+:etf_done
+del req.json out.json status.txt
+
+REM ==========================================================
+REM 4/7 Stock Kline
+REM ==========================================================
+echo.
+echo ----------------------------------------------------------
+echo [4/7] Stock Kline
+echo ----------------------------------------------------------
+
+echo {"secid":"1.600000","ndays":5} > req.json
+curl -s "%BASE_URL%/stock/kline" -H "Content-Type: application/json" -d @req.json -o out.json -w "%{http_code}" > status.txt
+set /p STATUS=<status.txt
+
+if "%STATUS%"=="200" (
+    findstr /C:"[" out.json >nul && (
+        echo   [PASS] /stock/kline
+        set /a PASS_COUNT+=1
+    ) || (
+        echo   [FAIL] /stock/kline invalid array
+        type out.json
+        set /a FAIL_COUNT+=1
+    )
+) else (
+    echo   [FAIL] /stock/kline http=%STATUS%
+    type out.json
+    set /a FAIL_COUNT+=1
+)
+del req.json out.json status.txt
+
+REM ==========================================================
+REM 5/7 Stock Kline Range
+REM ==========================================================
+echo.
+echo ----------------------------------------------------------
+echo [5/7] Stock Kline Range
+echo ----------------------------------------------------------
+
+echo {"secid":"1.600000","beg":"20240101","end":"20240201"} > req.json
+curl -s "%BASE_URL%/stock/kline/range" -H "Content-Type: application/json" -d @req.json -o out.json -w "%{http_code}" > status.txt
+set /p STATUS=<status.txt
+
+if "%STATUS%"=="200" (
+    findstr /C:"[" out.json >nul && (
+        echo   [PASS] /stock/kline/range
+        set /a PASS_COUNT+=1
+    ) || (
+        echo   [FAIL] /stock/kline/range invalid array
+        type out.json
+        set /a FAIL_COUNT+=1
+    )
+) else (
+    echo   [FAIL] /stock/kline/range http=%STATUS%
+    type out.json
+    set /a FAIL_COUNT+=1
+)
+del req.json out.json status.txt
+
+REM ==========================================================
+REM 6/7 Stock Kline US
+REM ==========================================================
+echo.
+echo ----------------------------------------------------------
+echo [6/7] Stock Kline US
+echo ----------------------------------------------------------
+
+echo {"secid":"MSFT","market":"105"} > req.json
+curl -s "%BASE_URL%/stock/kline/us" -H "Content-Type: application/json" -d @req.json -o out.json -w "%{http_code}" > status.txt
+set /p STATUS=<status.txt
+
+if "%STATUS%"=="200" (
+    findstr /C:"[" out.json >nul && (
+        echo   [PASS] /stock/kline/us
+        set /a PASS_COUNT+=1
+    ) || (
+        echo   [FAIL] /stock/kline/us invalid array
+        type out.json
+        set /a FAIL_COUNT+=1
+    )
+) else (
+    echo   [FAIL] /stock/kline/us http=%STATUS%
+    type out.json
+    set /a FAIL_COUNT+=1
+)
+del req.json out.json status.txt
+
+REM ==========================================================
+REM 7/7 Proxy JSON
+REM ==========================================================
+echo.
+echo ----------------------------------------------------------
+echo [7/7] Proxy JSON
+echo ----------------------------------------------------------
+
+echo {"url":"https://push2.eastmoney.com/api/qt/stock/get?secid=1.600000"} > req.json
+curl -s "%BASE_URL%/proxy/json" -H "Content-Type: application/json" -d @req.json -o out.json -w "%{http_code}" > status.txt
+set /p STATUS=<status.txt
+
+if "%STATUS%"=="200" (
+    call :check_json_field out.json data || goto :px_done
+    echo   [PASS] /proxy/json
+    set /a PASS_COUNT+=1
+) else (
+    echo   [FAIL] /proxy/json http=%STATUS%
+    type out.json
+    set /a FAIL_COUNT+=1
+)
+:px_done
+del req.json out.json status.txt
+
+REM ==========================================================
+REM SUMMARY
+REM ==========================================================
+echo.
+echo ==========================================================
+echo   Self-Test Summary
+echo ----------------------------------------------------------
+echo   PASSED : %PASS_COUNT%
+echo   FAILED : %FAIL_COUNT%
+echo ==========================================================
+echo.
+
 pause
 endlocal

@@ -51,3 +51,4 @@ nbdist/
 /node_modules
 config/application.yml
 *.yml
+*.pid
