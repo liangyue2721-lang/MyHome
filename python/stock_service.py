@@ -363,6 +363,7 @@ def health():
 async def stock_realtime(req: RealtimeRequest, request: Request):
     raw = await fetch_json_with_browser(req.url, request.state.request_id)
     if not raw or not raw.get("data"):
+        logger.error("Data fetch failed. [url=%s]", req.url)
         raise HTTPException(status_code=404, detail="Not Found")
     return standardize_realtime_data(raw["data"])
 
@@ -432,6 +433,7 @@ async def stock_kline_range(req: KlineRangeRequest, request: Request):
             })
         except Exception:
             # 单条异常直接跳过，避免整体失败
+            logger.error("Parsing line failed. [line=%s]", line)
             continue
 
     return result
@@ -458,5 +460,6 @@ async def stock_kline_us(req: USKlineRequest, request: Request):
 async def proxy_json(req: GenericJsonRequest, request: Request):
     data = await fetch_json_with_browser(req.url, request.state.request_id)
     if data is None:
+        logger.error("Browser started. [url=%s]", req.url)
         raise HTTPException(status_code=502, detail="Invalid upstream JSON")
     return data
