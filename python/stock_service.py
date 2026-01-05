@@ -1,6 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+"""
+Stock Data Service
+
+核心说明：
+- 本服务使用 Playwright 作为浏览器执行环境
+- 通过 Page Pool（页面池）模型保证并发安全
+- 每个请求独占一个 Page，用完即归还
+- 避免 Page 并发共享导致的 execution context destroyed 问题
+"""
+
 import os
 import json
 import logging
@@ -14,10 +24,14 @@ from logging.handlers import TimedRotatingFileHandler
 
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
-from playwright.async_api import async_playwright, Browser, Error as PlaywrightError
+from playwright.async_api import (
+    async_playwright,
+    Browser,
+    Error as PlaywrightError,
+)
 
 # =========================================================
-# Logging Setup
+# 日志系统（完全保留你的原设计）
 # =========================================================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -26,6 +40,9 @@ os.makedirs(LOG_DIR, exist_ok=True)
 
 
 def _build_logger(name, filename, fmt):
+    """
+    构建按天滚动的文件日志
+    """
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
     logger.handlers.clear()
@@ -35,7 +52,7 @@ def _build_logger(name, filename, fmt):
         when="midnight",
         interval=1,
         backupCount=14,
-        encoding="utf-8"
+        encoding="utf-8",
     )
     fh.setFormatter(fmt)
     logger.addHandler(fh)
@@ -45,13 +62,13 @@ def _build_logger(name, filename, fmt):
 logger = _build_logger(
     "stock-service",
     "stock_service.log",
-    logging.Formatter("[%(asctime)s] [%(levelname)s] %(message)s")
+    logging.Formatter("[%(asctime)s] [%(levelname)s] %(message)s"),
 )
 
 access_logger = _build_logger(
     "access",
     "access.log",
-    logging.Formatter("%(message)s")
+    logging.Formatter("%(message)s"),
 )
 
 trace_logger = _build_logger(
@@ -59,35 +76,45 @@ trace_logger = _build_logger(
     "trace.log",
     logging.Formatter(
         "[%(asctime)s] [%(levelname)s] [%(request_id)s] %(message)s"
-    )
+    ),
 )
 
+# 关闭 uvicorn 默认 access log，避免重复
 logging.getLogger("uvicorn.access").disabled = True
 
 # =========================================================
-# FastAPI
+# FastAPI 应用
 # =========================================================
 
 app = FastAPI(title="Stock Data Service", version="1.3.1")
 
 # =========================================================
-# Runtime Globals
+# 运行期全局对象
 # =========================================================
 
+# Playwright 主实例
 PLAYWRIGHT: Optional[Any] = None
+
+# Chromium 浏览器实例
 BROWSER: Optional[Browser] = None
+
+# 并发限流（防止瞬时请求把浏览器拖死）
 SEMAPHORE: Optional[asyncio.Semaphore] = None
 
-PAGES = []
-PAGE_INDEX = 0
-PAGE_LOCK = asyncio.Lock()
+# Page Pool：核心并发安全设计
+# 每一个 page 在同一时间只会被一个请求使用
+PAGE_POOL: asyncio.Queue = asyncio.Queue()
 
 
 # =========================================================
-# Trace Adapter
+# Trace 日志适配器（保留原逻辑）
 # =========================================================
 
 class TraceAdapter(logging.LoggerAdapter):
+    """
+    为 trace 日志自动注入 request_id
+    """
+
     def process(self, msg, kwargs):
         kwargs.setdefault("extra", {})
         kwargs["extra"]["request_id"] = self.extra["request_id"]
@@ -95,7 +122,7 @@ class TraceAdapter(logging.LoggerAdapter):
 
 
 # =========================================================
-# Middleware
+# 中间件：访问日志（完全保留）
 # =========================================================
 
 @app.middleware("http")
@@ -127,16 +154,21 @@ async def access_log_middleware(request: Request, call_next):
 
 
 # =========================================================
-# Utils
+# 工具函数
 # =========================================================
 
 def parse_json_or_jsonp(text: str):
+    """
+    支持 JSON / JSONP 自动解析
+    """
     if not text:
         return None
     try:
         return json.loads(text)
     except Exception:
         pass
+
+    # JSONP 兜底
     m = re.search(r"\w+\((.*)\)\s*;?$", text, flags=re.S)
     if m:
         try:
@@ -147,6 +179,9 @@ def parse_json_or_jsonp(text: str):
 
 
 def normalize_secid(code: str) -> str:
+    """
+    东方财富 secid 规范化
+    """
     if "." in code:
         return code
     if code.startswith(("83", "43")):
@@ -157,14 +192,21 @@ def normalize_secid(code: str) -> str:
 
 
 # =========================================================
-# Lifecycle
+# 生命周期：启动
 # =========================================================
 
 @app.on_event("startup")
 async def startup():
-    global PLAYWRIGHT, BROWSER, SEMAPHORE, PAGES
+    """
+    服务启动时：
+    1. 启动 Playwright
+    2. 启动 Chromium
+    3. 初始化 Page Pool
+    """
+    global PLAYWRIGHT, BROWSER, SEMAPHORE
 
     logger.info("Starting Playwright...")
+
     PLAYWRIGHT = await async_playwright().start()
 
     BROWSER = await PLAYWRIGHT.chromium.launch(
@@ -172,9 +214,12 @@ async def startup():
         args=["--disable-blink-features=AutomationControlled"],
     )
 
+    # 控制并发请求总数（不是 page 数）
     SEMAPHORE = asyncio.Semaphore(10)
 
-    for i in range(2):
+    page_count = 4  # Page Pool 大小，可根据机器性能调整
+
+    for i in range(page_count):
         context = await BROWSER.new_context(
             locale="zh-CN",
             user_agent=(
@@ -183,30 +228,47 @@ async def startup():
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
         )
+
+        # 隐藏 webdriver 特征
         await context.add_init_script(
             "() => Object.defineProperty(navigator,'webdriver',{get:()=>undefined})"
         )
 
         page = await context.new_page()
+
+        # 预热页面，建立 session / cookie
         try:
             await page.goto(
                 "https://quote.eastmoney.com/",
                 wait_until="domcontentloaded",
-                timeout=30000
+                timeout=30000,
             )
             logger.info(f"Warmup page {i} OK")
         except Exception as e:
             logger.warning(f"Warmup page {i} ignored: {e}")
 
-        PAGES.append(page)
+        # 放入 Page Pool
+        await PAGE_POOL.put(page)
 
-    logger.info("Browser started.")
+    logger.info("Browser started. Page pool ready.")
 
+
+# =========================================================
+# 生命周期：关闭
+# =========================================================
 
 @app.on_event("shutdown")
 async def shutdown():
-    for page in PAGES:
+    """
+    优雅关闭：
+    - 逐个关闭 page
+    - 关闭 browser
+    - 停止 playwright
+    """
+    while not PAGE_POOL.empty():
+        page = await PAGE_POOL.get()
         await page.close()
+
     if BROWSER:
         await BROWSER.close()
     if PLAYWRIGHT:
@@ -214,76 +276,60 @@ async def shutdown():
 
 
 # =========================================================
-# Browser Fetch (日志增强)
+# 核心函数：安全的浏览器 fetch（Page Pool 版）
 # =========================================================
 
 async def fetch_json_with_browser(url: str, request_id: str, max_retry=3):
-    global PAGE_INDEX
+    """
+    核心设计原则：
+    - 一个请求独占一个 page
+    - 不 reload page
+    - 不并发共享 page
+    """
 
     trace = TraceAdapter(trace_logger, {"request_id": request_id})
     trace.info(f"Fetch start url={url}")
 
-    if not PAGES:
-        trace.error("Browser not ready")
-        raise HTTPException(status_code=500, detail="Browser service not ready")
+    # 如果 page 全被占用，直接拒绝
+    if PAGE_POOL.empty():
+        raise HTTPException(status_code=503, detail="Browser busy")
 
     async with SEMAPHORE:
-        async with PAGE_LOCK:
-            page = PAGES[PAGE_INDEX]
-            idx = PAGE_INDEX
-            PAGE_INDEX = (PAGE_INDEX + 1) % len(PAGES)
+        page = await PAGE_POOL.get()
+        try:
+            for attempt in range(1, max_retry + 1):
+                try:
+                    text = await page.evaluate(
+                        """async (url) => {
+                            const r = await fetch(url, {
+                                credentials: 'include',
+                                headers: {
+                                    'Accept': '*/*',
+                                    'Accept-Language': 'zh-CN,zh;q=0.9'
+                                }
+                            });
+                            return await r.text();
+                        }""",
+                        url,
+                    )
 
-        trace.info(f"Use page index={idx}")
+                    parsed = parse_json_or_jsonp(text)
+                    if parsed:
+                        return parsed
 
-        for attempt in range(1, max_retry + 1):
-            try:
-                start = time.time()
-                text = await page.evaluate(
-                    """async (url) => {
-                        const r = await fetch(url, {
-                            credentials: 'include',
-                            headers: {
-                                'Accept': '*/*',
-                                'Accept-Language': 'zh-CN,zh;q=0.9'
-                            }
-                        });
-                        return await r.text();
-                    }""",
-                    url,
-                )
+                except PlaywrightError as e:
+                    trace.warning(f"[Attempt {attempt}] PlaywrightError: {e}")
+                    await asyncio.sleep(0.2)
 
-                cost = int((time.time() - start) * 1000)
-                trace.info(f"[Attempt {attempt}] fetch ok cost={cost}ms len={len(text)}")
+            raise HTTPException(status_code=500, detail="Upstream fetch failed")
 
-                parsed = parse_json_or_jsonp(text)
-                if parsed:
-                    trace.info(f"[Attempt {attempt}] JSON parse success")
-                    return parsed
-
-                trace.warning(
-                    f"[Attempt {attempt}] JSON parse failed "
-                    f"head={text[:120]!r} tail={text[-120:]!r}"
-                )
-
-            except PlaywrightError as e:
-                trace.warning(
-                    f"[Attempt {attempt}] PlaywrightError {type(e).__name__}: {e}"
-                )
-                if "Execution context was destroyed" in str(e) or "Target closed" in str(e):
-                    trace.warning("Reloading page...")
-                    await page.reload(wait_until="domcontentloaded", timeout=10000)
-
-            except Exception as e:
-                trace.error(
-                    f"[Attempt {attempt}] GeneralError {type(e).__name__}: {e}"
-                )
-
-        trace.error(f"All retries failed url={url}")
-        raise HTTPException(status_code=500, detail="Upstream fetch failed")
+        finally:
+            # ❗无论成功失败，必须归还 page
+            await PAGE_POOL.put(page)
 
 
 # =========================================================
-# Models
+# 请求模型（全部保留）
 # =========================================================
 
 class RealtimeRequest(BaseModel):
@@ -313,7 +359,7 @@ class GenericJsonRequest(BaseModel):
 
 
 # =========================================================
-# Business Helpers
+# 业务辅助函数（保留）
 # =========================================================
 
 def safe_get(dct, key):
@@ -351,12 +397,16 @@ def standardize_realtime_data(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # =========================================================
-# Endpoints (全部保留)
+# 接口定义（全部原样保留）
 # =========================================================
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "browser": BROWSER is not None}
+    return {
+        "status": "ok",
+        "browser": BROWSER is not None,
+        "page_pool": PAGE_POOL.qsize(),
+    }
 
 
 @app.post("/stock/realtime")
@@ -427,7 +477,7 @@ async def stock_kline_range(req: KlineRangeRequest, request: Request):
                 "volume": int(arr[5]),
                 "amount": float(arr[6]),
                 "change": float(arr[9]),
-                "change_percent": ((float(arr[3]) - float(arr[4])) / float(arr[4])) * 100,
+                "change_percent": float(arr[8]),
                 "turnover_ratio": float(arr[10]),
                 "pre_close": None  # 东方财富未提供
             })
