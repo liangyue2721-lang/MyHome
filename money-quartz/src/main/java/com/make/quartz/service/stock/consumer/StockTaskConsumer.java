@@ -345,9 +345,11 @@ public class StockTaskConsumer implements SmartLifecycle {
                     // 价格小于阈值触发提醒
                     sendNotification(task);
                 }
+            } else {
+                dbStatus = "FAILED";
+                dbResult = "Price= null";
             }
-            dbStatus = "SUCCESS";
-            dbResult = "Price= null";
+
         } catch (Exception e) {
             // 未预期异常：记录并失败终态。
             log.error("Task failed: stockCode={}, traceId={}", stockCode, traceId, e);
