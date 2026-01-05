@@ -331,20 +331,23 @@ public class StockTaskConsumer implements SmartLifecycle {
             // 5) 更新实体（内存）并落库。
             watchStockUpdater.updateFromRealtimeInfo(ws, info);
             watchstockService.updateWatchstock(ws);
+            if (info.getPrice() != null) {
+                dbStatus = "SUCCESS";
+                dbResult = "Price=" + info.getPrice();
+                executed = true;
 
-            dbStatus = "SUCCESS";
-            dbResult = "Price=" + info.getPrice();
-            executed = true;
+                // 1. 获取当前价格和阈值
+                BigDecimal currentPrice = BigDecimal.valueOf(info.getPrice());
+                BigDecimal threshold = ws.getThresholdPrice();
 
-            // 1. 获取当前价格和阈值
-            BigDecimal currentPrice = BigDecimal.valueOf(info.getPrice());
-            BigDecimal threshold = ws.getThresholdPrice();
-
-            // 2. 增加判空逻辑：只有当 threshold 不为 null 时才进行比较
-            if (threshold != null && currentPrice.compareTo(threshold) < 0) {
-                // 价格小于阈值触发提醒
-                sendNotification(task);
+                // 2. 增加判空逻辑：只有当 threshold 不为 null 时才进行比较
+                if (threshold != null && currentPrice.compareTo(threshold) < 0) {
+                    // 价格小于阈值触发提醒
+                    sendNotification(task);
+                }
             }
+            dbStatus = "SUCCESS";
+            dbResult = "Price= null";
         } catch (Exception e) {
             // 未预期异常：记录并失败终态。
             log.error("Task failed: stockCode={}, traceId={}", stockCode, traceId, e);

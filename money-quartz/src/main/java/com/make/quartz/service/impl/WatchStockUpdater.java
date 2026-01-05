@@ -110,7 +110,15 @@ public class WatchStockUpdater {
      * @param info       实时行情数据
      */
     public void updateFromRealtimeInfo(Watchstock watchstock, StockRealtimeInfo info) {
-        if (watchstock == null || info == null) return;
+        if (watchstock == null || info == null) {
+            log.warn("自选股或实时行情数据为空，无法更新股票信息");
+            return;
+        }
+
+        if (info.getPrice() == null) {
+            log.warn("实时行情价格数据为空，股票代码: {}", watchstock.getCode());
+            return;
+        }
 
         watchstock.setNewPrice(BigDecimal.valueOf(info.getPrice()));
         watchstock.setHighPrice(BigDecimal.valueOf(info.getHighPrice()));
