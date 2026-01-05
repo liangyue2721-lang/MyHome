@@ -477,7 +477,7 @@ async def stock_kline_range(req: KlineRangeRequest, request: Request):
                 "volume": int(arr[5]),
                 "amount": float(arr[6]),
                 "change": float(arr[9]),
-                "change_percent": float(arr[8]),
+                "change_percent": ((float(arr[3]) - float(arr[4])) / float(arr[4])) * 100,
                 "turnover_ratio": float(arr[10]),
                 "pre_close": None  # 东方财富未提供
             })
