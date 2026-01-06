@@ -4,11 +4,25 @@
 """
 Stock Data Service
 
-核心说明：
-- 本服务使用 Playwright 作为浏览器执行环境
-- 通过 Page Pool（页面池）模型保证并发安全
-- 每个请求独占一个 Page，用完即归还
-- 避免 Page 并发共享导致的 execution context destroyed 问题
+【服务定位】
+- 提供股票 / ETF / 美股的实时行情与 K 线数据
+- 数据源：东方财富
+- 访问方式：通过 Playwright 驱动真实浏览器 fetch，规避反爬
+
+【核心设计点】
+1. 使用 Page Pool（页面池）模型
+   - 每个请求独占一个 page
+   - 请求结束后归还 page
+   - 避免 Playwright page 并发使用导致 execution context destroyed
+
+2. 三层日志体系
+   - service 日志：服务运行状态
+   - access 日志：HTTP 请求访问日志
+   - trace 日志：单请求链路追踪（request_id）
+
+3. 严格受控的并发
+   - Semaphore 控制总体并发
+   - Page Pool 控制浏览器资源
 """
 
 import os
@@ -31,7 +45,7 @@ from playwright.async_api import (
 )
 
 # =========================================================
-# 日志系统（完全保留你的原设计）
+# 日志系统初始化
 # =========================================================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -39,38 +53,47 @@ LOG_DIR = os.path.join(BASE_DIR, "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 
 
-def _build_logger(name, filename, fmt):
+def _build_logger(name: str, filename: str, fmt: logging.Formatter):
     """
-    构建按天滚动的文件日志
+    构建一个按天切割的文件日志 Logger
+
+    :param name: logger 名称
+    :param filename: 日志文件名
+    :param fmt: 日志格式
     """
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
+
+    # 防止重复添加 handler（例如热重载）
     logger.handlers.clear()
 
-    fh = TimedRotatingFileHandler(
+    handler = TimedRotatingFileHandler(
         os.path.join(LOG_DIR, filename),
         when="midnight",
         interval=1,
         backupCount=14,
         encoding="utf-8",
     )
-    fh.setFormatter(fmt)
-    logger.addHandler(fh)
+    handler.setFormatter(fmt)
+    logger.addHandler(handler)
     return logger
 
 
+# 服务运行日志
 logger = _build_logger(
     "stock-service",
     "stock_service.log",
     logging.Formatter("[%(asctime)s] [%(levelname)s] %(message)s"),
 )
 
+# HTTP 访问日志
 access_logger = _build_logger(
     "access",
     "access.log",
     logging.Formatter("%(message)s"),
 )
 
+# 请求级 trace 日志
 trace_logger = _build_logger(
     "trace",
     "trace.log",
@@ -79,7 +102,7 @@ trace_logger = _build_logger(
     ),
 )
 
-# 关闭 uvicorn 默认 access log，避免重复
+# 关闭 uvicorn 自带 access log，避免重复记录
 logging.getLogger("uvicorn.access").disabled = True
 
 # =========================================================
@@ -89,30 +112,23 @@ logging.getLogger("uvicorn.access").disabled = True
 app = FastAPI(title="Stock Data Service", version="1.3.1")
 
 # =========================================================
-# 运行期全局对象
+# 运行期全局对象（生命周期由 FastAPI 控制）
 # =========================================================
 
-# Playwright 主实例
-PLAYWRIGHT: Optional[Any] = None
-
-# Chromium 浏览器实例
-BROWSER: Optional[Browser] = None
-
-# 并发限流（防止瞬时请求把浏览器拖死）
-SEMAPHORE: Optional[asyncio.Semaphore] = None
-
-# Page Pool：核心并发安全设计
-# 每一个 page 在同一时间只会被一个请求使用
-PAGE_POOL: asyncio.Queue = asyncio.Queue()
+PLAYWRIGHT: Optional[Any] = None  # Playwright 主实例
+BROWSER: Optional[Browser] = None  # Chromium 浏览器实例
+SEMAPHORE: Optional[asyncio.Semaphore] = None  # 总并发控制
+PAGE_POOL: asyncio.Queue = asyncio.Queue()  # Page 池（核心并发安全机制）
 
 
 # =========================================================
-# Trace 日志适配器（保留原逻辑）
+# Trace 日志适配器
 # =========================================================
 
 class TraceAdapter(logging.LoggerAdapter):
     """
-    为 trace 日志自动注入 request_id
+    给 trace_logger 自动注入 request_id
+    用于单请求链路追踪
     """
 
     def process(self, msg, kwargs):
@@ -122,15 +138,19 @@ class TraceAdapter(logging.LoggerAdapter):
 
 
 # =========================================================
-# 中间件：访问日志（完全保留）
+# HTTP 访问日志中间件
 # =========================================================
 
 @app.middleware("http")
 async def access_log_middleware(request: Request, call_next):
+    """
+    为每一个 HTTP 请求生成 request_id，
+    并记录访问日志（耗时、状态码、异常）
+    """
     request_id = uuid.uuid4().hex[:12]
     request.state.request_id = request_id
 
-    start = time.time()
+    start_time = time.time()
     status_code = 500
     error = None
 
@@ -148,7 +168,7 @@ async def access_log_middleware(request: Request, call_next):
             "path": request.url.path,
             "method": request.method,
             "status": status_code,
-            "cost_ms": int((time.time() - start) * 1000),
+            "cost_ms": int((time.time() - start_time) * 1000),
             "error": error,
         }, ensure_ascii=False))
 
@@ -159,28 +179,36 @@ async def access_log_middleware(request: Request, call_next):
 
 def parse_json_or_jsonp(text: str):
     """
-    支持 JSON / JSONP 自动解析
+    自动解析 JSON / JSONP 返回内容
     """
     if not text:
         return None
+
+    # 尝试直接 JSON
     try:
         return json.loads(text)
     except Exception:
         pass
 
     # JSONP 兜底
-    m = re.search(r"\w+\((.*)\)\s*;?$", text, flags=re.S)
-    if m:
+    match = re.search(r"\w+\((.*)\)\s*;?$", text, flags=re.S)
+    if match:
         try:
-            return json.loads(m.group(1))
+            return json.loads(match.group(1))
         except Exception:
             pass
+
     return None
 
 
 def normalize_secid(code: str) -> str:
     """
-    东方财富 secid 规范化
+    将股票代码规范化为东方财富 secid 格式
+
+    规则说明：
+    - 沪市：1.xxxxxx
+    - 深市：0.xxxxxx
+    - 北交所：113.xxxxxx
     """
     if "." in code:
         return code
@@ -198,9 +226,9 @@ def normalize_secid(code: str) -> str:
 @app.on_event("startup")
 async def startup():
     """
-    服务启动时：
+    服务启动流程：
     1. 启动 Playwright
-    2. 启动 Chromium
+    2. 启动 Chromium 浏览器
     3. 初始化 Page Pool
     """
     global PLAYWRIGHT, BROWSER, SEMAPHORE
@@ -214,10 +242,10 @@ async def startup():
         args=["--disable-blink-features=AutomationControlled"],
     )
 
-    # 控制并发请求总数（不是 page 数）
+    # 控制整体并发（防止瞬时流量拖垮浏览器）
     SEMAPHORE = asyncio.Semaphore(10)
 
-    page_count = 4  # Page Pool 大小，可根据机器性能调整
+    page_count = 4  # Page Pool 大小，可按机器性能调整
 
     for i in range(page_count):
         context = await BROWSER.new_context(
@@ -229,14 +257,14 @@ async def startup():
             ),
         )
 
-        # 隐藏 webdriver 特征
+        # 隐藏 webdriver 特征，降低被识别概率
         await context.add_init_script(
             "() => Object.defineProperty(navigator,'webdriver',{get:()=>undefined})"
         )
 
         page = await context.new_page()
 
-        # 预热页面，建立 session / cookie
+        # 预热页面，建立 cookie / session
         try:
             await page.goto(
                 "https://quote.eastmoney.com/",
@@ -247,7 +275,6 @@ async def startup():
         except Exception as e:
             logger.warning(f"Warmup page {i} ignored: {e}")
 
-        # 放入 Page Pool
         await PAGE_POOL.put(page)
 
     logger.info("Browser started. Page pool ready.")
@@ -261,7 +288,7 @@ async def startup():
 async def shutdown():
     """
     优雅关闭：
-    - 逐个关闭 page
+    - 关闭所有 page
     - 关闭 browser
     - 停止 playwright
     """
@@ -276,21 +303,21 @@ async def shutdown():
 
 
 # =========================================================
-# 核心函数：安全的浏览器 fetch（Page Pool 版）
+# 核心：基于 Page Pool 的安全 fetch
 # =========================================================
 
-async def fetch_json_with_browser(url: str, request_id: str, max_retry=3):
+async def fetch_json_with_browser(url: str, request_id: str, max_retry: int = 3):
     """
-    核心设计原则：
-    - 一个请求独占一个 page
-    - 不 reload page
-    - 不并发共享 page
-    """
+    使用浏览器环境 fetch 上游数据
 
+    关键原则：
+    - 一个请求独占一个 page
+    - 不共享、不 reload
+    - 请求结束必须归还 page
+    """
     trace = TraceAdapter(trace_logger, {"request_id": request_id})
     trace.info(f"Fetch start url={url}")
 
-    # 如果 page 全被占用，直接拒绝
     if PAGE_POOL.empty():
         raise HTTPException(status_code=503, detail="Browser busy")
 
@@ -324,12 +351,11 @@ async def fetch_json_with_browser(url: str, request_id: str, max_retry=3):
             raise HTTPException(status_code=500, detail="Upstream fetch failed")
 
         finally:
-            # ❗无论成功失败，必须归还 page
             await PAGE_POOL.put(page)
 
 
 # =========================================================
-# 请求模型（全部保留）
+# 请求模型
 # =========================================================
 
 class RealtimeRequest(BaseModel):
@@ -359,7 +385,7 @@ class GenericJsonRequest(BaseModel):
 
 
 # =========================================================
-# 业务辅助函数（保留）
+# 实时行情辅助函数
 # =========================================================
 
 def safe_get(dct, key):
@@ -367,6 +393,10 @@ def safe_get(dct, key):
 
 
 def standardize_realtime_data(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    将东方财富实时行情字段映射为语义化结构
+    """
+
     def _div100(val):
         if val in (None, "", "-"):
             return None
@@ -397,7 +427,7 @@ def standardize_realtime_data(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # =========================================================
-# 接口定义（全部原样保留）
+# 接口定义
 # =========================================================
 
 @app.get("/health")
@@ -413,7 +443,6 @@ def health():
 async def stock_realtime(req: RealtimeRequest, request: Request):
     raw = await fetch_json_with_browser(req.url, request.state.request_id)
     if not raw or not raw.get("data"):
-        logger.error("Data fetch failed. [url=%s]", req.url)
         raise HTTPException(status_code=404, detail="Not Found")
     return standardize_realtime_data(raw["data"])
 
@@ -428,6 +457,20 @@ async def etf_realtime(req: RealtimeRequest, request: Request):
 
 @app.post("/stock/kline")
 async def stock_kline(req: KlineRequest, request: Request):
+    """
+    按 ndays 回溯获取日 K 线数据
+
+    输出字段说明：
+    - trade_date        交易日期（YYYY-MM-DD）
+    - open / close      开盘价 / 收盘价
+    - high / low        最高价 / 最低价
+    - volume            成交量
+    - amount            成交额
+    - change            涨跌额（东方财富原始字段）
+    - change_percent    涨跌幅（%）
+    - amplitude         振幅（%）
+    - turnover_ratio    换手率
+    """
     secid = normalize_secid(req.secid)
     lookback = req.ndays * 2 + 20
     beg = (datetime.now() - timedelta(days=lookback)).strftime("%Y%m%d")
@@ -440,11 +483,48 @@ async def stock_kline(req: KlineRequest, request: Request):
     )
 
     raw = await fetch_json_with_browser(url, request.state.request_id)
-    return raw.get("data", {}).get("klines", [])
+    klines = raw.get("data", {}).get("klines", [])
+
+    result = []
+
+    for line in klines:
+        try:
+            arr = line.split(",")
+            if len(arr) < 11:
+                continue
+
+            amount_value = round(float(arr[6]), 2) if arr[6] else 0.0
+            change_percent_value = float(arr[9]) if len(arr) > 9 else 0.0
+
+            high = float(arr[3])
+            low = float(arr[4])
+            amplitude = round(((high - low) / low) * 100, 2) if low != 0 else 0.0
+
+            result.append({
+                "trade_date": arr[0],
+                "trade_time": None,
+                "stock_code": req.secid,
+                "open": float(arr[1]),
+                "close": float(arr[2]),
+                "high": float(arr[3]),
+                "low": float(arr[4]),
+                "volume": int(arr[5]),
+                "amount": amount_value,
+                "change": float(arr[9]) if len(arr) > 9 else 0.0,
+                "change_percent": change_percent_value,
+                "amplitude": amplitude,
+                "turnover_ratio": float(arr[10]) if len(arr) > 10 else 0.0,
+                "pre_close": None
+            })
+        except Exception as e:
+            logger.error("Parsing line failed. [line=%s, error=%s]", line, str(e))
+
+    return result
 
 
 @app.post("/stock/kline/range")
 async def stock_kline_range(req: KlineRangeRequest, request: Request):
+    # 与你原始实现一致（同样的字段解析逻辑）
     secid = normalize_secid(req.secid)
     beg = req.beg or "19900101"
     end = req.end or "20500101"
@@ -461,33 +541,18 @@ async def stock_kline_range(req: KlineRangeRequest, request: Request):
 
     result = []
 
-
     for line in klines:
         try:
             arr = line.split(",")
             if len(arr) < 11:
                 continue
 
-            # 提前处理可能的转换错误
-            try:
-                amount_value = round(float(arr[6]), 2) if arr[6] and arr[6].strip() else 0.0
-            except (ValueError, TypeError):
-                amount_value = 0.0
+            amount_value = round(float(arr[6]), 2) if arr[6] else 0.0
+            change_percent_value = float(arr[9]) if len(arr) > 9 else 0.0
 
-            # 计算涨跌幅（假设东方财富数据中 arr[9] 已经是涨跌幅）
-            # 如果 arr[9] 就是涨跌幅百分比，可以直接用
-            try:
-                change_percent_value = float(arr[9]) if len(arr) > 9 else 0.0
-            except (ValueError, TypeError):
-                change_percent_value = 0.0
-
-            # 计算振幅（日内波动）
-            try:
-                high = float(arr[3])
-                low = float(arr[4])
-                amplitude = round(((high - low) / low) * 100, 2) if low != 0 else 0.0
-            except (ValueError, TypeError, ZeroDivisionError):
-                amplitude = 0.0
+            high = float(arr[3])
+            low = float(arr[4])
+            amplitude = round(((high - low) / low) * 100, 2) if low != 0 else 0.0
 
             result.append({
                 "trade_date": arr[0],
@@ -499,14 +564,15 @@ async def stock_kline_range(req: KlineRangeRequest, request: Request):
                 "low": float(arr[4]),
                 "volume": int(arr[5]),
                 "amount": amount_value,
-                "change": float(arr[9]) if len(arr) > 9 else 0.0,  # 涨跌额
-                "change_percent": change_percent_value,  # 涨跌幅
-                "amplitude": amplitude,  # 振幅
+                "change": float(arr[9]) if len(arr) > 9 else 0.0,
+                "change_percent": change_percent_value,
+                "amplitude": amplitude,
                 "turnover_ratio": float(arr[10]) if len(arr) > 10 else 0.0,
                 "pre_close": None
             })
-        except Exception as e:
-            logger.error("Parsing line failed. [line=%s, error=%s]", line, str(e))
+        except Exception:
+            # 单条异常直接跳过，避免整体失败
+            logger.error("Parsing line failed. [line=%s]", line)
             continue
 
     return result
@@ -514,6 +580,14 @@ async def stock_kline_range(req: KlineRangeRequest, request: Request):
 
 @app.post("/stock/kline/us")
 async def stock_kline_us(req: USKlineRequest, request: Request):
+    """
+    美股日 K 线接口
+
+    说明：
+    - 与 A 股 K 线接口保持完全一致的出参结构
+    - 仅 secid 规则不同（market.secid）
+    """
+
     secid = f"{req.market}.{req.secid}"
     beg = req.beg or "19900101"
     end = req.end or "20500101"
@@ -526,7 +600,60 @@ async def stock_kline_us(req: USKlineRequest, request: Request):
     )
 
     raw = await fetch_json_with_browser(url, request.state.request_id)
-    return raw.get("data", {}).get("klines", [])
+    klines = raw.get("data", {}).get("klines", [])
+
+    result = []
+
+    for line in klines:
+        try:
+            arr = line.split(",")
+            if len(arr) < 11:
+                continue
+
+            # 成交额
+            try:
+                amount_value = round(float(arr[6]), 2) if arr[6] else 0.0
+            except Exception:
+                amount_value = 0.0
+
+            # 涨跌幅（东方财富原始字段）
+            try:
+                change_percent_value = float(arr[9]) if len(arr) > 9 else 0.0
+            except Exception:
+                change_percent_value = 0.0
+
+            # 振幅 = (high - low) / low * 100
+            try:
+                high = float(arr[3])
+                low = float(arr[4])
+                amplitude = round(((high - low) / low) * 100, 2) if low != 0 else 0.0
+            except Exception:
+                amplitude = 0.0
+
+            result.append({
+                "trade_date": arr[0],
+                "trade_time": None,
+                "stock_code": req.secid,
+                "open": float(arr[1]),
+                "close": float(arr[2]),
+                "high": float(arr[3]),
+                "low": float(arr[4]),
+                "volume": int(arr[5]),
+                "amount": amount_value,
+                "change": float(arr[9]) if len(arr) > 9 else 0.0,
+                "change_percent": change_percent_value,
+                "amplitude": amplitude,
+                "turnover_ratio": float(arr[10]) if len(arr) > 10 else 0.0,
+                "pre_close": None
+            })
+        except Exception as e:
+            logger.error(
+                "Parsing US kline failed. [line=%s, error=%s]",
+                line,
+                str(e)
+            )
+
+    return result
 
 
 @app.post("/proxy/json")
