@@ -91,6 +91,66 @@
         </foreach>
     </select>
 
+    <resultMap type="com.make.stock.domain.vo.StockRankingStat" id="StockRankingStatResult">
+        <result property="stockCode" column="stock_code"/>
+        <result property="currentValue" column="current_val"/>
+        <result property="prevValue" column="prev_val"/>
+    </resultMap>
+
+    <!-- 1. Rank by (Current Year Max High / Last Year Max High) -->
+    <select id="selectHighVsHighRanking" resultMap="StockRankingStatResult">
+        SELECT
+            curr.stock_code,
+            curr.max_high AS current_val,
+            prev.max_high AS prev_val
+        FROM
+            (SELECT stock_code, MAX(high) as max_high FROM stock_kline WHERE YEAR(trade_date) = YEAR(NOW()) GROUP BY stock_code) curr
+            INNER JOIN
+            (SELECT stock_code, MAX(high) as max_high FROM stock_kline WHERE YEAR(trade_date) = YEAR(NOW()) - 1 GROUP BY stock_code) prev
+            ON curr.stock_code = prev.stock_code
+        ORDER BY (curr.max_high / NULLIF(prev.max_high, 0)) DESC
+            LIMIT 10
+    </select>
+
+    <!-- 2. Rank by (Current Year Min Low / Last Year Min Low) -->
+    <select id="selectLowVsLowRanking" resultMap="StockRankingStatResult">
+        SELECT
+            curr.stock_code,
+            curr.min_low AS current_val,
+            prev.min_low AS prev_val
+        FROM
+            (SELECT stock_code, MIN(low) as min_low FROM stock_kline WHERE YEAR(trade_date) = YEAR(NOW()) GROUP BY stock_code) curr
+            INNER JOIN
+            (SELECT stock_code, MIN(low) as min_low FROM stock_kline WHERE YEAR(trade_date) = YEAR(NOW()) - 1 GROUP BY stock_code) prev
+            ON curr.stock_code = prev.stock_code
+        ORDER BY (curr.min_low / NULLIF(prev.min_low, 0)) DESC
+            LIMIT 10
+    </select>
+
+    <!-- 3. Rank by (Current Year Latest Close / Last Year Max High) -->
+    <select id="selectLatestVsHighRanking" resultMap="StockRankingStatResult">
+        SELECT
+            curr.stock_code,
+            curr.close AS current_val,
+            prev.max_high AS prev_val
+        FROM
+            (
+                SELECT k.stock_code, k.close
+                FROM stock_kline k
+                INNER JOIN (
+                    SELECT stock_code, MAX(trade_date) as max_date
+                    FROM stock_kline
+                    WHERE YEAR(trade_date) = YEAR(NOW())
+                    GROUP BY stock_code
+                ) latest ON k.stock_code = latest.stock_code AND k.trade_date = latest.max_date
+            ) curr
+            INNER JOIN
+            (SELECT stock_code, MAX(high) as max_high FROM stock_kline WHERE YEAR(trade_date) = YEAR(NOW()) - 1 GROUP BY stock_code) prev
+            ON curr.stock_code = prev.stock_code
+        ORDER BY (curr.close / NULLIF(prev.max_high, 0)) DESC
+            LIMIT 10
+    </select>
+
 
     <insert id="insertStockKline" parameterType="StockKline" useGeneratedKeys="true" keyProperty="id">
         insert into stock_kline

@@ -4,7 +4,8 @@ import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
 
-import com.make.stock.domain .StockKline;
+import com.make.stock.domain.StockKline;
+import com.make.stock.domain.vo.StockRankingStat;
 
 /**
  * 股票K线数据Service接口
@@ -92,4 +93,11 @@ public interface IStockKlineService {
     List<LocalDate> selectExistsDates(String stockCode, List<LocalDate> tradeDateList);
 
     List<StockKline> queryWeekAllStockKline(String stockCode, List<LocalDate> tradeDateList);
+
+    /**
+     * Get ranking statistics by type.
+     * @param type The ranking type (HIGH_VS_HIGH, LOW_VS_LOW, LATEST_VS_HIGH)
+     * @return List of ranking stats
+     */
+    List<StockRankingStat> selectStockRanking(String type);
 }

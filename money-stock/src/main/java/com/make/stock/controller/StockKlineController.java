@@ -68,6 +68,15 @@ public class StockKlineController extends BaseController {
     }
 
     /**
+     * Get Ranking Statistics
+     */
+    @PreAuthorize("@ss.hasPermi('stock:kline:list')")
+    @GetMapping(value = "/ranking/{type}")
+    public AjaxResult getRanking(@PathVariable("type") String type) {
+        return success(stockKlineService.selectStockRanking(type));
+    }
+
+    /**
      * 新增股票K线数据
      */
     @PreAuthorize("@ss.hasPermi('stock:kline:add')")

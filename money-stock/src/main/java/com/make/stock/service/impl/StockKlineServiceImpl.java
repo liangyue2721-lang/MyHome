@@ -8,6 +8,7 @@ import java.util.List;
 import com.make.common.utils.DateUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import com.make.stock.domain.vo.StockRankingStat;
 import com.make.stock.mapper.StockKlineMapper;
 import com.make.stock.domain.StockKline;
 import com.make.stock.service.IStockKlineService;
@@ -141,5 +142,19 @@ public class StockKlineServiceImpl implements IStockKlineService {
     @Override
     public List<StockKline> queryWeekAllStockKline(String stockCode, List<LocalDate> tradeDateList) {
         return stockKlineMapper.queryWeekAllStockKline(stockCode, tradeDateList);
+    }
+
+    @Override
+    public List<StockRankingStat> selectStockRanking(String type) {
+        switch (type) {
+            case "HIGH_VS_HIGH":
+                return stockKlineMapper.selectHighVsHighRanking();
+            case "LOW_VS_LOW":
+                return stockKlineMapper.selectLowVsLowRanking();
+            case "LATEST_VS_HIGH":
+                return stockKlineMapper.selectLatestVsHighRanking();
+            default:
+                return Collections.emptyList();
+        }
     }
 }

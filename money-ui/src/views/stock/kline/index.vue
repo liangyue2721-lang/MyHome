@@ -1,5 +1,32 @@
 <template>
   <div class="app-container">
+    <el-row :gutter="20" class="mb8">
+      <el-col :span="8">
+        <el-card>
+          <div slot="header">
+            <span>本年度最高价 vs 去年度最高价</span>
+          </div>
+          <div ref="chartHighVsHigh" style="height: 300px;"></div>
+        </el-card>
+      </el-col>
+      <el-col :span="8">
+        <el-card>
+          <div slot="header">
+            <span>本年度最低价 vs 去年度最低价</span>
+          </div>
+          <div ref="chartLowVsLow" style="height: 300px;"></div>
+        </el-card>
+      </el-col>
+      <el-col :span="8">
+        <el-card>
+          <div slot="header">
+            <span>本年度最新价 vs 去年度最高价</span>
+          </div>
+          <div ref="chartLatestVsHigh" style="height: 300px;"></div>
+        </el-card>
+      </el-col>
+    </el-row>
+
     <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch" label-width="68px">
       <el-form-item label="股票代码" prop="stockCode">
         <el-input
@@ -191,8 +218,10 @@
 </template>
 
 <script>
-import { listKline, getKline, delKline, addKline, updateKline } from "@/api/stock/kline"
+import { listKline, getKline, delKline, addKline, updateKline, getRankingStats } from "@/api/stock/kline"
 import {listUser} from "@/api/stock/dropdown_component";  // 获取用户列表API
+import * as echarts from 'echarts'
+
 export default {
   name: "Kline",
   dicts: ['market_identity'],
@@ -252,7 +281,61 @@ export default {
     // 加载数据
     this.getList();
   },
+  mounted() {
+    this.initCharts();
+  },
   methods: {
+    initCharts() {
+      this.initRankingChart('HIGH_VS_HIGH', 'chartHighVsHigh', '本年度最高价', '去年度最高价');
+      this.initRankingChart('LOW_VS_LOW', 'chartLowVsLow', '本年度最低价', '去年度最低价');
+      this.initRankingChart('LATEST_VS_HIGH', 'chartLatestVsHigh', '本年度最新价', '去年度最高价');
+    },
+    initRankingChart(type, refName, labelCurrent, labelPrev) {
+      getRankingStats(type).then(response => {
+        const data = response.data;
+        const stockCodes = data.map(item => item.stockCode);
+        const currentValues = data.map(item => item.currentValue);
+        const prevValues = data.map(item => item.prevValue);
+
+        const chart = echarts.init(this.$refs[refName]);
+        const option = {
+          tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'shadow' }
+          },
+          legend: {
+            data: [labelCurrent, labelPrev]
+          },
+          grid: {
+            left: '3%',
+            right: '4%',
+            bottom: '3%',
+            containLabel: true
+          },
+          xAxis: {
+            type: 'category',
+            data: stockCodes,
+            axisLabel: { interval: 0, rotate: 30 }
+          },
+          yAxis: {
+            type: 'value'
+          },
+          series: [
+            {
+              name: labelCurrent,
+              type: 'bar',
+              data: currentValues
+            },
+            {
+              name: labelPrev,
+              type: 'bar',
+              data: prevValues
+            }
+          ]
+        };
+        chart.setOption(option);
+      });
+    },
     /**
      * 初始化用户列表数据
      * @returns {Promise<void>} 异步操作完成Promise

@@ -42,3 +42,11 @@ export function delKline(id) {
     method: 'delete'
   })
 }
+
+// 获取排名统计数据
+export function getRankingStats(type) {
+  return request({
+    url: '/stock/kline/ranking/' + type,
+    method: 'get'
+  })
+}

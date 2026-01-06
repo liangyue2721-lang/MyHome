@@ -5,6 +5,7 @@ import java.util.Date;
 import java.util.List;
 
 import com.make.stock.domain.StockKline;
+import com.make.stock.domain.vo.StockRankingStat;
 import org.apache.ibatis.annotations.Param;
 
 /**
@@ -91,4 +92,19 @@ public interface StockKlineMapper {
     List<LocalDate> selectExistsDates(@Param("stockCode") String stockCode, @Param("tradeDateList") List<LocalDate> tradeDateList);
 
     List<StockKline> queryWeekAllStockKline(@Param("stockCode") String stockCode, @Param("tradeDateList") List<LocalDate> tradeDateList);
+
+    /**
+     * Ranking 1: Current Max High vs Last Max High
+     */
+    List<StockRankingStat> selectHighVsHighRanking();
+
+    /**
+     * Ranking 2: Current Min Low vs Last Min Low
+     */
+    List<StockRankingStat> selectLowVsLowRanking();
+
+    /**
+     * Ranking 3: Current Latest Close vs Last Max High
+     */
+    List<StockRankingStat> selectLatestVsHighRanking();
 }
