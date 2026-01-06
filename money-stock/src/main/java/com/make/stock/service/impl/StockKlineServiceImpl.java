@@ -153,6 +153,8 @@ public class StockKlineServiceImpl implements IStockKlineService {
                 return stockKlineMapper.selectLowVsLowRanking();
             case "LATEST_VS_HIGH":
                 return stockKlineMapper.selectLatestVsHighRanking();
+            case "LATEST_VS_LOW":
+                return stockKlineMapper.selectLatestVsLowRanking();
             default:
                 return Collections.emptyList();
         }

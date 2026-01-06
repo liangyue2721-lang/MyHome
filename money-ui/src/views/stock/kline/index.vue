@@ -1,7 +1,7 @@
 <template>
   <div class="app-container">
     <el-row :gutter="20" class="mb8">
-      <el-col :span="8">
+      <el-col :span="6">
         <el-card>
           <div slot="header">
             <span>本年度最高价 vs 去年度最高价</span>
@@ -9,7 +9,7 @@
           <div ref="chartHighVsHigh" style="height: 300px;"></div>
         </el-card>
       </el-col>
-      <el-col :span="8">
+      <el-col :span="6">
         <el-card>
           <div slot="header">
             <span>本年度最低价 vs 去年度最低价</span>
@@ -17,12 +17,20 @@
           <div ref="chartLowVsLow" style="height: 300px;"></div>
         </el-card>
       </el-col>
-      <el-col :span="8">
+      <el-col :span="6">
         <el-card>
           <div slot="header">
             <span>本年度最新价 vs 去年度最高价</span>
           </div>
           <div ref="chartLatestVsHigh" style="height: 300px;"></div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card>
+          <div slot="header">
+            <span>本年度最新价 vs 去年度最低价</span>
+          </div>
+          <div ref="chartLatestVsLow" style="height: 300px;"></div>
         </el-card>
       </el-col>
     </el-row>
@@ -289,6 +297,7 @@ export default {
       this.initRankingChart('HIGH_VS_HIGH', 'chartHighVsHigh', '本年度最高价', '去年度最高价');
       this.initRankingChart('LOW_VS_LOW', 'chartLowVsLow', '本年度最低价', '去年度最低价');
       this.initRankingChart('LATEST_VS_HIGH', 'chartLatestVsHigh', '本年度最新价', '去年度最高价');
+      this.initRankingChart('LATEST_VS_LOW', 'chartLatestVsLow', '本年度最新价', '去年度最低价');
     },
     initRankingChart(type, refName, labelCurrent, labelPrev) {
       getRankingStats(type).then(response => {

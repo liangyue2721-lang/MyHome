@@ -107,4 +107,9 @@ public interface StockKlineMapper {
      * Ranking 3: Current Latest Close vs Last Max High
      */
     List<StockRankingStat> selectLatestVsHighRanking();
+
+    /**
+     * Ranking 4: Current Latest Close vs Last Min Low
+     */
+    List<StockRankingStat> selectLatestVsLowRanking();
 }
