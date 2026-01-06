@@ -460,30 +460,53 @@ async def stock_kline_range(req: KlineRangeRequest, request: Request):
     klines = raw.get("data", {}).get("klines", [])
 
     result = []
+
+
     for line in klines:
         try:
             arr = line.split(",")
             if len(arr) < 11:
                 continue
 
+            # 提前处理可能的转换错误
+            try:
+                amount_value = round(float(arr[6]), 2) if arr[6] and arr[6].strip() else 0.0
+            except (ValueError, TypeError):
+                amount_value = 0.0
+
+            # 计算涨跌幅（假设东方财富数据中 arr[9] 已经是涨跌幅）
+            # 如果 arr[9] 就是涨跌幅百分比，可以直接用
+            try:
+                change_percent_value = float(arr[9]) if len(arr) > 9 else 0.0
+            except (ValueError, TypeError):
+                change_percent_value = 0.0
+
+            # 计算振幅（日内波动）
+            try:
+                high = float(arr[3])
+                low = float(arr[4])
+                amplitude = round(((high - low) / low) * 100, 2) if low != 0 else 0.0
+            except (ValueError, TypeError, ZeroDivisionError):
+                amplitude = 0.0
+
             result.append({
                 "trade_date": arr[0],
-                "trade_time": None,  # Java Date，可为空
+                "trade_time": None,
                 "stock_code": req.secid,
                 "open": float(arr[1]),
                 "close": float(arr[2]),
                 "high": float(arr[3]),
                 "low": float(arr[4]),
                 "volume": int(arr[5]),
-                "amount": float(arr[6]),
-                "change": float(arr[9]),
-                "change_percent": ((float(arr[3]) - float(arr[4])) / float(arr[4])) * 100,
-                "turnover_ratio": float(arr[10]),
-                "pre_close": None  # 东方财富未提供
+                "amount": amount_value,
+                "change": float(arr[9]) if len(arr) > 9 else 0.0,  # 涨跌额
+                "change_percent": change_percent_value,  # 涨跌幅
+                "amplitude": amplitude,  # 振幅
+                "turnover_ratio": float(arr[10]) if len(arr) > 10 else 0.0,
+                "pre_close": None
             })
-        except Exception:
-            # 单条异常直接跳过，避免整体失败
-            logger.error("Parsing line failed. [line=%s]", line)
+        except Exception as e:
+            logger.error("Parsing line failed. [line=%s, error=%s]", line, str(e))
             continue
 
     return result
