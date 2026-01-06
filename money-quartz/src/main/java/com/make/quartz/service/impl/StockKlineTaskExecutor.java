@@ -68,11 +68,11 @@ public class StockKlineTaskExecutor {
 
     /**
      * 执行所有股票K线任务
-     *
+     * <p>
      * 该方法获取指定节点的所有股票K线任务，并使用多线程分批处理的方式执行这些任务。
      * 任务处理结果将被持久化到数据库中，并更新监控股票的相关信息。
      *
-     * @param nodeId 节点ID，用于标识当前执行任务的节点
+     * @param nodeId  节点ID，用于标识当前执行任务的节点
      * @param traceId 跟踪ID，用于追踪任务执行过程中的日志
      */
     public void executeAll(int nodeId, String traceId) {
@@ -92,8 +92,8 @@ public class StockKlineTaskExecutor {
 
         // 将任务列表分批，每批最多20个任务，以提高并发处理效率
         List<List<StockKlineTask>> partitions = Lists.partition(taskList, 20);
-        // 获取用于处理监控股票的线程池执行器
-        ExecutorService executor = ThreadPoolUtil.getWatchStockExecutor();
+        // 获取用于处理核心业务的线程池执行器
+        ExecutorService executor = ThreadPoolUtil.getCoreExecutor();
 
         // 初始化成功和失败任务计数器
         int successCount = 0;
