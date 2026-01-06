@@ -61,7 +61,7 @@ public interface StockKlineTaskMapper {
      */
     public int deleteStockKlineTaskByIds(Long[] ids);
 
-    List<StockKlineTask> getStockAllTask(@Param("nodeId") int nodeId);
+    List<StockKlineTask> getStockAllTask();
 
     void batchFinishTask(@Param("list") List<Long> taskIds);
 }

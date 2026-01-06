@@ -100,7 +100,7 @@ public class StockKlineTaskServiceImpl implements IStockKlineTaskService {
 
     @Override
     public List<StockKlineTask> getStockAllTask(int nodeId) {
-        return stockKlineTaskMapper.getStockAllTask(nodeId);
+        return stockKlineTaskMapper.getStockAllTask();
     }
 
     @Override
