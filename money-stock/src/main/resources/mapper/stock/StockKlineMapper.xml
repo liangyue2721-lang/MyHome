@@ -93,6 +93,7 @@
 
     <resultMap type="com.make.stock.domain.vo.StockRankingStat" id="StockRankingStatResult">
         <result property="stockCode" column="stock_code"/>
+        <result property="stockName" column="stock_name"/>
         <result property="currentValue" column="current_val"/>
         <result property="prevValue" column="prev_val"/>
     </resultMap>
@@ -101,6 +102,7 @@
     <select id="selectHighVsHighRanking" resultMap="StockRankingStatResult">
         SELECT
             curr.stock_code,
+            w.name AS stock_name,
             curr.max_high AS current_val,
             prev.max_high AS prev_val
         FROM
@@ -108,6 +110,7 @@
             INNER JOIN
             (SELECT stock_code, MAX(high) as max_high FROM stock_kline WHERE YEAR(trade_date) = YEAR(NOW()) - 1 GROUP BY stock_code) prev
             ON curr.stock_code = prev.stock_code
+            LEFT JOIN (SELECT code, MAX(name) as name FROM watchstock GROUP BY code) w ON curr.stock_code = w.code
         ORDER BY (curr.max_high / NULLIF(prev.max_high, 0)) DESC
             LIMIT 10
     </select>
@@ -116,6 +119,7 @@
     <select id="selectLowVsLowRanking" resultMap="StockRankingStatResult">
         SELECT
             curr.stock_code,
+            w.name AS stock_name,
             curr.min_low AS current_val,
             prev.min_low AS prev_val
         FROM
@@ -123,6 +127,7 @@
             INNER JOIN
             (SELECT stock_code, MIN(low) as min_low FROM stock_kline WHERE YEAR(trade_date) = YEAR(NOW()) - 1 GROUP BY stock_code) prev
             ON curr.stock_code = prev.stock_code
+            LEFT JOIN (SELECT code, MAX(name) as name FROM watchstock GROUP BY code) w ON curr.stock_code = w.code
         ORDER BY (curr.min_low / NULLIF(prev.min_low, 0)) DESC
             LIMIT 10
     </select>
@@ -131,6 +136,7 @@
     <select id="selectLatestVsHighRanking" resultMap="StockRankingStatResult">
         SELECT
             curr.stock_code,
+            w.name AS stock_name,
             curr.close AS current_val,
             prev.max_high AS prev_val
         FROM
@@ -147,6 +153,7 @@
             INNER JOIN
             (SELECT stock_code, MAX(high) as max_high FROM stock_kline WHERE YEAR(trade_date) = YEAR(NOW()) - 1 GROUP BY stock_code) prev
             ON curr.stock_code = prev.stock_code
+            LEFT JOIN (SELECT code, MAX(name) as name FROM watchstock GROUP BY code) w ON curr.stock_code = w.code
         ORDER BY (curr.close / NULLIF(prev.max_high, 0)) DESC
             LIMIT 10
     </select>

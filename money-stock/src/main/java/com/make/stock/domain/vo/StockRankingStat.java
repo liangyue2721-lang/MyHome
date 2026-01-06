@@ -7,6 +7,7 @@ import java.math.BigDecimal;
  */
 public class StockRankingStat {
     private String stockCode;
+    private String stockName;
     private BigDecimal currentValue;
     private BigDecimal prevValue;
 
@@ -16,6 +17,14 @@ public class StockRankingStat {
 
     public void setStockCode(String stockCode) {
         this.stockCode = stockCode;
+    }
+
+    public String getStockName() {
+        return stockName;
+    }
+
+    public void setStockName(String stockName) {
+        this.stockName = stockName;
     }
 
     public BigDecimal getCurrentValue() {

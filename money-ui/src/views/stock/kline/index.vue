@@ -293,9 +293,16 @@ export default {
     initRankingChart(type, refName, labelCurrent, labelPrev) {
       getRankingStats(type).then(response => {
         const data = response.data;
-        const stockCodes = data.map(item => item.stockCode);
+        const xAxisData = data.map(item => `${item.stockName || ''} (${item.stockCode})`);
         const currentValues = data.map(item => item.currentValue);
         const prevValues = data.map(item => item.prevValue);
+        // Calculate percentage change for each item
+        const percentageChanges = data.map(item => {
+           if (item.prevValue && item.prevValue !== 0) {
+             return ((item.currentValue - item.prevValue) / item.prevValue * 100).toFixed(2) + '%';
+           }
+           return '-';
+        });
 
         const chart = echarts.init(this.$refs[refName]);
         const option = {
@@ -314,7 +321,7 @@ export default {
           },
           xAxis: {
             type: 'category',
-            data: stockCodes,
+            data: xAxisData,
             axisLabel: { interval: 0, rotate: 30 }
           },
           yAxis: {
@@ -324,7 +331,14 @@ export default {
             {
               name: labelCurrent,
               type: 'bar',
-              data: currentValues
+              data: currentValues,
+              label: {
+                show: true,
+                position: 'top',
+                formatter: function (params) {
+                  return percentageChanges[params.dataIndex];
+                }
+              }
             },
             {
               name: labelPrev,
