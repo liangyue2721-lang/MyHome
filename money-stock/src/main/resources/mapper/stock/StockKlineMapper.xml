@@ -100,159 +100,198 @@
 
     <!-- 1. Rank by (Current Year Max High / Last Year Max High) -->
     <select id="selectHighVsHighRanking" resultMap="StockRankingStatResult">
-        SELECT
-            curr.stock_code,
-            w.name AS stock_name,
-            curr.max_high AS current_val,
-            prev.max_high AS prev_val
-        FROM
-            (SELECT stock_code, MAX(high) as max_high FROM stock_kline WHERE YEAR(trade_date) = YEAR(NOW()) GROUP BY stock_code) curr
-            INNER JOIN
-            (SELECT stock_code, MAX(high) as max_high FROM stock_kline WHERE YEAR(trade_date) = YEAR(NOW()) - 1 GROUP BY stock_code) prev
-            ON curr.stock_code = prev.stock_code
-            LEFT JOIN (SELECT code, MAX(name) as name FROM watchstock GROUP BY code) w ON curr.stock_code = w.code
-        ORDER BY (curr.max_high / NULLIF(prev.max_high, 0)) DESC
-            LIMIT 10
+        SELECT curr.stock_code,
+               w.name        AS stock_name,
+               curr.max_high AS current_val,
+               prev.max_high AS prev_val
+        FROM (SELECT stock_code, MAX(high) as max_high
+              FROM stock_kline
+              WHERE YEAR (trade_date) = YEAR (NOW())
+              GROUP BY stock_code) curr
+                 INNER JOIN
+             (SELECT stock_code, MAX(high) as max_high
+              FROM stock_kline
+              WHERE YEAR (trade_date) = YEAR (NOW()) - 1
+              GROUP BY stock_code) prev
+             ON curr.stock_code = prev.stock_code
+                 LEFT JOIN (SELECT code, MAX(name) as name FROM watchstock GROUP BY code) w ON curr.stock_code = w.code
+        ORDER BY (curr.max_high / NULLIF(prev.max_high, 0)) DESC LIMIT 10
     </select>
 
     <!-- 2. Rank by (Current Year Min Low / Last Year Min Low) -->
     <select id="selectLowVsLowRanking" resultMap="StockRankingStatResult">
-        SELECT
-            curr.stock_code,
-            w.name AS stock_name,
-            curr.min_low AS current_val,
-            prev.min_low AS prev_val
-        FROM
-            (SELECT stock_code, MIN(low) as min_low FROM stock_kline WHERE YEAR(trade_date) = YEAR(NOW()) GROUP BY stock_code) curr
-            INNER JOIN
-            (SELECT stock_code, MIN(low) as min_low FROM stock_kline WHERE YEAR(trade_date) = YEAR(NOW()) - 1 GROUP BY stock_code) prev
-            ON curr.stock_code = prev.stock_code
-            LEFT JOIN (SELECT code, MAX(name) as name FROM watchstock GROUP BY code) w ON curr.stock_code = w.code
-        ORDER BY (curr.min_low / NULLIF(prev.min_low, 0)) DESC
-            LIMIT 10
+        SELECT curr.stock_code,
+               w.name       AS stock_name,
+               curr.min_low AS current_val,
+               prev.min_low AS prev_val
+        FROM (SELECT stock_code, MIN(low) as min_low
+              FROM stock_kline
+              WHERE YEAR (trade_date) = YEAR (NOW())
+              GROUP BY stock_code) curr
+                 INNER JOIN
+             (SELECT stock_code, MIN(low) as min_low
+              FROM stock_kline
+              WHERE YEAR (trade_date) = YEAR (NOW()) - 1
+              GROUP BY stock_code) prev
+             ON curr.stock_code = prev.stock_code
+                 LEFT JOIN (SELECT code, MAX(name) as name FROM watchstock GROUP BY code) w ON curr.stock_code = w.code
+        ORDER BY (curr.min_low / NULLIF(prev.min_low, 0)) DESC LIMIT 10
     </select>
 
     <!-- 3. Rank by (Current Year Latest Close / Last Year Max High) -->
     <select id="selectLatestVsHighRanking" resultMap="StockRankingStatResult">
-        SELECT
-            curr.stock_code,
-            w.name AS stock_name,
-            curr.close AS current_val,
-            prev.max_high AS prev_val
-        FROM
-            (
-                SELECT k.stock_code, k.close
-                FROM stock_kline k
-                INNER JOIN (
-                    SELECT stock_code, MAX(trade_date) as max_date
-                    FROM stock_kline
-                    WHERE YEAR(trade_date) = YEAR(NOW())
-                    GROUP BY stock_code
-                ) latest ON k.stock_code = latest.stock_code AND k.trade_date = latest.max_date
-            ) curr
-            INNER JOIN
-            (SELECT stock_code, MAX(high) as max_high FROM stock_kline WHERE YEAR(trade_date) = YEAR(NOW()) - 1 GROUP BY stock_code) prev
-            ON curr.stock_code = prev.stock_code
-            LEFT JOIN (SELECT code, MAX(name) as name FROM watchstock GROUP BY code) w ON curr.stock_code = w.code
-        ORDER BY (curr.close / NULLIF(prev.max_high, 0)) DESC
-            LIMIT 10
+        SELECT curr.stock_code,
+               w.name        AS stock_name,
+               curr.close    AS current_val,
+               prev.max_high AS prev_val
+        FROM (SELECT k.stock_code, k.close
+              FROM stock_kline k
+                       INNER JOIN (SELECT stock_code, MAX(trade_date) as max_date
+                                   FROM stock_kline
+                                   WHERE YEAR (trade_date) = YEAR (NOW())
+                                   GROUP BY stock_code) latest
+                                  ON k.stock_code = latest.stock_code AND k.trade_date = latest.max_date) curr
+                 INNER JOIN
+             (SELECT stock_code, MAX(high) as max_high
+              FROM stock_kline
+              WHERE YEAR (trade_date) = YEAR (NOW()) - 1
+              GROUP BY stock_code) prev
+             ON curr.stock_code = prev.stock_code
+                 LEFT JOIN (SELECT code, MAX(name) as name FROM watchstock GROUP BY code) w ON curr.stock_code = w.code
+        ORDER BY (curr.close / NULLIF(prev.max_high, 0)) DESC LIMIT 10
     </select>
 
     <!-- 4. Rank by (Current Year Latest Close / Last Year Min Low) -->
     <select id="selectLatestVsLowRanking" resultMap="StockRankingStatResult">
-        SELECT
-            curr.stock_code,
-            w.name AS stock_name,
-            curr.close AS current_val,
-            prev.min_low AS prev_val
-        FROM
-            (
-                SELECT k.stock_code, k.close
-                FROM stock_kline k
-                INNER JOIN (
-                    SELECT stock_code, MAX(trade_date) as max_date
-                    FROM stock_kline
-                    WHERE YEAR(trade_date) = YEAR(NOW())
-                    GROUP BY stock_code
-                ) latest ON k.stock_code = latest.stock_code AND k.trade_date = latest.max_date
-            ) curr
-            INNER JOIN
-            (SELECT stock_code, MIN(low) as min_low FROM stock_kline WHERE YEAR(trade_date) = YEAR(NOW()) - 1 GROUP BY stock_code) prev
-            ON curr.stock_code = prev.stock_code
-            LEFT JOIN (SELECT code, MAX(name) as name FROM watchstock GROUP BY code) w ON curr.stock_code = w.code
-        ORDER BY (curr.close / NULLIF(prev.min_low, 0)) DESC
-            LIMIT 10
+        SELECT curr.stock_code,
+               w.name       AS stock_name,
+               curr.close   AS current_val,
+               prev.min_low AS prev_val
+        FROM (SELECT k.stock_code, k.close
+              FROM stock_kline k
+                       INNER JOIN (SELECT stock_code, MAX(trade_date) as max_date
+                                   FROM stock_kline
+                                   WHERE YEAR (trade_date) = YEAR (NOW())
+                                   GROUP BY stock_code) latest
+                                  ON k.stock_code = latest.stock_code AND k.trade_date = latest.max_date) curr
+                 INNER JOIN
+             (SELECT stock_code, MIN(low) as min_low
+              FROM stock_kline
+              WHERE YEAR (trade_date) = YEAR (NOW()) - 1
+              GROUP BY stock_code) prev
+             ON curr.stock_code = prev.stock_code
+                 LEFT JOIN (SELECT code, MAX(name) as name FROM watchstock GROUP BY code) w ON curr.stock_code = w.code
+        ORDER BY (curr.close / NULLIF(prev.min_low, 0)) DESC LIMIT 10
     </select>
 
-    <!-- 5. Rank by Weekly Gain -->
+    <!-- ========================= -->
+    <!-- 周涨幅 Top 10 -->
+    <!-- ========================= -->
     <select id="selectWeeklyGainRanking" resultMap="StockRankingStatResult">
-        SELECT
-        curr.stock_code,
-        w.name AS stock_name,
-        curr.close AS current_val,
-        prev.close AS prev_val
-        FROM
-        (
-        SELECT k.stock_code, k.close
-        FROM stock_kline k
-        INNER JOIN (
-        SELECT stock_code, MAX(trade_date) as max_date
-        FROM stock_kline
-        WHERE trade_date >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
-        GROUP BY stock_code
-        ) latest ON k.stock_code = latest.stock_code AND k.trade_date = latest.max_date
-        ) curr
-        INNER JOIN
-        (
-        SELECT k.stock_code, k.close
-        FROM stock_kline k
-        INNER JOIN (
-        SELECT stock_code, MAX(trade_date) as max_date
-        FROM stock_kline
-        WHERE trade_date < DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
-        GROUP BY stock_code
-        ) prev_date ON k.stock_code = prev_date.stock_code AND k.trade_date = prev_date.max_date
-        ) prev
-        ON curr.stock_code = prev.stock_code
-        LEFT JOIN (SELECT code, MAX(name) as name FROM watchstock GROUP BY code) w ON curr.stock_code = w.code
-        ORDER BY ((curr.close - prev.close) / prev.close) DESC
-        LIMIT 10
-    </select>
+<![CDATA[
+        WITH base AS (SELECT stock_code,
+                             trade_date,
+            close
+           , CASE
+            WHEN trade_date
+           < DATE_SUB(CURDATE()
+           , INTERVAL WEEKDAY(CURDATE()) DAY)
+            THEN 'PREV'
+            ELSE 'CURR'
+        END
+        AS week_flag
+    FROM stock_kline
+    WHERE trade_date <= CURDATE()
+),
+ranked AS (
+    SELECT
+        stock_code,
+        close,
+        week_flag,
+        ROW_NUMBER() OVER (
+            PARTITION BY stock_code, week_flag
+            ORDER BY trade_date DESC
+        ) AS rn
+    FROM base
+),
+week_close AS (
+    SELECT
+        stock_code,
+        MAX(CASE WHEN week_flag = 'CURR' AND rn = 1 THEN close END) AS current_val,
+        MAX(CASE WHEN week_flag = 'PREV' AND rn = 1 THEN close END) AS prev_val
+    FROM ranked
+    GROUP BY stock_code
+)
+        SELECT wc.stock_code,
+               w.name                                       AS stock_name,
+               wc.current_val,
+               wc.prev_val,
+               (wc.current_val - wc.prev_val) / wc.prev_val AS week_change_rate
+        FROM week_close wc
+                 LEFT JOIN (SELECT code, MAX(name) AS name
+                            FROM watchstock
+                            GROUP BY code) w ON wc.stock_code = w.code
+        WHERE wc.prev_val IS NOT NULL
+          AND wc.prev_val <> 0
+          AND wc.current_val IS NOT NULL
+        ORDER BY week_change_rate DESC LIMIT 10
+        ]]>
+</select>
 
-    <!-- 6. Rank by Weekly Loss -->
+
+    <!-- ========================= -->
+    <!-- 周跌幅 Top 10 -->
+    <!-- ========================= -->
     <select id="selectWeeklyLossRanking" resultMap="StockRankingStatResult">
-        SELECT
-        curr.stock_code,
-        w.name AS stock_name,
-        curr.close AS current_val,
-        prev.close AS prev_val
-        FROM
-        (
-        SELECT k.stock_code, k.close
-        FROM stock_kline k
-        INNER JOIN (
-        SELECT stock_code, MAX(trade_date) as max_date
-        FROM stock_kline
-        WHERE trade_date >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
-        GROUP BY stock_code
-        ) latest ON k.stock_code = latest.stock_code AND k.trade_date = latest.max_date
-        ) curr
-        INNER JOIN
-        (
-        SELECT k.stock_code, k.close
-        FROM stock_kline k
-        INNER JOIN (
-        SELECT stock_code, MAX(trade_date) as max_date
-        FROM stock_kline
-        WHERE trade_date < DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
-        GROUP BY stock_code
-        ) prev_date ON k.stock_code = prev_date.stock_code AND k.trade_date = prev_date.max_date
-        ) prev
-        ON curr.stock_code = prev.stock_code
-        LEFT JOIN (SELECT code, MAX(name) as name FROM watchstock GROUP BY code) w ON curr.stock_code = w.code
-        ORDER BY ((curr.close - prev.close) / prev.close) ASC
-        LIMIT 10
-    </select>
+    <![CDATA[
+        WITH base AS (SELECT stock_code,
+                             trade_date,
+            close
+           , CASE
+            WHEN trade_date
+           < DATE_SUB(CURDATE()
+           , INTERVAL WEEKDAY(CURDATE()) DAY)
+            THEN 'PREV'
+            ELSE 'CURR'
+        END
+        AS week_flag
+    FROM stock_kline
+    WHERE trade_date <= CURDATE()
+),
+ranked AS (
+    SELECT
+        stock_code,
+        close,
+        week_flag,
+        ROW_NUMBER() OVER (
+            PARTITION BY stock_code, week_flag
+            ORDER BY trade_date DESC
+        ) AS rn
+    FROM base
+),
+week_close AS (
+    SELECT
+        stock_code,
+        MAX(CASE WHEN week_flag = 'CURR' AND rn = 1 THEN close END) AS current_val,
+        MAX(CASE WHEN week_flag = 'PREV' AND rn = 1 THEN close END) AS prev_val
+    FROM ranked
+    GROUP BY stock_code
+)
+        SELECT wc.stock_code,
+               w.name                                       AS stock_name,
+               wc.current_val,
+               wc.prev_val,
+               (wc.current_val - wc.prev_val) / wc.prev_val AS week_change_rate
+        FROM week_close wc
+                 LEFT JOIN (SELECT code, MAX(name) AS name
+                            FROM watchstock
+                            GROUP BY code) w ON wc.stock_code = w.code
+        WHERE wc.prev_val IS NOT NULL
+          AND wc.prev_val <> 0
+          AND wc.current_val IS NOT NULL
+        ORDER BY week_change_rate ASC LIMIT 10
+        ]]>
+</select>
 
 
     <insert id="insertStockKline" parameterType="StockKline" useGeneratedKeys="true" keyProperty="id">
