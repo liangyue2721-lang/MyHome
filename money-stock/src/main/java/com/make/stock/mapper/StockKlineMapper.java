@@ -112,4 +112,14 @@ public interface StockKlineMapper {
      * Ranking 4: Current Latest Close vs Last Min Low
      */
     List<StockRankingStat> selectLatestVsLowRanking();
+
+    /**
+     * Ranking 5: Weekly Gain Ranking
+     */
+    List<StockRankingStat> selectWeeklyGainRanking();
+
+    /**
+     * Ranking 6: Weekly Loss Ranking
+     */
+    List<StockRankingStat> selectWeeklyLossRanking();
 }

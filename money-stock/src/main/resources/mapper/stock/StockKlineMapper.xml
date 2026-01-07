@@ -184,6 +184,76 @@
             LIMIT 10
     </select>
 
+    <!-- 5. Rank by Weekly Gain -->
+    <select id="selectWeeklyGainRanking" resultMap="StockRankingStatResult">
+        SELECT
+        curr.stock_code,
+        w.name AS stock_name,
+        curr.close AS current_val,
+        prev.close AS prev_val
+        FROM
+        (
+        SELECT k.stock_code, k.close
+        FROM stock_kline k
+        INNER JOIN (
+        SELECT stock_code, MAX(trade_date) as max_date
+        FROM stock_kline
+        WHERE trade_date >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
+        GROUP BY stock_code
+        ) latest ON k.stock_code = latest.stock_code AND k.trade_date = latest.max_date
+        ) curr
+        INNER JOIN
+        (
+        SELECT k.stock_code, k.close
+        FROM stock_kline k
+        INNER JOIN (
+        SELECT stock_code, MAX(trade_date) as max_date
+        FROM stock_kline
+        WHERE trade_date < DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
+        GROUP BY stock_code
+        ) prev_date ON k.stock_code = prev_date.stock_code AND k.trade_date = prev_date.max_date
+        ) prev
+        ON curr.stock_code = prev.stock_code
+        LEFT JOIN (SELECT code, MAX(name) as name FROM watchstock GROUP BY code) w ON curr.stock_code = w.code
+        ORDER BY ((curr.close - prev.close) / prev.close) DESC
+        LIMIT 10
+    </select>
+
+    <!-- 6. Rank by Weekly Loss -->
+    <select id="selectWeeklyLossRanking" resultMap="StockRankingStatResult">
+        SELECT
+        curr.stock_code,
+        w.name AS stock_name,
+        curr.close AS current_val,
+        prev.close AS prev_val
+        FROM
+        (
+        SELECT k.stock_code, k.close
+        FROM stock_kline k
+        INNER JOIN (
+        SELECT stock_code, MAX(trade_date) as max_date
+        FROM stock_kline
+        WHERE trade_date >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
+        GROUP BY stock_code
+        ) latest ON k.stock_code = latest.stock_code AND k.trade_date = latest.max_date
+        ) curr
+        INNER JOIN
+        (
+        SELECT k.stock_code, k.close
+        FROM stock_kline k
+        INNER JOIN (
+        SELECT stock_code, MAX(trade_date) as max_date
+        FROM stock_kline
+        WHERE trade_date < DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
+        GROUP BY stock_code
+        ) prev_date ON k.stock_code = prev_date.stock_code AND k.trade_date = prev_date.max_date
+        ) prev
+        ON curr.stock_code = prev.stock_code
+        LEFT JOIN (SELECT code, MAX(name) as name FROM watchstock GROUP BY code) w ON curr.stock_code = w.code
+        ORDER BY ((curr.close - prev.close) / prev.close) ASC
+        LIMIT 10
+    </select>
+
 
     <insert id="insertStockKline" parameterType="StockKline" useGeneratedKeys="true" keyProperty="id">
         insert into stock_kline

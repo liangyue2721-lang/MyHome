@@ -36,6 +36,57 @@
       </el-form>
     </el-card>
 
+    <el-row :gutter="20" class="mb-20">
+      <el-col :span="12">
+        <el-card shadow="never">
+          <div slot="header" class="clearfix">
+            <span style="font-weight: bold; font-size: 16px;">📈 本周涨幅榜</span>
+          </div>
+          <el-table :data="weeklyGainList" size="mini" :border="false" :show-header="true">
+            <el-table-column type="index" label="排名" width="50" align="center"/>
+            <el-table-column prop="stockName" label="名称" align="center" show-overflow-tooltip/>
+            <el-table-column prop="stockCode" label="代码" align="center"/>
+            <el-table-column label="最新价" align="center">
+              <template slot-scope="scope">
+                <span class="price-font">{{ scope.row.currentValue }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="周涨幅" align="center">
+              <template slot-scope="scope">
+                   <span :class="getWeeklyValueColor(scope.row.currentValue, scope.row.prevValue)">
+                      {{ calculateWeeklyRate(scope.row.currentValue, scope.row.prevValue) }}
+                   </span>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+      </el-col>
+      <el-col :span="12">
+        <el-card shadow="never">
+          <div slot="header" class="clearfix">
+            <span style="font-weight: bold; font-size: 16px;">📉 本周跌幅榜</span>
+          </div>
+          <el-table :data="weeklyLossList" size="mini" :border="false" :show-header="true">
+            <el-table-column type="index" label="排名" width="50" align="center"/>
+            <el-table-column prop="stockName" label="名称" align="center" show-overflow-tooltip/>
+            <el-table-column prop="stockCode" label="代码" align="center"/>
+            <el-table-column label="最新价" align="center">
+              <template slot-scope="scope">
+                <span class="price-font">{{ scope.row.currentValue }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="周跌幅" align="center">
+              <template slot-scope="scope">
+                   <span :class="getWeeklyValueColor(scope.row.currentValue, scope.row.prevValue)">
+                      {{ calculateWeeklyRate(scope.row.currentValue, scope.row.prevValue) }}
+                   </span>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+      </el-col>
+    </el-row>
+
     <div class="content-header mb-10">
       <el-row :gutter="10">
         <el-col :span="1.5">
@@ -253,11 +304,14 @@ import {
   addWatch_stock,
   updateWatch_stock
 } from "@/api/stock/watch_stock";
+import { getRankingStats } from "@/api/stock/kline";
 
 export default {
   name: "StockList",
   data() {
     return {
+      weeklyGainList: [],
+      weeklyLossList: [],
       loading: true,
       ids: [],
       single: true,
@@ -284,8 +338,27 @@ export default {
   },
   created() {
     this.getList();
+    this.loadRankings();
   },
   methods: {
+    loadRankings() {
+      getRankingStats('WEEKLY_GAIN').then(res => {
+        this.weeklyGainList = res.data;
+      });
+      getRankingStats('WEEKLY_LOSS').then(res => {
+        this.weeklyLossList = res.data;
+      });
+    },
+    calculateWeeklyRate(current, prev) {
+      if (!prev || prev == 0) return '-';
+      const rate = ((current - prev) / prev) * 100;
+      return (rate > 0 ? '+' : '') + rate.toFixed(2) + '%';
+    },
+    getWeeklyValueColor(current, prev) {
+      if (!prev || prev == 0) return '';
+      const rate = current - prev;
+      return rate >= 0 ? 'text-up' : 'text-down';
+    },
     getList() {
       this.loading = true;
       listWatch_stock(this.queryParams).then(response => {
