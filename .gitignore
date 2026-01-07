@@ -53,3 +53,5 @@ config/application.yml
 *.yml
 *.pid
 /config
+**/venv
+**/python/*json

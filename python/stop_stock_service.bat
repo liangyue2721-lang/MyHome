@@ -1,22 +1,38 @@
 @echo off
-chcp 65001 >nul
 setlocal
 
+echo ==========================================
+echo Stock Service - Stop Script (Windows)
+echo ==========================================
+
 set PORT=8000
-set FOUND=0
 
-echo [INFO] Stopping Stock Service on port %PORT% ...
+echo [INFO] Finding process on port %PORT% ...
 
-for /f "tokens=5" %%p in ('netstat -ano ^| findstr :%PORT% ^| findstr LISTENING') do (
-    echo [INFO] Found process PID=%%p
-    taskkill /F /PID %%p
-    set FOUND=1
+REM 查找占用端口的 PID
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr :%PORT%') do (
+    set PID=%%a
+    goto FOUND
 )
 
-if "%FOUND%"=="0" (
-    echo [WARN] No process found listening on port %PORT%.
-) else (
-    echo [INFO] Stock Service stopped successfully.
+echo [INFO] No process found on port %PORT%
+goto END
+
+:FOUND
+echo [INFO] Found process PID=%PID%
+echo [INFO] Stopping service...
+
+REM 优雅结束进程
+taskkill /PID %PID% /F
+
+if errorlevel 1 (
+    echo ERROR: Failed to stop process %PID%
+    goto END
 )
 
+echo [OK] Service stopped successfully.
+
+:END
+echo ==========================================
+pause
 endlocal
