@@ -293,6 +293,106 @@ week_close AS (
         ]]>
 </select>
 
+    <!-- ========================= -->
+    <!-- New Charts: Current Year High vs Latest -->
+    <!-- ========================= -->
+
+    <!-- 5. Rank by (Current Year Latest Close / Current Year Max High) DESC - Strongest (Closest to High) -->
+    <select id="selectHighVsLatestHighRanking" resultMap="StockRankingStatResult">
+        SELECT curr.stock_code,
+               w.name        AS stock_name,
+               curr.close    AS current_val,
+               year_stat.max_high AS prev_val
+        FROM (SELECT k.stock_code, k.close
+              FROM stock_kline k
+                       INNER JOIN (SELECT stock_code, MAX(trade_date) as max_date
+                                   FROM stock_kline
+                                   WHERE YEAR (trade_date) = YEAR (NOW())
+                                   GROUP BY stock_code) latest
+                                  ON k.stock_code = latest.stock_code AND k.trade_date = latest.max_date) curr
+                 INNER JOIN
+             (SELECT stock_code, MAX(high) as max_high
+              FROM stock_kline
+              WHERE YEAR (trade_date) = YEAR (NOW())
+              GROUP BY stock_code) year_stat
+             ON curr.stock_code = year_stat.stock_code
+                 LEFT JOIN (SELECT code, MAX(name) as name FROM watchstock GROUP BY code) w ON curr.stock_code = w.code
+        WHERE year_stat.max_high > 0
+        ORDER BY (curr.close / year_stat.max_high) DESC LIMIT 10
+    </select>
+
+    <!-- 6. Rank by (Current Year Latest Close / Current Year Max High) ASC - Weakest (Dropped Most from High) -->
+    <select id="selectHighVsLatestLowRanking" resultMap="StockRankingStatResult">
+        SELECT curr.stock_code,
+               w.name        AS stock_name,
+               curr.close    AS current_val,
+               year_stat.max_high AS prev_val
+        FROM (SELECT k.stock_code, k.close
+              FROM stock_kline k
+                       INNER JOIN (SELECT stock_code, MAX(trade_date) as max_date
+                                   FROM stock_kline
+                                   WHERE YEAR (trade_date) = YEAR (NOW())
+                                   GROUP BY stock_code) latest
+                                  ON k.stock_code = latest.stock_code AND k.trade_date = latest.max_date) curr
+                 INNER JOIN
+             (SELECT stock_code, MAX(high) as max_high
+              FROM stock_kline
+              WHERE YEAR (trade_date) = YEAR (NOW())
+              GROUP BY stock_code) year_stat
+             ON curr.stock_code = year_stat.stock_code
+                 LEFT JOIN (SELECT code, MAX(name) as name FROM watchstock GROUP BY code) w ON curr.stock_code = w.code
+        WHERE year_stat.max_high > 0
+        ORDER BY (curr.close / year_stat.max_high) ASC LIMIT 10
+    </select>
+
+    <!-- 7. Rank by (Current Year Latest Close / Current Year Min Low) DESC - Strongest Rebound (Rose Most from Low) -->
+    <select id="selectLowVsLatestHighRanking" resultMap="StockRankingStatResult">
+        SELECT curr.stock_code,
+               w.name        AS stock_name,
+               curr.close    AS current_val,
+               year_stat.min_low AS prev_val
+        FROM (SELECT k.stock_code, k.close
+              FROM stock_kline k
+                       INNER JOIN (SELECT stock_code, MAX(trade_date) as max_date
+                                   FROM stock_kline
+                                   WHERE YEAR (trade_date) = YEAR (NOW())
+                                   GROUP BY stock_code) latest
+                                  ON k.stock_code = latest.stock_code AND k.trade_date = latest.max_date) curr
+                 INNER JOIN
+             (SELECT stock_code, MIN(low) as min_low
+              FROM stock_kline
+              WHERE YEAR (trade_date) = YEAR (NOW())
+              GROUP BY stock_code) year_stat
+             ON curr.stock_code = year_stat.stock_code
+                 LEFT JOIN (SELECT code, MAX(name) as name FROM watchstock GROUP BY code) w ON curr.stock_code = w.code
+        WHERE year_stat.min_low > 0
+        ORDER BY (curr.close / year_stat.min_low) DESC LIMIT 10
+    </select>
+
+    <!-- 8. Rank by (Current Year Latest Close / Current Year Min Low) ASC - Weakest (Closest to Low) -->
+    <select id="selectLowVsLatestLowRanking" resultMap="StockRankingStatResult">
+        SELECT curr.stock_code,
+               w.name        AS stock_name,
+               curr.close    AS current_val,
+               year_stat.min_low AS prev_val
+        FROM (SELECT k.stock_code, k.close
+              FROM stock_kline k
+                       INNER JOIN (SELECT stock_code, MAX(trade_date) as max_date
+                                   FROM stock_kline
+                                   WHERE YEAR (trade_date) = YEAR (NOW())
+                                   GROUP BY stock_code) latest
+                                  ON k.stock_code = latest.stock_code AND k.trade_date = latest.max_date) curr
+                 INNER JOIN
+             (SELECT stock_code, MIN(low) as min_low
+              FROM stock_kline
+              WHERE YEAR (trade_date) = YEAR (NOW())
+              GROUP BY stock_code) year_stat
+             ON curr.stock_code = year_stat.stock_code
+                 LEFT JOIN (SELECT code, MAX(name) as name FROM watchstock GROUP BY code) w ON curr.stock_code = w.code
+        WHERE year_stat.min_low > 0
+        ORDER BY (curr.close / year_stat.min_low) ASC LIMIT 10
+    </select>
+
 
     <insert id="insertStockKline" parameterType="StockKline" useGeneratedKeys="true" keyProperty="id">
         insert into stock_kline

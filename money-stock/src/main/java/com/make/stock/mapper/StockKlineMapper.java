@@ -122,4 +122,24 @@ public interface StockKlineMapper {
      * Ranking 6: Weekly Loss Ranking
      */
     List<StockRankingStat> selectWeeklyLossRanking();
+
+    /**
+     * Ranking: Current Latest vs Current Max High (DESC - Closest to High)
+     */
+    List<StockRankingStat> selectHighVsLatestHighRanking();
+
+    /**
+     * Ranking: Current Latest vs Current Max High (ASC - Dropped Most from High)
+     */
+    List<StockRankingStat> selectHighVsLatestLowRanking();
+
+    /**
+     * Ranking: Current Latest vs Current Min Low (DESC - Rose Most from Low)
+     */
+    List<StockRankingStat> selectLowVsLatestHighRanking();
+
+    /**
+     * Ranking: Current Latest vs Current Min Low (ASC - Closest to Low)
+     */
+    List<StockRankingStat> selectLowVsLatestLowRanking();
 }

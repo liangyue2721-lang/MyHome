@@ -35,6 +35,41 @@
       </el-col>
     </el-row>
 
+    <el-row :gutter="20" class="mb8">
+      <el-col :span="6">
+        <el-card>
+          <div slot="header">
+            <span>本年度最新价 vs 本年度最高价 (强势)</span>
+          </div>
+          <div ref="chartHighVsLatestHigh" style="height: 300px;"></div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card>
+          <div slot="header">
+            <span>本年度最新价 vs 本年度最高价 (跌幅大)</span>
+          </div>
+          <div ref="chartHighVsLatestLow" style="height: 300px;"></div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card>
+          <div slot="header">
+            <span>本年度最新价 vs 本年度最低价 (反弹强)</span>
+          </div>
+          <div ref="chartLowVsLatestHigh" style="height: 300px;"></div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card>
+          <div slot="header">
+            <span>本年度最新价 vs 本年度最低价 (弱势)</span>
+          </div>
+          <div ref="chartLowVsLatestLow" style="height: 300px;"></div>
+        </el-card>
+      </el-col>
+    </el-row>
+
     <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch" label-width="68px">
       <el-form-item label="股票代码" prop="stockCode">
         <el-input
@@ -298,6 +333,16 @@ export default {
       this.initRankingChart('LOW_VS_LOW', 'chartLowVsLow', '本年度最低价', '去年度最低价');
       this.initRankingChart('LATEST_VS_HIGH', 'chartLatestVsHigh', '本年度最新价', '去年度最高价');
       this.initRankingChart('LATEST_VS_LOW', 'chartLatestVsLow', '本年度最新价', '去年度最低价');
+
+      // New Charts
+      // Strongest near High (Latest vs Year High)
+      this.initRankingChart('HIGH_VS_LATEST_HIGH', 'chartHighVsLatestHigh', '本年度最新价', '本年度最高价');
+      // Dropped most from High (Latest vs Year High)
+      this.initRankingChart('HIGH_VS_LATEST_LOW', 'chartHighVsLatestLow', '本年度最新价', '本年度最高价');
+      // Strongest Rebound from Low (Latest vs Year Low)
+      this.initRankingChart('LOW_VS_LATEST_HIGH', 'chartLowVsLatestHigh', '本年度最新价', '本年度最低价');
+      // Closest to Low (Latest vs Year Low)
+      this.initRankingChart('LOW_VS_LATEST_LOW', 'chartLowVsLatestLow', '本年度最新价', '本年度最低价');
     },
     initRankingChart(type, refName, labelCurrent, labelPrev) {
       getRankingStats(type).then(response => {
