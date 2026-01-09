@@ -64,6 +64,7 @@
             <if test="startDate != null ">and trade_date &gt;= #{startDate}</if>
             <if test="endDate != null ">and trade_date &lt;= #{endDate}</if>
         </where>
+        order by trade_date desc
     </select>
 
     <select id="selectStockKlineById" parameterType="String" resultMap="StockKlineResult">

@@ -336,8 +336,8 @@ public class StockTaskConsumer implements SmartLifecycle {
                 dbResult = "Price=" + info.getPrice();
                 executed = true;
 
-                // 1. 获取当前价格和阈值
-                BigDecimal currentPrice = BigDecimal.valueOf(info.getPrice());
+                // 1. 获取当前最低价格和阈值
+                BigDecimal currentPrice = BigDecimal.valueOf(info.getLowPrice());
                 BigDecimal threshold = ws.getThresholdPrice();
 
                 // 2. 增加判空逻辑：只有当 threshold 不为 null 时才进行比较
