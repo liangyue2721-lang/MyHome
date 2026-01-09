@@ -792,16 +792,6 @@ public class StockTaskConsumer implements SmartLifecycle {
             summaryToUpdate.setActualEndValue(actualEndValue);
 
             yearlyInvestmentSummaryService.updateYearlyInvestmentSummary(summaryToUpdate);
-            int today = LocalDate.now().getDayOfMonth();
-            if (today != 11) {
-                log.info("【DepositService】当前日期为 {} 日，非 11 号，跳过银行存款更新。", today);
-                return; // ✅ 直接跳过，不抛异常
-            }
-//            if (!userId.equals(4L)) {
-//                AssetRecord assetRecord = assetRecordService.selectAssetRecordByAssetId(3L);
-//                assetRecord.setAmount(actualEndValue);
-//                assetRecordService.updateAssetRecord(assetRecord);
-//            }
             log.info("成功更新 {} 年度投资汇总，累计利润：{}", currentYear, totalProfit);
         } catch (Exception e) {
             // 捕获并输出完整异常信息，便于排查
