@@ -12,9 +12,13 @@ import com.make.quartz.service.impl.StockWatchProcessor;
 import com.make.quartz.service.impl.WatchStockUpdater;
 import com.make.quartz.service.stock.queue.StockTaskQueueService;
 import com.make.quartz.util.email.SendEmail;
+import com.make.stock.domain.SellPriceAlerts;
 import com.make.stock.domain.StockListingNotice;
+import com.make.stock.domain.StockTrades;
 import com.make.stock.domain.Watchstock;
 import com.make.stock.domain.dto.StockRealtimeInfo;
+import com.make.stock.service.ISellPriceAlertsService;
+import com.make.stock.service.IStockTradesService;
 import com.make.stock.service.IWatchstockService;
 import com.make.stock.util.KlineDataFetcher;
 import org.slf4j.Logger;
@@ -27,9 +31,11 @@ import javax.annotation.PreDestroy;
 import javax.annotation.Resource;
 import java.math.BigDecimal;
 import java.util.Date;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.IntStream;
 
 /**
  * 股票刷新任务消费者（升级版：多线程并发消费 + 内部失败重试）
@@ -88,6 +94,10 @@ public class StockTaskConsumer implements SmartLifecycle {
 
     @Resource
     private IStockRefreshExecuteRecordService recordService;
+    @Resource
+    private IStockTradesService stockTradesService;        // 交易记录服务
+    @Resource
+    private ISellPriceAlertsService sellPriceAlertsService; // 股票信息服务
 
     @Resource
     private QuartzProperties quartzProperties;
@@ -331,6 +341,7 @@ public class StockTaskConsumer implements SmartLifecycle {
             // 5) 更新实体（内存）并落库。
             watchStockUpdater.updateFromRealtimeInfo(ws, info);
             watchstockService.updateWatchstock(ws);
+            asyncUpdateTradeRecords(ws.getCode(), ws.getNewPrice());
             if (info.getPrice() != null) {
                 dbStatus = "SUCCESS";
                 dbResult = "Price=" + info.getPrice();
@@ -526,4 +537,126 @@ public class StockTaskConsumer implements SmartLifecycle {
             log.error("Failed to send price alert for {}", task.getStockCode(), e);
         }
     }
+
+    /**
+     * 异步更新指定股票代码的交易记录及相关卖出价格预警信息
+     *
+     * @param code     股票代码
+     * @param newPrice 最新价格，用于更新交易记录和预警价格
+     */
+    private void asyncUpdateTradeRecords(String code, BigDecimal newPrice) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                // 查询指定股票代码的交易记录
+                List<StockTrades> tradesList = stockTradesService.selectStockTradesOne(
+                        new StockTrades().setStockCode(code));
+                for (StockTrades stockTrades : tradesList) {
+                    if (stockTrades != null && stockTrades.getStockCode().equals(code)) {
+                        // 计算更新交易明细
+                        updateTradeDetails(stockTrades, newPrice);
+
+                        // 更新数据库中的交易记录
+                        stockTradesService.updateStockTradesByCode(stockTrades);
+
+                        // 更新卖出价格预警中的最新价格
+                        SellPriceAlerts sellPriceAlerts = new SellPriceAlerts()
+                                .setStockCode(stockTrades.getStockCode())
+                                .setLatestPrice(newPrice);
+                        sellPriceAlertsService.updateLatestPrice(sellPriceAlerts);
+                    }
+                }
+
+            } catch (Exception e) {
+                log.error("更新交易记录失败: {}", code, e);
+            }
+        }, ThreadPoolUtil.getCoreExecutor());
+    }
+
+    /**
+     * 计算并更新交易详情
+     * Calculate and update trade details
+     */
+    private void updateTradeDetails(StockTrades trade, BigDecimal newPrice) {
+        try {
+            BigDecimal[] addPrices = {
+                    trade.getAdditionalPrice1(),
+                    trade.getAdditionalPrice2(),
+                    trade.getAdditionalPrice3()
+            };
+
+            Long[] addShares = {
+                    trade.getAdditionalShares1(),
+                    trade.getAdditionalShares2(),
+                    trade.getAdditionalShares3()
+            };
+
+            BigDecimal profit = calculateNetProfit(
+                    trade.getBuyPrice(),
+                    newPrice,
+                    trade.getInitialShares(),
+                    addPrices,
+                    addShares
+            );
+
+            BigDecimal targetNetProfit = calculateNetProfit(
+                    trade.getBuyPrice(),
+                    trade.getSellTargetPrice(),
+                    trade.getInitialShares(),
+                    addPrices,
+                    addShares
+            );
+
+            if (trade.getSellTargetPrice().equals(newPrice)) {
+                trade.setIsSell(1);
+            }
+
+            trade.setSellPrice(newPrice)
+                    .setNetProfit(profit)
+                    .setTargetNetProfit(targetNetProfit)
+                    .setTotalCost(calculateTotalCost(
+                            trade.getBuyPrice(),
+                            trade.getInitialShares(),
+                            addPrices,
+                            addShares
+                    ));
+        } catch (Exception e) {
+            log.error("计算交易详情失败:", e);
+        }
+
+    }
+
+    /**
+     * 计算净收益
+     * Calculate net profit
+     */
+    private BigDecimal calculateNetProfit(BigDecimal buyPrice, BigDecimal sellPrice,
+                                          Long initShares, BigDecimal[] addPrices, Long[] addShares) {
+        BigDecimal baseProfit = sellPrice.subtract(buyPrice)
+                .multiply(new BigDecimal(initShares));
+
+        BigDecimal additionalProfit = IntStream.range(0, Math.min(addPrices.length, addShares.length))
+                .filter(i -> addPrices[i] != null && addShares[i] != null)
+                .mapToObj(i -> sellPrice.subtract(addPrices[i])
+                        .multiply(new BigDecimal(addShares[i])))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return baseProfit.add(additionalProfit);
+    }
+
+    /**
+     * 计算总成本
+     * Calculate total cost
+     */
+    private BigDecimal calculateTotalCost(BigDecimal buyPrice, Long initShares,
+                                          BigDecimal[] addPrices, Long[] addShares) {
+        BigDecimal baseCost = buyPrice.multiply(new BigDecimal(initShares));
+
+        BigDecimal additionalCost = IntStream.range(0, Math.min(addPrices.length, addShares.length))
+                .filter(i -> addPrices[i] != null && addShares[i] != null)
+                .mapToObj(i -> addPrices[i].multiply(new BigDecimal(addShares[i])))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return baseCost.add(additionalCost);
+    }
+
 }
