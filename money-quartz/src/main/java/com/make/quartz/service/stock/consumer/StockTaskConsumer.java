@@ -3,6 +3,9 @@ package com.make.quartz.service.stock.consumer;
 import com.alibaba.fastjson2.JSON;
 import com.make.common.utils.ThreadPoolUtil;
 import com.make.common.utils.ip.IpUtils;
+import com.make.finance.domain.AssetRecord;
+import com.make.finance.domain.YearlyInvestmentSummary;
+import com.make.finance.service.IYearlyInvestmentSummaryService;
 import com.make.quartz.domain.StockRefreshExecuteRecord;
 import com.make.quartz.domain.StockRefreshTask;
 import com.make.quartz.domain.StockTaskStatus;
@@ -12,15 +15,18 @@ import com.make.quartz.service.impl.StockWatchProcessor;
 import com.make.quartz.service.impl.WatchStockUpdater;
 import com.make.quartz.service.stock.queue.StockTaskQueueService;
 import com.make.quartz.util.email.SendEmail;
+import com.make.stock.domain.SalesData;
 import com.make.stock.domain.SellPriceAlerts;
 import com.make.stock.domain.StockListingNotice;
 import com.make.stock.domain.StockTrades;
 import com.make.stock.domain.Watchstock;
 import com.make.stock.domain.dto.StockRealtimeInfo;
+import com.make.stock.service.ISalesDataService;
 import com.make.stock.service.ISellPriceAlertsService;
 import com.make.stock.service.IStockTradesService;
 import com.make.stock.service.IWatchstockService;
 import com.make.stock.util.KlineDataFetcher;
+import org.apache.commons.collections4.CollectionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
@@ -30,11 +36,17 @@ import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import javax.annotation.Resource;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.Year;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
@@ -98,11 +110,19 @@ public class StockTaskConsumer implements SmartLifecycle {
     private IStockTradesService stockTradesService;        // 交易记录服务
     @Resource
     private ISellPriceAlertsService sellPriceAlertsService; // 股票信息服务
-
+    @Resource
+    private ISalesDataService salesDataService; // 折线图
     @Resource
     private QuartzProperties quartzProperties;
+    @Resource
+    private IYearlyInvestmentSummaryService yearlyInvestmentSummaryService;
 
     /* ===================== 运行时状态与线程资源 ===================== */
+    /**
+     * 日期格式化器：确保 yyyy-MM-dd，不包含时分秒
+     * DateTimeFormatter 是线程安全的，不用额外同步
+     */
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     /**
      * 生命周期状态：使用 AtomicBoolean 便于多线程可见与 CAS 防重复启动。
@@ -342,6 +362,7 @@ public class StockTaskConsumer implements SmartLifecycle {
             watchStockUpdater.updateFromRealtimeInfo(ws, info);
             watchstockService.updateWatchstock(ws);
             asyncUpdateTradeRecords(ws.getCode(), ws.getNewPrice());
+            queryStockProfitData();
             if (info.getPrice() != null) {
                 dbStatus = "SUCCESS";
                 dbResult = "Price=" + info.getPrice();
@@ -659,4 +680,133 @@ public class StockTaskConsumer implements SmartLifecycle {
         return baseCost.add(additionalCost);
     }
 
+    /**
+     * 查询当日所有交易记录，按用户分组累加净利润，
+     * 并将每个用户的净利润写入或更新 SalesData 表中的当天数据。
+     *
+     * @throws RuntimeException 如果在日期转换或数据库操作中发生不可恢复错误
+     */
+    public void queryStockProfitData() {
+        // 1. 查询所有交易记录
+        List<StockTrades> trades = stockTradesService.selectStockTradesList(new StockTrades());
+        if (CollectionUtils.isEmpty(trades)) {
+            log.info("【StockProfitService】未查询到任何交易记录，跳过当天净利润统计");
+            return;
+        }
+
+        // 2. 按 userId 分组，计算每个用户的总净利润
+        Map<Long, BigDecimal> profitByUser = trades.stream()
+                .filter(t -> t.getNetProfit() != null && t.getUserId() != null) // 过滤无效记录
+                .collect(Collectors.groupingBy(
+                        StockTrades::getUserId,                                     // 以 userId 分组
+                        Collectors.mapping(                                        // 提取净利润字段
+                                StockTrades::getNetProfit,
+                                Collectors.reducing(BigDecimal.ZERO, BigDecimal::add)   // 累加
+                        )
+                ));
+
+        // 3. 获取当日零点日期，用于 SalesData.recordDate
+        LocalDate today = LocalDate.now(ZoneId.systemDefault());
+        Date recordDate = Date.from(today.atStartOfDay(ZoneId.systemDefault()).toInstant());
+
+        // 4. 针对每个用户，写入或更新 SalesData
+        profitByUser.forEach((userId, totalProfit) -> {
+            SalesData criteria = new SalesData();
+            criteria.setRecordDate(recordDate);
+            criteria.setUserId(userId);
+
+            // 4.1 查询是否已存在当日记录
+            List<SalesData> existing = salesDataService.selectSalesDataList(criteria);
+            SalesData salesData = new SalesData();
+            salesData.setRecordDate(recordDate);
+            salesData.setUserId(userId);
+            salesData.setProfit(totalProfit);
+
+            if (CollectionUtils.isNotEmpty(existing)) {
+                // 4.2 如果存在则更新
+                salesData.setId(existing.get(0).getId());
+                salesDataService.updateSalesData(salesData);
+                log.info("【StockProfitService】已更新用户 {} 在 {} 的净利润，金额：{}",
+                        userId, today.format(DATE_FORMATTER), totalProfit);
+            } else {
+                // 4.3 如果不存在则插入
+                salesDataService.insertSalesData(salesData);
+                log.info("【StockProfitService】已插入用户 {} 在 {} 的净利润，金额：{}",
+                        userId, today.format(DATE_FORMATTER), totalProfit);
+            }
+        });
+
+        // 5. 异步分别触发每个用户的年度投资汇总更新
+        profitByUser.forEach((userId, totalProfit) -> {
+            ThreadPoolUtil.getCoreExecutor().submit(() -> {
+                // 传入单个用户净利润，按业务逻辑更新该用户的年度汇总
+                queryAndUpdateYearlyInvestmentSummary(totalProfit, userId);
+            });
+        });
+    }
+
+
+    /**
+     * 查询并更新当年投资汇总数据。
+     *
+     * <p>该方法执行以下步骤：
+     * <ol>
+     *   <li>根据当前年份构造查询条件，调用 service 查询当年投资汇总列表；</li>
+     *   <li>若列表不为空，取第一条记录并执行更新操作；</li>
+     *   <li>若列表为空，则记录警告日志；</li>
+     *   <li>捕获并记录执行过程中的异常。</li>
+     * </ol>
+     *
+     * @param totalProfit 本年度累计利润（单位：元），用于更新汇总记录中的利润字段
+     */
+    public void queryAndUpdateYearlyInvestmentSummary(BigDecimal totalProfit, Long userId) {
+        // 动态获取当前年份
+        long currentYear = Year.now().getValue();
+        try {
+            // 构造查询条件：查询当前年份的汇总记录
+            YearlyInvestmentSummary queryCondition = new YearlyInvestmentSummary();
+            queryCondition.setYear(currentYear);
+            queryCondition.setUserId(userId);
+
+            List<YearlyInvestmentSummary> summaries =
+                    yearlyInvestmentSummaryService.selectYearlyInvestmentSummaryList(queryCondition);
+
+            if (summaries == null || summaries.isEmpty()) {
+                // 如果无数据，记录警告并返回
+                log.warn("queryAndUpdateYearlyInvestmentSummary：未查询到 {} 年的投资汇总记录", currentYear);
+                return;
+            }
+
+            // 取第一条记录进行更新
+            YearlyInvestmentSummary summaryToUpdate = summaries.get(0);
+
+            BigDecimal startPrincipal = summaryToUpdate.getStartPrincipal() != null
+                    ? summaryToUpdate.getStartPrincipal()
+                    : BigDecimal.ZERO;
+
+            BigDecimal profit = totalProfit != null
+                    ? totalProfit
+                    : BigDecimal.ZERO;
+
+            BigDecimal actualEndValue = profit.add(startPrincipal);
+            summaryToUpdate.setActualEndValue(actualEndValue);
+
+            yearlyInvestmentSummaryService.updateYearlyInvestmentSummary(summaryToUpdate);
+            int today = LocalDate.now().getDayOfMonth();
+            if (today != 11) {
+                log.info("【DepositService】当前日期为 {} 日，非 11 号，跳过银行存款更新。", today);
+                return; // ✅ 直接跳过，不抛异常
+            }
+//            if (!userId.equals(4L)) {
+//                AssetRecord assetRecord = assetRecordService.selectAssetRecordByAssetId(3L);
+//                assetRecord.setAmount(actualEndValue);
+//                assetRecordService.updateAssetRecord(assetRecord);
+//            }
+            log.info("成功更新 {} 年度投资汇总，累计利润：{}", currentYear, totalProfit);
+        } catch (Exception e) {
+            // 捕获并输出完整异常信息，便于排查
+            log.error("queryAndUpdateYearlyInvestmentSummary 更新失败，年份：{}，累计利润：{}",
+                    currentYear, totalProfit, e);
+        }
+    }
 }
