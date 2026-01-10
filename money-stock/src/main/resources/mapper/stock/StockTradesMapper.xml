@@ -214,7 +214,6 @@
     </update>
 
 
-
     <select id="selectStockTradesOne" parameterType="StockTrades" resultMap="StockTradesResult">
         <include refid="selectStockTradesVo"/>
         <where>
@@ -222,6 +221,10 @@
         </where>
         and is_sell = '0'
     </select>
-
+    <select id="selectStockTradesByYear" parameterType="int" resultMap="StockTradesResult">
+        <include refid="selectStockTradesVo"/>
+        WHERE YEAR(create_time) = #{year}
+        order by create_time desc
+    </select>
 
 </mapper>

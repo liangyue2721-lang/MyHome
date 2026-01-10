@@ -137,6 +137,11 @@ public class StockTradesServiceImpl implements IStockTradesService {
         return stockTradesMapper.selectStockTradesOne(stockTrades);
     }
 
+    @Override
+    public List<StockTrades> selectStockTradesByYear(int year) {
+        return stockTradesMapper.selectStockTradesByYear(year);
+    }
+
     /**
      * 查询当日所有交易记录，累加净利润，并写入或更新 SalesData 表中的当天数据。
      *

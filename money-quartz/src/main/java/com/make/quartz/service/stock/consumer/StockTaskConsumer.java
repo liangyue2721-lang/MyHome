@@ -688,7 +688,8 @@ public class StockTaskConsumer implements SmartLifecycle {
      */
     public void queryStockProfitData() {
         // 1. 查询所有交易记录
-        List<StockTrades> trades = stockTradesService.selectStockTradesList(new StockTrades());
+        int currentYear = Year.now().getValue();
+        List<StockTrades> trades = stockTradesService.selectStockTradesByYear(currentYear);
         if (CollectionUtils.isEmpty(trades)) {
             log.info("【StockProfitService】未查询到任何交易记录，跳过当天净利润统计");
             return;
