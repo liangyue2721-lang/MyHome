@@ -78,7 +78,7 @@ public class StockRefreshHandler implements IStockRefreshHandler {
     /**
      * 处理股票刷新任务的主入口
      *
-     * @param task 任务信息
+     * @param task 任务信息对象，包含 stockCode 和 traceId
      */
     @Override
     public void refreshStock(StockRefreshTask task) {
@@ -153,8 +153,8 @@ public class StockRefreshHandler implements IStockRefreshHandler {
     /**
      * 获取实时数据（带内部重试）
      *
-     * @param apiUrl 股票 API 地址
-     * @return 实时数据信息，失败返回 null
+     * @param apiUrl 股票 API 接口地址
+     * @return 实时数据对象 StockRealtimeInfo，若重试多次仍失败则返回 null
      */
     private StockRealtimeInfo fetchRealtimeWithRetry(String apiUrl) {
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -315,6 +315,9 @@ public class StockRefreshHandler implements IStockRefreshHandler {
 
     /**
      * 计算并更新交易详情（利润、成本、目标达成等）
+     *
+     * @param trade    交易记录实体
+     * @param newPrice 最新股票价格
      */
     private void updateTradeDetails(StockTrades trade, BigDecimal newPrice) {
         try {
@@ -366,6 +369,13 @@ public class StockRefreshHandler implements IStockRefreshHandler {
 
     /**
      * 计算净收益
+     *
+     * @param buyPrice   买入价格
+     * @param sellPrice  卖出/当前价格
+     * @param initShares 初始持仓数量
+     * @param addPrices  追加买入价格数组
+     * @param addShares  追加买入数量数组
+     * @return 总净收益 (基础收益 + 追加部分收益)
      */
     private BigDecimal calculateNetProfit(BigDecimal buyPrice, BigDecimal sellPrice,
                                           Long initShares, BigDecimal[] addPrices, Long[] addShares) {
@@ -385,6 +395,12 @@ public class StockRefreshHandler implements IStockRefreshHandler {
 
     /**
      * 计算总成本
+     *
+     * @param buyPrice   初始买入价格
+     * @param initShares 初始持仓数量
+     * @param addPrices  追加买入价格数组
+     * @param addShares  追加买入数量数组
+     * @return 总投入成本
      */
     private BigDecimal calculateTotalCost(BigDecimal buyPrice, Long initShares,
                                           BigDecimal[] addPrices, Long[] addShares) {
@@ -402,6 +418,9 @@ public class StockRefreshHandler implements IStockRefreshHandler {
 
     /**
      * 发送价格预警通知
+     *
+     * @param task 当前任务信息
+     * @param ws   关注股票信息
      */
     private void sendNotification(StockRefreshTask task, Watchstock ws) {
         try {
@@ -424,6 +443,11 @@ public class StockRefreshHandler implements IStockRefreshHandler {
 
     /**
      * 更新 Redis 中的任务状态
+     *
+     * @param stockCode 股票代码
+     * @param status    任务状态 (RUNNING/SUCCESS/FAILED)
+     * @param result    执行结果描述
+     * @param traceId   追踪ID
      */
     private void updateStatus(String stockCode, String status, String result, String traceId) {
         StockTaskStatus s = new StockTaskStatus();
@@ -438,6 +462,12 @@ public class StockRefreshHandler implements IStockRefreshHandler {
 
     /**
      * 保存执行记录到数据库
+     *
+     * @param stockCode 股票代码
+     * @param stockName 股票名称
+     * @param status    最终状态
+     * @param result    执行结果或错误信息
+     * @param traceId   批次ID
      */
     private void saveExecutionRecord(String stockCode, String stockName, String status, String result, String traceId) {
         try {
@@ -457,6 +487,8 @@ public class StockRefreshHandler implements IStockRefreshHandler {
 
     /**
      * 线程休眠（忽略中断异常）
+     *
+     * @param ms 休眠毫秒数
      */
     private void sleepQuiet(long ms) {
         try {

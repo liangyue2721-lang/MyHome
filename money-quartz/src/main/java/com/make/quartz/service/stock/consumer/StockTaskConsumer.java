@@ -183,6 +183,8 @@ public class StockTaskConsumer implements SmartLifecycle {
      * 3. 获取背压许可 (Semaphore)：如果当前并发高，此处会阻塞，实现流量控制。
      * 4. 提交任务到 executePool 执行，并在 finally 块中释放许可。
      * </p>
+     *
+     * @throws InterruptedException 如果在等待许可时被中断
      */
     private void pollOnceAndSubmit() throws InterruptedException {
         StockRefreshTask task = queueService.poll();
@@ -220,6 +222,8 @@ public class StockTaskConsumer implements SmartLifecycle {
      * 3. finally 块中释放锁、清理 Redis 状态。
      * 4. 递减 Redis 批次计数器，如果计数归零，触发下一轮任务。
      * </p>
+     *
+     * @param task 从队列中获取的任务对象
      */
     private void handleTaskExecution(StockRefreshTask task) {
         final String stockCode = task.getStockCode();
@@ -266,6 +270,9 @@ public class StockTaskConsumer implements SmartLifecycle {
      * 避免因短暂的网络抖动导致获取锁失败。
      * 重试次数: LOCK_ATTEMPTS (2次)
      * </p>
+     *
+     * @param stockCode 股票代码（锁的Key）
+     * @return true 表示获取锁成功，false 表示失败
      */
     private boolean tryLockWithRetry(String stockCode) {
         for (int i = 1; i <= LOCK_ATTEMPTS; i++) {
@@ -282,6 +289,8 @@ public class StockTaskConsumer implements SmartLifecycle {
      * <p>
      * 即使 Redis 连接异常也不抛出，确保 finally 块后续逻辑能继续执行。
      * </p>
+     *
+     * @param stockCode 股票代码（锁的Key）
      */
     private void safeReleaseLock(String stockCode) {
         try {
@@ -293,6 +302,8 @@ public class StockTaskConsumer implements SmartLifecycle {
 
     /**
      * 线程休眠（忽略中断异常）
+     *
+     * @param ms 休眠毫秒数
      */
     private void sleepQuiet(long ms) {
         try {
