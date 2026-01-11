@@ -22,8 +22,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * 股票刷新任务消费者（多线程并发消费）
  * <p>
  * 重构说明：
- * 1. 业务逻辑已委托给 StockRefreshHandler 处理。
- * 2. 本类专注于队列轮询（Polling）、并发控制与分布式锁管理。
+ * 1. 职责分离：业务逻辑已委托给 StockRefreshHandler 处理，本类只负责“消费机制”。
+ * 2. 并发模型：采用 Polling (轮询) + ThreadPool (执行) + Semaphore (背压) 架构。
+ * 3. 分布式锁：保证同一股票在同一时刻只被一个节点更新。
  */
 @Component
 public class StockTaskConsumer implements SmartLifecycle {
@@ -38,6 +39,7 @@ public class StockTaskConsumer implements SmartLifecycle {
     private StockTaskQueueService queueService;
 
     // 懒加载注入，避免循环依赖 (Consumer -> Processor -> Consumer)
+    // Processor 负责触发下一轮，而 Consumer 负责消费，两者通过 Redis 批次计数器解耦
     @Resource
     @org.springframework.context.annotation.Lazy
     private StockWatchProcessor stockWatchProcessor;
@@ -56,7 +58,12 @@ public class StockTaskConsumer implements SmartLifecycle {
 
     /**
      * 初始化消费者资源
-     * 包括：执行线程池、并发限制信号量、轮询线程池
+     * <p>
+     * 1. 获取当前节点 IP 作为分布式锁标识。
+     * 2. 初始化执行线程池 (WatchStockExecutor)。
+     * 3. 初始化背压信号量 (Semaphore)，大小为线程池最大线程数，防止过多任务积压在内存队列中。
+     * 4. 初始化 Polling 线程池，用于并发拉取 Redis 消息。
+     * </p>
      */
     @PostConstruct
     public void init() {
@@ -81,8 +88,11 @@ public class StockTaskConsumer implements SmartLifecycle {
 
     /**
      * 启动消费者
-     * 1. 恢复 WAITING 状态的任务
-     * 2. 启动轮询线程
+     * <p>
+     * 1. 使用 CAS 确保只启动一次。
+     * 2. 异步触发 WAITING 状态任务恢复（防止因上次停机导致的“僵尸任务”）。
+     * 3. 提交 Polling 任务到线程池，开始无限循环拉取。
+     * </p>
      */
     @Override
     public void start() {
@@ -109,6 +119,10 @@ public class StockTaskConsumer implements SmartLifecycle {
 
     /**
      * 停止消费者
+     * <p>
+     * 1. 设置 running = false，通知 Polling 循环退出。
+     * 2. 强制关闭 pollPool，中断正在 sleep 的拉取线程。
+     * </p>
      */
     @Override
     public void stop() {
@@ -118,7 +132,7 @@ public class StockTaskConsumer implements SmartLifecycle {
     }
 
     /**
-     * 销毁前确保停止
+     * 容器销毁钩子，确保资源释放
      */
     @PreDestroy
     public void destroy() {
@@ -131,7 +145,7 @@ public class StockTaskConsumer implements SmartLifecycle {
     }
 
     /**
-     * 设定启动优先级（最晚启动）
+     * 设定启动优先级（Integer.MAX_VALUE），确保在所有依赖 Bean 初始化完成后再启动
      */
     @Override
     public int getPhase() {
@@ -140,13 +154,17 @@ public class StockTaskConsumer implements SmartLifecycle {
 
     /**
      * 安全的轮询循环
-     * 捕获异常以防止轮询线程意外退出
+     * <p>
+     * 这是一个死循环，直到 stop() 被调用或线程被中断。
+     * 捕获所有 Exception，防止因偶发 Redis 异常导致 Worker 线程彻底退出。
+     * </p>
      */
     private void pollLoopSafely() {
         while (running.get() && !Thread.currentThread().isInterrupted()) {
             try {
                 pollOnceAndSubmit();
             } catch (InterruptedException ie) {
+                // 响应中断信号，退出循环
                 Thread.currentThread().interrupt();
                 break;
             } catch (Exception e) {
@@ -158,7 +176,13 @@ public class StockTaskConsumer implements SmartLifecycle {
 
     /**
      * 单次轮询并提交任务
-     * 包含背压控制（Backpressure）
+     * <p>
+     * 核心流程：
+     * 1. 从 Redis 队列中非阻塞拉取一个任务。
+     * 2. 如果队列为空，短暂休眠避免 CPU 空转。
+     * 3. 获取背压许可 (Semaphore)：如果当前并发高，此处会阻塞，实现流量控制。
+     * 4. 提交任务到 executePool 执行，并在 finally 块中释放许可。
+     * </p>
      */
     private void pollOnceAndSubmit() throws InterruptedException {
         StockRefreshTask task = queueService.poll();
@@ -176,10 +200,12 @@ public class StockTaskConsumer implements SmartLifecycle {
                 try {
                     handleTaskExecution(task);
                 } finally {
+                    // 任务执行结束（无论成功失败），必须释放许可
                     submitLimiter.release();
                 }
             });
         } catch (RejectedExecutionException ree) {
+            // 极端情况：线程池满了且拒绝策略触发。释放许可并记录日志。
             submitLimiter.release();
             log.warn("Execute pool rejected task. stockCode={}, traceId={}", task.getStockCode(), task.getTraceId(), ree);
         }
@@ -187,7 +213,13 @@ public class StockTaskConsumer implements SmartLifecycle {
 
     /**
      * 处理单个任务的执行流程
-     * 包含：分布式锁、业务执行、状态清理、批次计数
+     * <p>
+     * 流程：
+     * 1. 尝试获取分布式锁 (Redis)。
+     * 2. 如果获取成功，调用 Handler 执行业务逻辑。
+     * 3. finally 块中释放锁、清理 Redis 状态。
+     * 4. 递减 Redis 批次计数器，如果计数归零，触发下一轮任务。
+     * </p>
      */
     private void handleTaskExecution(StockRefreshTask task) {
         final String stockCode = task.getStockCode();
@@ -218,8 +250,8 @@ public class StockTaskConsumer implements SmartLifecycle {
                 log.info("Batch completed (traceId={}). Triggering next batch...", traceId);
                 stockWatchProcessor.triggerNextBatch();
             } else if (remaining < 0) {
+                // 异常情况：计数器丢失。使用恢复锁机制尝试触发，防止死锁。
                 log.warn("Batch counter missing (remaining < 0). Attempting recovery... traceId={}", traceId);
-                // 尝试获取恢复锁以触发下一批次
                 if (queueService.tryLockRecovery(traceId)) {
                     log.info("Recovery lock acquired. Triggering next batch... traceId={}", traceId);
                     stockWatchProcessor.triggerNextBatch();
@@ -230,6 +262,10 @@ public class StockTaskConsumer implements SmartLifecycle {
 
     /**
      * 尝试获取分布式锁（带重试）
+     * <p>
+     * 避免因短暂的网络抖动导致获取锁失败。
+     * 重试次数: LOCK_ATTEMPTS (2次)
+     * </p>
      */
     private boolean tryLockWithRetry(String stockCode) {
         for (int i = 1; i <= LOCK_ATTEMPTS; i++) {
@@ -243,6 +279,9 @@ public class StockTaskConsumer implements SmartLifecycle {
 
     /**
      * 安全释放锁
+     * <p>
+     * 即使 Redis 连接异常也不抛出，确保 finally 块后续逻辑能继续执行。
+     * </p>
      */
     private void safeReleaseLock(String stockCode) {
         try {
