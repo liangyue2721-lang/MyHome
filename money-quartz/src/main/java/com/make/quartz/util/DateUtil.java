@@ -39,45 +39,55 @@ public class DateUtil {
 
     static {
         // 法定节假日（需排除调休的周末）
-        // 1. 元旦：1月1日放假1天，不调休:cite[1]:cite[6]
-        HOLIDAYS.add(LocalDate.of(2025, 1, 1));
+        // 1. 元旦：1月1日至3日放假调休，共3天[citation:1][citation:2]
+        LocalDate newYearStart = LocalDate.of(2026, 1, 1);
+        LocalDate newYearEnd = LocalDate.of(2026, 1, 3);
+        addDateRange(HOLIDAYS, newYearStart, newYearEnd);
 
-        // 2. 春节：1月28日-2月4日放假，共8天
-        LocalDate springFestivalStart = LocalDate.of(2025, 1, 28);
-        LocalDate springFestivalEnd = LocalDate.of(2025, 2, 4);
+        // 2. 春节：2月15日至23日放假调休，共9天[citation:1][citation:2]
+        LocalDate springFestivalStart = LocalDate.of(2026, 2, 15);
+        LocalDate springFestivalEnd = LocalDate.of(2026, 2, 23);
         addDateRange(HOLIDAYS, springFestivalStart, springFestivalEnd);
 
-        // 3. 清明节：4月4日-6日放假，共3天:cite[3]:cite[7]
-        LocalDate qingmingStart = LocalDate.of(2025, 4, 4);
-        LocalDate qingmingEnd = LocalDate.of(2025, 4, 6);
+        // 3. 清明节：4月4日至6日放假，共3天[citation:1][citation:2]
+        LocalDate qingmingStart = LocalDate.of(2026, 4, 4);
+        LocalDate qingmingEnd = LocalDate.of(2026, 4, 6);
         addDateRange(HOLIDAYS, qingmingStart, qingmingEnd);
 
-        // 4. 劳动节：5月1日-5日放假，共5天
-        LocalDate laborDayStart = LocalDate.of(2025, 5, 1);
-        LocalDate laborDayEnd = LocalDate.of(2025, 5, 5);
+        // 4. 劳动节：5月1日至5日放假调休，共5天[citation:1][citation:2]
+        LocalDate laborDayStart = LocalDate.of(2026, 5, 1);
+        LocalDate laborDayEnd = LocalDate.of(2026, 5, 5);
         addDateRange(HOLIDAYS, laborDayStart, laborDayEnd);
 
-        // 5. 端午节：5月31日-6月2日放假，共3天:cite[6]:cite[8]
-        LocalDate dragonBoatStart = LocalDate.of(2025, 5, 31);
-        LocalDate dragonBoatEnd = LocalDate.of(2025, 6, 2);
+        // 5. 端午节：6月19日至21日放假，共3天[citation:1][citation:2]
+        LocalDate dragonBoatStart = LocalDate.of(2026, 6, 19);
+        LocalDate dragonBoatEnd = LocalDate.of(2026, 6, 21);
         addDateRange(HOLIDAYS, dragonBoatStart, dragonBoatEnd);
 
-        // 6. 国庆节+中秋节：10月1日-8日放假，共8天
-        LocalDate nationalDayStart = LocalDate.of(2025, 10, 1);
-        LocalDate nationalDayEnd = LocalDate.of(2025, 10, 8);
+        // 6. 中秋节：9月25日至27日放假，共3天[citation:1][citation:2]
+        LocalDate midAutumnStart = LocalDate.of(2026, 9, 25);
+        LocalDate midAutumnEnd = LocalDate.of(2026, 9, 27);
+        addDateRange(HOLIDAYS, midAutumnStart, midAutumnEnd);
+
+        // 7. 国庆节：10月1日至7日放假调休，共7天[citation:1][citation:2]
+        LocalDate nationalDayStart = LocalDate.of(2026, 10, 1);
+        LocalDate nationalDayEnd = LocalDate.of(2026, 10, 7);
         addDateRange(HOLIDAYS, nationalDayStart, nationalDayEnd);
 
         // 调休补班日期（周末需要上班的日期）
-        // 春节调休：1月26日（周日）、2月8日（周六）上班:cite[2]:cite[4]
-        EXTRA_WORK_DAYS.add(LocalDate.of(2025, 1, 26));
-        EXTRA_WORK_DAYS.add(LocalDate.of(2025, 2, 8));
+        // 元旦调休：1月4日（周日）上班[citation:1][citation:2]
+        EXTRA_WORK_DAYS.add(LocalDate.of(2026, 1, 4));
 
-        // 劳动节调休：4月27日（周日）上班:cite[9]
-        EXTRA_WORK_DAYS.add(LocalDate.of(2025, 4, 27));
+        // 春节调休：2月14日（周六）、2月28日（周六）上班[citation:1][citation:2]
+        EXTRA_WORK_DAYS.add(LocalDate.of(2026, 2, 14));
+        EXTRA_WORK_DAYS.add(LocalDate.of(2026, 2, 28));
 
-        // 国庆调休：9月28日（周日）、10月11日（周六）上班:cite[5]:cite[10]
-        EXTRA_WORK_DAYS.add(LocalDate.of(2025, 9, 28));
-        EXTRA_WORK_DAYS.add(LocalDate.of(2025, 10, 11));
+        // 劳动节调休：5月9日（周六）上班[citation:1][citation:2]
+        EXTRA_WORK_DAYS.add(LocalDate.of(2026, 5, 9));
+
+        // 国庆节调休：9月20日（周日）、10月10日（周六）上班[citation:1][citation:2]
+        EXTRA_WORK_DAYS.add(LocalDate.of(2026, 9, 20));
+        EXTRA_WORK_DAYS.add(LocalDate.of(2026, 10, 10));
     }
 
     private static void addDateRange(Set<LocalDate> set, LocalDate start, LocalDate end) {

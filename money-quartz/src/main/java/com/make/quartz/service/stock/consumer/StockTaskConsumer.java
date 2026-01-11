@@ -1,6 +1,7 @@
 package com.make.quartz.service.stock.consumer;
 
 import com.alibaba.fastjson2.JSON;
+import com.make.common.utils.DateUtils;
 import com.make.common.utils.ThreadPoolUtil;
 import com.make.common.utils.ip.IpUtils;
 import com.make.finance.domain.AssetRecord;
@@ -14,6 +15,7 @@ import com.make.quartz.service.IStockRefreshExecuteRecordService;
 import com.make.quartz.service.impl.StockWatchProcessor;
 import com.make.quartz.service.impl.WatchStockUpdater;
 import com.make.quartz.service.stock.queue.StockTaskQueueService;
+import com.make.quartz.util.DateUtil;
 import com.make.quartz.util.email.SendEmail;
 import com.make.stock.domain.SalesData;
 import com.make.stock.domain.SellPriceAlerts;
@@ -362,7 +364,10 @@ public class StockTaskConsumer implements SmartLifecycle {
             watchStockUpdater.updateFromRealtimeInfo(ws, info);
             watchstockService.updateWatchstock(ws);
             asyncUpdateTradeRecords(ws.getCode(), ws.getNewPrice());
-            queryStockProfitData();
+            if (DateUtil.isValidWorkday()) {
+                queryStockProfitData();
+            }
+
             if (info.getPrice() != null) {
                 dbStatus = "SUCCESS";
                 dbResult = "Price=" + info.getPrice();
