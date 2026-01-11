@@ -19,11 +19,11 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * 股票刷新任务消费者（升级版：多线程并发消费 + 内部失败重试）
+ * 股票刷新任务消费者（多线程并发消费）
  * <p>
- * Refactored:
- * 1. Logic delegated to StockRefreshHandler.
- * 2. Focuses on Queue Polling, Concurrency, and Flow Control.
+ * 重构说明：
+ * 1. 业务逻辑已委托给 StockRefreshHandler 处理。
+ * 2. 本类专注于队列轮询（Polling）、并发控制与分布式锁管理。
  */
 @Component
 public class StockTaskConsumer implements SmartLifecycle {
@@ -37,7 +37,7 @@ public class StockTaskConsumer implements SmartLifecycle {
     @Resource
     private StockTaskQueueService queueService;
 
-    // Lazy inject to avoid circular dependency (Consumer -> Processor -> Consumer)
+    // 懒加载注入，避免循环依赖 (Consumer -> Processor -> Consumer)
     @Resource
     @org.springframework.context.annotation.Lazy
     private StockWatchProcessor stockWatchProcessor;
@@ -54,11 +54,16 @@ public class StockTaskConsumer implements SmartLifecycle {
     private Semaphore submitLimiter;
     private ExecutorService pollPool;
 
+    /**
+     * 初始化消费者资源
+     * 包括：执行线程池、并发限制信号量、轮询线程池
+     */
     @PostConstruct
     public void init() {
         this.currentNodeId = IpUtils.getHostIp();
         this.executePool = (ThreadPoolExecutor) ThreadPoolUtil.getWatchStockExecutor();
 
+        // 使用线程池最大线程数作为并发上限
         int inFlightLimit = Math.max(1, executePool.getMaximumPoolSize());
         this.submitLimiter = new Semaphore(inFlightLimit);
 
@@ -74,12 +79,18 @@ public class StockTaskConsumer implements SmartLifecycle {
                 currentNodeId, pollWorkers, inFlightLimit, executePool.getMaximumPoolSize());
     }
 
+    /**
+     * 启动消费者
+     * 1. 恢复 WAITING 状态的任务
+     * 2. 启动轮询线程
+     */
     @Override
     public void start() {
         if (!running.compareAndSet(false, true)) {
             return;
         }
 
+        // 异步恢复积压任务，避免阻塞启动
         CompletableFuture.runAsync(() -> {
             try {
                 queueService.recoverWaitingTasks();
@@ -96,6 +107,9 @@ public class StockTaskConsumer implements SmartLifecycle {
         log.info("StockTaskConsumer started. node={}, pollWorkers={}", currentNodeId, pollWorkers);
     }
 
+    /**
+     * 停止消费者
+     */
     @Override
     public void stop() {
         running.set(false);
@@ -103,6 +117,9 @@ public class StockTaskConsumer implements SmartLifecycle {
         log.info("StockTaskConsumer stopped. node={}", currentNodeId);
     }
 
+    /**
+     * 销毁前确保停止
+     */
     @PreDestroy
     public void destroy() {
         stop();
@@ -113,11 +130,18 @@ public class StockTaskConsumer implements SmartLifecycle {
         return running.get();
     }
 
+    /**
+     * 设定启动优先级（最晚启动）
+     */
     @Override
     public int getPhase() {
         return Integer.MAX_VALUE;
     }
 
+    /**
+     * 安全的轮询循环
+     * 捕获异常以防止轮询线程意外退出
+     */
     private void pollLoopSafely() {
         while (running.get() && !Thread.currentThread().isInterrupted()) {
             try {
@@ -132,6 +156,10 @@ public class StockTaskConsumer implements SmartLifecycle {
         }
     }
 
+    /**
+     * 单次轮询并提交任务
+     * 包含背压控制（Backpressure）
+     */
     private void pollOnceAndSubmit() throws InterruptedException {
         StockRefreshTask task = queueService.poll();
 
@@ -140,6 +168,7 @@ public class StockTaskConsumer implements SmartLifecycle {
             return;
         }
 
+        // 获取许可，控制并发量
         submitLimiter.acquire();
 
         try {
@@ -156,6 +185,10 @@ public class StockTaskConsumer implements SmartLifecycle {
         }
     }
 
+    /**
+     * 处理单个任务的执行流程
+     * 包含：分布式锁、业务执行、状态清理、批次计数
+     */
     private void handleTaskExecution(StockRefreshTask task) {
         final String stockCode = task.getStockCode();
         final String traceId = task.getTraceId();
@@ -165,17 +198,19 @@ public class StockTaskConsumer implements SmartLifecycle {
             return;
         }
 
+        // 尝试获取分布式锁
         boolean locked = tryLockWithRetry(stockCode);
         if (!locked) {
             return;
         }
 
         try {
-            // Business Logic Delegated to Handler
+            // 委托给 Handler 执行具体业务
             stockRefreshHandler.refreshStock(task);
         } finally {
             safeReleaseLock(stockCode);
 
+            // 清理状态并递减批次计数
             queueService.deleteStatus(stockCode, traceId);
 
             long remaining = queueService.decrementBatch(traceId);
@@ -184,6 +219,7 @@ public class StockTaskConsumer implements SmartLifecycle {
                 stockWatchProcessor.triggerNextBatch();
             } else if (remaining < 0) {
                 log.warn("Batch counter missing (remaining < 0). Attempting recovery... traceId={}", traceId);
+                // 尝试获取恢复锁以触发下一批次
                 if (queueService.tryLockRecovery(traceId)) {
                     log.info("Recovery lock acquired. Triggering next batch... traceId={}", traceId);
                     stockWatchProcessor.triggerNextBatch();
@@ -192,6 +228,9 @@ public class StockTaskConsumer implements SmartLifecycle {
         }
     }
 
+    /**
+     * 尝试获取分布式锁（带重试）
+     */
     private boolean tryLockWithRetry(String stockCode) {
         for (int i = 1; i <= LOCK_ATTEMPTS; i++) {
             if (queueService.tryLockStock(stockCode, currentNodeId)) {
@@ -202,6 +241,9 @@ public class StockTaskConsumer implements SmartLifecycle {
         return false;
     }
 
+    /**
+     * 安全释放锁
+     */
     private void safeReleaseLock(String stockCode) {
         try {
             queueService.releaseLock(stockCode, currentNodeId);
@@ -210,6 +252,9 @@ public class StockTaskConsumer implements SmartLifecycle {
         }
     }
 
+    /**
+     * 线程休眠（忽略中断异常）
+     */
     private void sleepQuiet(long ms) {
         try {
             TimeUnit.MILLISECONDS.sleep(ms);

@@ -42,20 +42,19 @@ import java.util.stream.IntStream;
 /**
  * 股票刷新业务处理器实现类
  * <p>
- * 将原 Consumer 中的业务逻辑抽离至此，包括：
- * 1. Fetch 数据
- * 2. Update WatchStock
- * 3. Update Trade Records
- * 4. Calculate Profits (Optimized)
- * 5. Notifications
- * 6. DB Logging
+ * 将原 Consumer 中的业务逻辑抽离至此，实现业务与调度分离。包含：
+ * 1. Fetch 数据（带重试）
+ * 2. Update WatchStock（更新价格）
+ * 3. Update Trade Records（更新交易记录与预警）
+ * 4. Calculate Profits (优化后的按用户计算)
+ * 5. Notifications（价格预警通知）
+ * 6. DB Logging（执行日志落库）
  */
 @Service
 public class StockRefreshHandler implements IStockRefreshHandler {
 
     private static final Logger log = LoggerFactory.getLogger(StockRefreshHandler.class);
 
-    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final int MAX_ATTEMPTS = 3;
     private static final long RETRY_BASE_DELAY_MS = 300;
 
@@ -76,6 +75,11 @@ public class StockRefreshHandler implements IStockRefreshHandler {
     @Resource
     private StockTaskQueueService queueService;
 
+    /**
+     * 处理股票刷新任务的主入口
+     *
+     * @param task 任务信息
+     */
     @Override
     public void refreshStock(StockRefreshTask task) {
         String stockCode = task.getStockCode();
@@ -86,10 +90,10 @@ public class StockRefreshHandler implements IStockRefreshHandler {
         String stockName = null;
 
         try {
-            // 1. Update Status to RUNNING
+            // 1. 更新 Redis 状态为 RUNNING
             updateStatus(stockCode, StockTaskStatus.STATUS_RUNNING, null, traceId);
 
-            // 2. Get WatchStock
+            // 2. 获取关注股票信息
             Watchstock ws = watchstockService.getWatchStockByCode(stockCode);
             if (ws == null) {
                 dbResult = "Stock not found in DB";
@@ -97,33 +101,33 @@ public class StockRefreshHandler implements IStockRefreshHandler {
             }
             stockName = ws.getName();
 
-            // 3. Check URL
+            // 3. 校验 API URL
             String apiUrl = ws.getStockApi();
             if (apiUrl == null || apiUrl.contains("secid=null")) {
                 dbResult = "INVALID_URL";
                 return;
             }
 
-            // 4. Fetch Realtime Data (Retry Logic)
+            // 4. 获取实时数据（带重试机制）
             StockRealtimeInfo info = fetchRealtimeWithRetry(apiUrl);
             if (info == null) {
                 dbResult = "Fetch returned null after retry";
                 return;
             }
 
-            // 5. Update WatchStock
+            // 5. 更新 WatchStock 实体与数据库
             watchStockUpdater.updateFromRealtimeInfo(ws, info);
             watchstockService.updateWatchstock(ws);
 
-            // 6. Update Trade Records (Synchronous now to avoid race conditions)
+            // 6. 同步更新交易记录（解决并发数据不一致问题）
             updateTradeRecordsSync(ws.getCode(), ws.getNewPrice());
 
-            // 7. Calculate Profits (Optimized & Synchronous)
+            // 7. 计算利润（仅在工作日执行）
             if (DateUtil.isValidWorkday()) {
                 updateProfitForHolders(ws.getCode());
             }
 
-            // 8. Notifications
+            // 8. 检查并发送价格预警通知
             if (info.getPrice() != null) {
                 dbStatus = "SUCCESS";
                 dbResult = "Price=" + info.getPrice();
@@ -141,11 +145,17 @@ public class StockRefreshHandler implements IStockRefreshHandler {
             log.error("Task failed: stockCode={}, traceId={}", stockCode, traceId, e);
             dbResult = Objects.toString(e.getMessage(), "Exception");
         } finally {
-            // 9. Save Execution Record
+            // 9. 保存执行记录
             saveExecutionRecord(stockCode, stockName, dbStatus, dbResult, traceId);
         }
     }
 
+    /**
+     * 获取实时数据（带内部重试）
+     *
+     * @param apiUrl 股票 API 地址
+     * @return 实时数据信息，失败返回 null
+     */
     private StockRealtimeInfo fetchRealtimeWithRetry(String apiUrl) {
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             try {
@@ -166,7 +176,10 @@ public class StockRefreshHandler implements IStockRefreshHandler {
     }
 
     /**
-     * 同步更新交易记录
+     * 同步更新交易记录及预警价格
+     *
+     * @param code     股票代码
+     * @param newPrice 最新价格
      */
     private void updateTradeRecordsSync(String code, BigDecimal newPrice) {
         try {
@@ -191,6 +204,8 @@ public class StockRefreshHandler implements IStockRefreshHandler {
 
     /**
      * 优化后的利润更新逻辑：仅更新持有该股票的用户
+     *
+     * @param stockCode 股票代码
      */
     private void updateProfitForHolders(String stockCode) {
         try {
@@ -202,6 +217,7 @@ public class StockRefreshHandler implements IStockRefreshHandler {
                 return;
             }
 
+            // 提取去重的 userId 列表
             List<Long> userIds = holders.stream()
                     .map(StockTrades::getUserId)
                     .filter(Objects::nonNull)
@@ -217,6 +233,11 @@ public class StockRefreshHandler implements IStockRefreshHandler {
         }
     }
 
+    /**
+     * 更新指定用户的当日总利润及年度汇总
+     *
+     * @param userId 用户ID
+     */
     private void updateDailyProfitForUser(Long userId) {
         // 获取该用户的所有持仓
         StockTrades query = new StockTrades();
@@ -229,7 +250,7 @@ public class StockRefreshHandler implements IStockRefreshHandler {
                 .map(StockTrades::getNetProfit)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // 更新 SalesData
+        // 更新 SalesData（日报表）
         LocalDate today = LocalDate.now(ZoneId.systemDefault());
         Date recordDate = Date.from(today.atStartOfDay(ZoneId.systemDefault()).toInstant());
 
@@ -250,14 +271,18 @@ public class StockRefreshHandler implements IStockRefreshHandler {
             salesDataService.insertSalesData(salesData);
         }
 
-        // 异步更新年度汇总 (这步比较轻量，可以异步，也可以同步)
-        // 为保持一致性，这里改为同步或者提交到线程池
-        // 原逻辑是提交到 coreExecutor，这里保持提交到线程池，避免阻塞太久
+        // 异步更新年度汇总（防止阻塞主流程）
         ThreadPoolUtil.getCoreExecutor().submit(() -> {
             queryAndUpdateYearlyInvestmentSummary(totalProfit, userId);
         });
     }
 
+    /**
+     * 查询并更新当年投资汇总数据
+     *
+     * @param totalProfit 本年度累计利润
+     * @param userId      用户ID
+     */
     public void queryAndUpdateYearlyInvestmentSummary(BigDecimal totalProfit, Long userId) {
         long currentYear = Year.now().getValue();
         try {
@@ -288,6 +313,9 @@ public class StockRefreshHandler implements IStockRefreshHandler {
         }
     }
 
+    /**
+     * 计算并更新交易详情（利润、成本、目标达成等）
+     */
     private void updateTradeDetails(StockTrades trade, BigDecimal newPrice) {
         try {
             BigDecimal[] addPrices = {
@@ -318,7 +346,7 @@ public class StockRefreshHandler implements IStockRefreshHandler {
                     addShares
             );
 
-            if (trade.getSellTargetPrice().equals(newPrice)) {
+            if (trade.getSellTargetPrice() != null && trade.getSellTargetPrice().equals(newPrice)) {
                 trade.setIsSell(1);
             }
 
@@ -336,6 +364,9 @@ public class StockRefreshHandler implements IStockRefreshHandler {
         }
     }
 
+    /**
+     * 计算净收益
+     */
     private BigDecimal calculateNetProfit(BigDecimal buyPrice, BigDecimal sellPrice,
                                           Long initShares, BigDecimal[] addPrices, Long[] addShares) {
         if (buyPrice == null || sellPrice == null || initShares == null) return BigDecimal.ZERO;
@@ -352,6 +383,9 @@ public class StockRefreshHandler implements IStockRefreshHandler {
         return baseProfit.add(additionalProfit);
     }
 
+    /**
+     * 计算总成本
+     */
     private BigDecimal calculateTotalCost(BigDecimal buyPrice, Long initShares,
                                           BigDecimal[] addPrices, Long[] addShares) {
         if (buyPrice == null || initShares == null) return BigDecimal.ZERO;
@@ -366,6 +400,9 @@ public class StockRefreshHandler implements IStockRefreshHandler {
         return baseCost.add(additionalCost);
     }
 
+    /**
+     * 发送价格预警通知
+     */
     private void sendNotification(StockRefreshTask task, Watchstock ws) {
         try {
             if (ws == null || ws.getNum() >= 3) return;
@@ -385,22 +422,23 @@ public class StockRefreshHandler implements IStockRefreshHandler {
         }
     }
 
+    /**
+     * 更新 Redis 中的任务状态
+     */
     private void updateStatus(String stockCode, String status, String result, String traceId) {
         StockTaskStatus s = new StockTaskStatus();
         s.setStockCode(stockCode);
         s.setStatus(status);
-        s.setOccupiedByNode(null); // Assuming node ID is handled by queue service if needed, or pass it?
-        // Actually StockTaskConsumer sets occupiedByNode = currentNodeId.
-        // Handler doesn't know currentNodeId easily unless passed or fetched.
-        // For now, let's skip occupiedByNode here or IpUtils.getHostIp()
-        // But updating status to RUNNING usually refreshes the lock info too.
-        // Let's assume Consumer handles lock ownership and this is just status display.
+        s.setOccupiedByNode(null);
         s.setOccupiedTime(System.currentTimeMillis());
         s.setTraceId(traceId);
         s.setLastResult(result);
         queueService.updateStatus(stockCode, s);
     }
 
+    /**
+     * 保存执行记录到数据库
+     */
     private void saveExecutionRecord(String stockCode, String stockName, String status, String result, String traceId) {
         try {
             StockRefreshExecuteRecord record = new StockRefreshExecuteRecord();
@@ -408,9 +446,6 @@ public class StockRefreshHandler implements IStockRefreshHandler {
             record.setStockName(stockName);
             record.setStatus(status);
             record.setExecuteResult(result);
-            // record.setNodeIp(currentNodeId); // Handler might need node IP
-            // Let's use IpUtils here or leave it null?
-            // The original used currentNodeId field.
             record.setNodeIp(com.make.common.utils.ip.IpUtils.getHostIp());
             record.setExecuteTime(new Date());
             record.setTraceId(traceId);
@@ -420,6 +455,9 @@ public class StockRefreshHandler implements IStockRefreshHandler {
         }
     }
 
+    /**
+     * 线程休眠（忽略中断异常）
+     */
     private void sleepQuiet(long ms) {
         try {
             TimeUnit.MILLISECONDS.sleep(ms);
