@@ -162,13 +162,13 @@
     <update id="updateLoanRepaymentsById" parameterType="LoanRepayments">
         update loan_repayments
         <trim prefix="SET" suffixOverrides=",">
-            <if test="installments != null">installments = #{installments},</if>
+            <if test="repaymentDate != null">repayment_date = #{repaymentDate},</if>
             <if test="principal != null">principal = #{principal},</if>
             <if test="interest != null">interest = #{interest},</if>
             <if test="totalPrincipalAndInterest != null">total_principal_and_interest = #{totalPrincipalAndInterest},
             </if>
         </trim>
-        where id = #{installments} and repayment_date = #{repaymentDate}
+        where user_id = #{userId} and installments = #{installments} and is_settled = 0
     </update>
 
 
