@@ -134,7 +134,7 @@ public class LoanRepaymentsController extends BaseController {
      * @param multipartFile 上传的文件，类型为 MultipartFile
      * @return AjaxResult 返回操作结果，包含成功或失败信息
      */
-    @PreAuthorize("@ss.hasPermi('stock:repayments:import')") // 权限校验，确保用户有权限进行导入操作
+    @PreAuthorize("@ss.hasPermi('finance:loan_repayments:import')") // 权限校验，确保用户有权限进行导入操作
     @Log(title = "更新贷款", businessType = BusinessType.IMPORT) // 日志记录，记录导入操作
     @PostMapping("/import") // 映射 POST 请求到 /import 路径
     public AjaxResult importData(@RequestParam("file") MultipartFile multipartFile) {
