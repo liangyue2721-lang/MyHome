@@ -97,7 +97,7 @@
             :show-file-list="false"
             :before-upload="beforeUpload"
             :on-change="handleFileChange"
-            accept=".csv, .xlsx"
+            accept=".xlsx"
             :auto-upload="false"
           >
             <el-button
@@ -543,12 +543,12 @@ export default {
       }
     },
     beforeUpload(file) {
-      const isCsv = file.type === 'text/csv' || file.type === 'application/vnd.ms-excel';
+      // const isCsv = file.type === 'text/csv' || file.type === 'application/vnd.ms-excel';
       const isXlsx = file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      if (!isCsv && !isXlsx) {
-        this.$message.error('上传文件只能是 .csv 或 .xlsx 格式!');
+      if (!isXlsx) {
+        this.$message.error('上传文件只能是 .xlsx 格式!');
       }
-      return isCsv || isXlsx; // 注意：element upload 手动上传模式下 before-upload 可能会被跳过，主要靠 on-change
+      return isXlsx; // 注意：element upload 手动上传模式下 before-upload 可能会被跳过，主要靠 on-change
     },
     confirmImport() {
       if (!this.selectedFile) return;
