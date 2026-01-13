@@ -8,7 +8,6 @@ import com.make.stock.domain.StockIssueInfo;
 import com.make.stock.service.IEtfDataService;
 import com.make.stock.service.IStockIssueInfoService;
 import com.make.stock.service.IStockListingNoticeService;
-import com.make.stock.util.KlineDataFetcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;

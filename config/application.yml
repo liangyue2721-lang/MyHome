@@ -181,6 +181,10 @@ python:
     path: python
     nexusStock:
       nodeId: 2
+  service:
+    url: http://localhost:8000
 watchStockExecutor:
   corePoolSize": 10
   maxPoolSize: 10
+
+
