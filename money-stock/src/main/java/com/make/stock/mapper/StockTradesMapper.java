@@ -3,6 +3,7 @@ package com.make.stock.mapper;
 import java.util.List;
 
 import com.make.stock.domain.StockTrades;
+import org.apache.ibatis.annotations.Param;
 
 /**
  * 股票利润Mapper接口
@@ -79,7 +80,7 @@ public interface StockTradesMapper {
     int updateStockTradesBatch(List<StockTrades> unsyncedTrades);
 
     // 在 StockTradesService 接口中添加方法
-    List<StockTrades> selectStockTradesByYear(int year);
+    List<StockTrades> selectStockTradesByYear(@Param("year") int year);
 
-    List<StockTrades> selectStockTradesByYearAndUserId(int year, Long userId);
+    List<StockTrades> selectStockTradesByYearAndUserId(@Param("year") int year, @Param("userId") Long userId);
 }
