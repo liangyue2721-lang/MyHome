@@ -241,9 +241,7 @@ public class StockRefreshHandler implements IStockRefreshHandler {
      */
     private void updateDailyProfitForUser(Long userId) {
         // 获取该用户的所有持仓
-        StockTrades query = new StockTrades();
-        query.setUserId(userId);
-        List<StockTrades> userTrades = stockTradesService.selectStockTradesList(query);
+        List<StockTrades> userTrades = stockTradesService.selectStockTradesByYearAndUserId(Year.now().getValue(), userId);
 
         // 累加净利润
         BigDecimal totalProfit = userTrades.stream()

@@ -79,4 +79,8 @@ public interface IStockTradesService {
     // 在 StockTradesService 接口中添加方法
     List<StockTrades> selectStockTradesByYear(int year);
 
+
+    // 在 StockTradesService 接口中添加方法
+    List<StockTrades> selectStockTradesByYearAndUserId(int year, Long userId);
+
 }

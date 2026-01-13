@@ -226,5 +226,10 @@
         WHERE YEAR(create_time) = #{year}
         order by create_time desc
     </select>
+    <select id="selectStockTradesByYearAndUserId" resultType="com.make.stock.domain.StockTrades">
+        <include refid="selectStockTradesVo"/>
+        WHERE YEAR(create_time) = #{year} AND user_id = #{userId}
+        order by create_time desc
+    </select>
 
 </mapper>
