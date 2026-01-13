@@ -210,8 +210,9 @@ public class StockRefreshHandler implements IStockRefreshHandler {
     private void updateProfitForHolders(String stockCode) {
         try {
             // 1. 找出持有该股票的所有用户 (利用 selectStockTradesList)
-            List<StockTrades> holders = stockTradesService.selectStockTradesList(
-                    new StockTrades().setStockCode(stockCode));
+            // 在 updateProfitForHolders 方法中替换硬编码的年份
+            long currentYear = Year.now().getValue();
+            List<StockTrades> holders = stockTradesService.selectStockTradesByYear((int) currentYear);
 
             if (CollectionUtils.isEmpty(holders)) {
                 return;
