@@ -107,7 +107,7 @@ spring:
       properties:
         spring.json.trusted.packages: "*"
     listener:
-      ack-mode: RECORD
+      ack-mode: BATCH
   # Quartz配置
   quartz:
     bootstrapEnabled: true
