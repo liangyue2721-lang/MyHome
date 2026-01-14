@@ -7,6 +7,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -163,6 +164,7 @@ public class TaskMonitoringService {
     /**
      * 关闭监控服务
      */
+    @PreDestroy
     public void shutdown() {
         if (scheduledExecutorService != null && !scheduledExecutorService.isShutdown()) {
             scheduledExecutorService.shutdown();

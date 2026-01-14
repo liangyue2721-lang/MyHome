@@ -17,16 +17,16 @@ public class KafkaProducerConfig {
     private static final Logger log = LoggerFactory.getLogger(KafkaProducerConfig.class);
 
     @Bean
-    public ProducerListener<String, Object> producerListener() {
-        return new ProducerListener<String, Object>() {
+    public ProducerListener<Object, Object> producerListener() {
+        return new ProducerListener<Object, Object>() {
             @Override
-            public void onSuccess(ProducerRecord<String, Object> producerRecord, RecordMetadata recordMetadata) {
+            public void onSuccess(ProducerRecord<Object, Object> producerRecord, RecordMetadata recordMetadata) {
                 log.info("[PRODUCE_SUCCESS] Topic={}, Key={}, Offset={}",
                         producerRecord.topic(), producerRecord.key(), recordMetadata.offset());
             }
 
             @Override
-            public void onError(ProducerRecord<String, Object> producerRecord, RecordMetadata recordMetadata, Exception exception) {
+            public void onError(ProducerRecord<Object, Object> producerRecord, RecordMetadata recordMetadata, Exception exception) {
                 log.error("[PRODUCE_ERROR] Topic={}, Key={}, Error={}",
                         producerRecord.topic(), producerRecord.key(), exception.getMessage());
             }
