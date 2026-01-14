@@ -1,11 +1,18 @@
 package com.make.stock.mq;
 
 import com.make.common.constant.KafkaTopics;
+import com.alibaba.fastjson2.JSON;
+import com.make.common.constant.KafkaTopics;
+import com.make.common.utils.ip.IpUtils;
+import com.make.stock.domain.StockRefreshTask;
 import com.make.stock.service.scheduled.IRealTimeStockService;
+import com.make.stock.service.scheduled.impl.StockWatchProcessor;
 import com.make.stock.service.scheduled.stock.KlineAggregatorService;
 import com.make.stock.service.scheduled.stock.ProfitService;
 import com.make.stock.service.scheduled.stock.StockInfoService;
 import com.make.stock.service.scheduled.stock.WatchService;
+import com.make.stock.service.scheduled.stock.handler.IStockRefreshHandler;
+import com.make.stock.service.scheduled.stock.queue.StockTaskQueueService;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,6 +22,7 @@ import org.springframework.stereotype.Component;
 import javax.annotation.Resource;
 import java.io.IOException;
 import java.util.Date;
+import java.util.List;
 
 /**
  * Stock Kafka Consumer
@@ -36,6 +44,15 @@ public class StockKafkaConsumer {
 
     @Resource
     private KlineAggregatorService klineAggregatorService;
+
+    @Resource
+    private StockTaskQueueService queueService;
+
+    @Resource
+    private IStockRefreshHandler stockRefreshHandler;
+
+    @Resource
+    private StockWatchProcessor stockWatchProcessor;
 
     @Resource
     private IRealTimeStockService realTimeStockService; // For legacy methods if any
@@ -118,22 +135,41 @@ public class StockKafkaConsumer {
         klineAggregatorService.runStockKlineTask(1);
     }
 
-    @KafkaListener(topics = KafkaTopics.TOPIC_STOCK_REFRESH, groupId = "money-stock-group")
-    public void stockRefresh(ConsumerRecord<String, String> record) {
-        log.info("Consume [TOPIC_STOCK_REFRESH]");
-        // Logic from RealTimeTask.updateInMemoryData (commented out in original but maybe needed?)
-        // Or logic that was in IRealTimeStockServiceImpl
-        // realTimeStockService.refreshInMemoryMapEntries();
-        // realTimeStockService.batchSyncStockDataToDB2();
+    @KafkaListener(topics = KafkaTopics.TOPIC_STOCK_REFRESH, groupId = "money-stock-group", containerFactory = "stockBatchFactory")
+    public void stockRefresh(List<ConsumerRecord<String, String>> records) {
+        log.info("Consume [TOPIC_STOCK_REFRESH] batch size: {}", records.size());
+        String currentNodeId = IpUtils.getHostIp();
 
-        // Check if we should uncomment this based on migration goals.
-        // RealTimeTask.java had it commented out with "Logic migrated to IStockTaskServiceImpl... scheduled by Quartz".
-        // If it was already migrated, maybe we don't need to call it here?
-        // But if Quartz was scheduling "StockKlineTaskExecutor", then that's different.
+        for (ConsumerRecord<String, String> record : records) {
+            String json = record.value();
+            try {
+                StockRefreshTask task = JSON.parseObject(json, StockRefreshTask.class);
+                if (task == null) continue;
 
-        // If the user wants "Quartz -> Kafka -> Business", and "All original Quartz tasks",
-        // we should map whatever was active in Quartz.
-        // If RealTimeTask.updateInMemoryData was commented out, we don't map it.
+                // Try lock
+                if (queueService.tryLockStock(task.getStockCode(), currentNodeId)) {
+                    try {
+                        stockRefreshHandler.refreshStock(task);
+                    } finally {
+                        queueService.releaseLock(task.getStockCode(), currentNodeId);
+
+                        // Decrement batch
+                        long remaining = queueService.decrementBatch(task.getTraceId());
+                        if (remaining == 0) {
+                            log.info("Batch completed (traceId={}). Triggering next batch...", task.getTraceId());
+                            stockWatchProcessor.triggerNextBatch();
+                        } else if (remaining < 0) {
+                             if (queueService.tryLockRecovery(task.getTraceId())) {
+                                 log.info("Recovery lock acquired. Triggering next batch... traceId={}", task.getTraceId());
+                                 stockWatchProcessor.triggerNextBatch();
+                             }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Failed to process stock refresh task: {}", json, e);
+            }
+        }
     }
 
     private Date getDateMidnight() {

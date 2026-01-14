@@ -1,6 +1,8 @@
 package com.make.stock.service.scheduled.impl;
 
+import com.alibaba.fastjson2.JSON;
 import com.google.common.collect.Lists;
+import com.make.common.constant.KafkaTopics;
 import com.make.stock.domain.StockRefreshTask;
 import com.make.stock.service.scheduled.stock.queue.StockTaskQueueService;
 import com.make.stock.domain.Watchstock;
@@ -8,6 +10,7 @@ import com.make.stock.service.IWatchstockService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
@@ -36,6 +39,9 @@ public class StockWatchProcessor implements SmartLifecycle {
 
     @Resource
     private StockTaskQueueService stockTaskQueueService;
+
+    @Resource
+    private KafkaTemplate<String, String> kafkaTemplate;
 
     private final AtomicBoolean running = new AtomicBoolean(false);
 
@@ -112,7 +118,8 @@ public class StockWatchProcessor implements SmartLifecycle {
                 task.setCreateTime(System.currentTimeMillis());
                 task.setTraceId(traceId);
 
-                stockTaskQueueService.enqueue(task);
+                // Use stockCode as key to ensure same stock goes to same partition
+                kafkaTemplate.send(KafkaTopics.TOPIC_STOCK_REFRESH, ws.getCode(), JSON.toJSONString(task));
             } catch (Exception e) {
                 log.error("生产任务失败: {}", ws.getCode(), e);
             }
