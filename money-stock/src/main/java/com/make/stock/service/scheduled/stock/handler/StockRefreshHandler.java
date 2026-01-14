@@ -19,6 +19,7 @@ import com.make.stock.service.ISellPriceAlertsService;
 import com.make.stock.service.IStockTradesService;
 import com.make.stock.service.IWatchstockService;
 import com.make.stock.util.KlineDataFetcher;
+import com.make.common.annotation.IdempotentConsumer;
 import org.apache.commons.collections4.CollectionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -81,6 +82,7 @@ public class StockRefreshHandler implements IStockRefreshHandler {
      * @param task 任务信息对象，包含 stockCode 和 traceId
      */
     @Override
+    @IdempotentConsumer(key = "#task.traceId", expire = 7200)
     public void refreshStock(StockRefreshTask task) {
         String stockCode = task.getStockCode();
         String traceId = task.getTraceId();

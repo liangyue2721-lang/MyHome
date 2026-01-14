@@ -2,6 +2,7 @@ package com.make.finance.mq;
 
 import com.alibaba.fastjson2.JSON;
 import com.make.common.constant.KafkaTopics;
+import com.make.common.annotation.IdempotentConsumer;
 import com.make.finance.domain.dto.CCBCreditCardTransactionEmail;
 import com.make.finance.service.scheduled.finance.CreditCardService;
 import com.make.finance.service.scheduled.finance.DepositService;
@@ -30,13 +31,23 @@ public class FinanceTaskConsumer {
 
     @KafkaListener(topics = KafkaTopics.TOPIC_DEPOSIT_UPDATE, groupId = "money-finance-group")
     public void updateDepositAmount(ConsumerRecord<String, String> record) {
-        log.info("Consume [TOPIC_DEPOSIT_UPDATE]");
-        depositService.updateAnnualDepositSummary();
+        log.info("Consume [TOPIC_DEPOSIT_UPDATE] key={}", record.key());
+        handleDepositUpdate(record.key());
     }
 
     @KafkaListener(topics = KafkaTopics.TOPIC_ICBC_DEPOSIT_UPDATE, groupId = "money-finance-group")
     public void updateICBCDepositAmount(ConsumerRecord<String, String> record) {
-        log.info("Consume [TOPIC_ICBC_DEPOSIT_UPDATE]");
+        log.info("Consume [TOPIC_ICBC_DEPOSIT_UPDATE] key={}", record.key());
+        handleICBCDepositUpdate(record.key());
+    }
+
+    @IdempotentConsumer(key = "#traceId")
+    public void handleDepositUpdate(String traceId) {
+        depositService.updateAnnualDepositSummary();
+    }
+
+    @IdempotentConsumer(key = "#traceId")
+    public void handleICBCDepositUpdate(String traceId) {
         // Legacy FixedTimeTask calls with 1L, 7L
         depositService.updateICBCDepositAmount(1L, 7L);
     }

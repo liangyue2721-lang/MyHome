@@ -10,6 +10,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
+import java.util.UUID;
 
 /**
  * 数据库备份 Quartz 任务
@@ -30,8 +31,9 @@ public class DatabaseBackupTask extends QuartzJobWrapper {
      */
     @Override
     protected void doExecute(JobExecutionContext context, SysJob sysJob) {
-        log.info("[DB-BACKUP] 触发数据库备份任务, jobId={}, topic={}", sysJob.getJobId(), KafkaTopics.TOPIC_SYSTEM_BACKUP);
-        kafkaTemplate.send(KafkaTopics.TOPIC_SYSTEM_BACKUP, "trigger");
+        String traceId = UUID.randomUUID().toString();
+        log.info("[DB-BACKUP] 触发数据库备份任务, jobId={}, topic={}, traceId={}", sysJob.getJobId(), KafkaTopics.TOPIC_SYSTEM_BACKUP, traceId);
+        kafkaTemplate.send(KafkaTopics.TOPIC_SYSTEM_BACKUP, traceId, "trigger");
         log.info("[DB-BACKUP] 数据库备份任务触发消息已发送, jobId={}", sysJob.getJobId());
     }
 }
