@@ -135,7 +135,7 @@ public class StockKafkaConsumer {
         klineAggregatorService.runStockKlineTask(1);
     }
 
-    @KafkaListener(topics = KafkaTopics.TOPIC_STOCK_REFRESH, groupId = "money-stock-group", containerFactory = "stockBatchFactory")
+    @KafkaListener(topics = KafkaTopics.TOPIC_STOCK_REFRESH, groupId = "money-stock-group", containerFactory = "stockBatchFactory", properties = {"max.poll.records=10"})
     public void stockRefresh(List<ConsumerRecord<String, String>> records) {
         log.info("Consume [TOPIC_STOCK_REFRESH] batch size: {}", records.size());
         String currentNodeId = IpUtils.getHostIp();
