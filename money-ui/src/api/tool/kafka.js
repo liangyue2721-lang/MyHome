@@ -24,3 +24,28 @@ export function getConsumerDetails(groupIds) {
     data: groupIds
   })
 }
+
+// Delete topic
+export function deleteTopic(topicName) {
+  return request({
+    url: '/tool/kafka/topic/' + topicName,
+    method: 'delete'
+  })
+}
+
+// Delete all messages in a topic
+export function deleteTopicMessages(topicName) {
+  return request({
+    url: '/tool/kafka/topic/' + topicName + '/messages',
+    method: 'delete'
+  })
+}
+
+// Get recent messages for a topic
+export function getTopicMessages(topicName, count) {
+  return request({
+    url: '/tool/kafka/topic/' + topicName + '/messages',
+    method: 'get',
+    params: { count }
+  })
+}

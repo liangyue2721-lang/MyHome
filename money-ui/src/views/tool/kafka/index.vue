@@ -7,6 +7,13 @@
           <el-table-column prop="partitionCount" label="Partitions" width="120" />
           <el-table-column prop="replicationFactor" label="Replicas" width="120" />
           <el-table-column prop="totalMessageCount" label="Total Messages (Approx)" width="200" />
+          <el-table-column label="Actions" width="300" align="center">
+            <template slot-scope="scope">
+              <el-button size="mini" type="text" icon="el-icon-search" @click="handleViewMessages(scope.row)">Inspect</el-button>
+              <el-button size="mini" type="text" icon="el-icon-delete" class="text-danger" @click="handleClearMessages(scope.row)">Clear Msg</el-button>
+              <el-button size="mini" type="text" icon="el-icon-delete-solid" class="text-danger" @click="handleDeleteTopic(scope.row)">Delete</el-button>
+            </template>
+          </el-table-column>
         </el-table>
       </el-tab-pane>
 
@@ -67,11 +74,26 @@
         </el-row>
       </el-tab-pane>
     </el-tabs>
+
+    <!-- Message Inspection Dialog -->
+    <el-dialog title="Topic Messages (Recent 10)" :visible.sync="messageDialogVisible" width="80%">
+      <el-table :data="topicMessages" border style="width: 100%" height="500">
+        <el-table-column prop="partition" label="Part" width="60" />
+        <el-table-column prop="offset" label="Offset" width="100" />
+        <el-table-column prop="timestamp" label="Timestamp" width="160">
+          <template slot-scope="scope">
+            {{ parseTime(scope.row.timestamp) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="key" label="Key" width="200" show-overflow-tooltip />
+        <el-table-column prop="value" label="Value" show-overflow-tooltip />
+      </el-table>
+    </el-dialog>
   </div>
 </template>
 
 <script>
-import { listTopics, listConsumers, getConsumerDetails } from "@/api/tool/kafka";
+import { listTopics, listConsumers, getConsumerDetails, deleteTopic, deleteTopicMessages, getTopicMessages } from "@/api/tool/kafka";
 
 export default {
   name: "KafkaMonitor",
@@ -82,7 +104,9 @@ export default {
       topics: [],
       consumerGroups: [], // List of strings
       selectedGroup: null,
-      selectedGroupDetails: null
+      selectedGroupDetails: null,
+      messageDialogVisible: false,
+      topicMessages: []
     };
   },
   created() {
@@ -126,6 +150,37 @@ export default {
           this.selectedGroupDetails = response.data[0];
         }
       });
+    },
+    handleViewMessages(row) {
+      this.topicMessages = [];
+      getTopicMessages(row.name, 10).then(response => {
+        this.topicMessages = response.data;
+        this.messageDialogVisible = true;
+      });
+    },
+    handleClearMessages(row) {
+      this.$confirm('Are you sure you want to clear all messages for topic "' + row.name + '"?', 'Warning', {
+        confirmButtonText: 'Confirm',
+        cancelButtonText: 'Cancel',
+        type: 'warning'
+      }).then(() => {
+        return deleteTopicMessages(row.name);
+      }).then(() => {
+        this.$modal.msgSuccess("Messages cleared successfully");
+        this.getTopics();
+      }).catch(() => {});
+    },
+    handleDeleteTopic(row) {
+      this.$confirm('Are you sure you want to delete topic "' + row.name + '"?', 'Warning', {
+        confirmButtonText: 'Confirm',
+        cancelButtonText: 'Cancel',
+        type: 'error'
+      }).then(() => {
+        return deleteTopic(row.name);
+      }).then(() => {
+        this.$modal.msgSuccess("Topic deleted successfully");
+        this.getTopics();
+      }).catch(() => {});
     }
   }
 };
