@@ -6,6 +6,7 @@
           <el-table-column prop="name" label="Topic Name" />
           <el-table-column prop="partitionCount" label="Partitions" width="120" />
           <el-table-column prop="replicationFactor" label="Replicas" width="120" />
+          <el-table-column prop="totalMessageCount" label="Total Messages (Approx)" width="200" />
         </el-table>
       </el-tab-pane>
 

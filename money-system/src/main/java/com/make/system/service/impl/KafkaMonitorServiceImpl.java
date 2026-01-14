@@ -32,10 +32,20 @@ public class KafkaMonitorServiceImpl implements IKafkaMonitorService {
     @Override
     public List<KafkaTopicInfo> getTopics() {
         List<KafkaTopicInfo> result = new ArrayList<>();
-        try (AdminClient admin = AdminClient.create(kafkaAdmin.getConfigurationProperties())) {
+        try (AdminClient admin = AdminClient.create(kafkaAdmin.getConfigurationProperties());
+             org.apache.kafka.clients.consumer.Consumer<String, String> consumer = consumerFactory.createConsumer()) {
+
             ListTopicsResult topicsResult = admin.listTopics();
             Set<String> names = topicsResult.names().get();
             Map<String, TopicDescription> descriptions = admin.describeTopics(names).all().get();
+
+            // Collect all partitions to query log end offsets
+            List<TopicPartition> allPartitions = new ArrayList<>();
+            for (TopicDescription desc : descriptions.values()) {
+                desc.partitions().forEach(p -> allPartitions.add(new TopicPartition(desc.name(), p.partition())));
+            }
+
+            Map<TopicPartition, Long> endOffsets = consumer.endOffsets(allPartitions);
 
             for (Map.Entry<String, TopicDescription> entry : descriptions.entrySet()) {
                 TopicDescription desc = entry.getValue();
@@ -45,6 +55,17 @@ public class KafkaMonitorServiceImpl implements IKafkaMonitorService {
                 if (!desc.partitions().isEmpty()) {
                     info.setReplicationFactor(desc.partitions().get(0).replicas().size());
                 }
+
+                // Calculate total messages (Sum of Log End Offsets)
+                // Note: This approximates "total produced" since retention policies delete old messages.
+                // It represents "total current messages + deleted messages" effectively the high watermark sum.
+                long totalMessages = 0;
+                for (org.apache.kafka.common.TopicPartitionInfo p : desc.partitions()) {
+                    TopicPartition tp = new TopicPartition(desc.name(), p.partition());
+                    totalMessages += endOffsets.getOrDefault(tp, 0L);
+                }
+                info.setTotalMessageCount(totalMessages);
+
                 result.add(info);
             }
         } catch (Exception e) {
