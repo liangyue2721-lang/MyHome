@@ -167,4 +167,87 @@ public class KafkaMonitorServiceImpl implements IKafkaMonitorService {
         }
         return result;
     }
+
+    @Override
+    public boolean deleteTopic(String topicName) {
+        try (AdminClient admin = AdminClient.create(kafkaAdmin.getConfigurationProperties())) {
+            admin.deleteTopics(Collections.singleton(topicName)).all().get();
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to delete topic: {}", topicName, e);
+            return false;
+        }
+    }
+
+    @Override
+    public boolean deleteTopicMessages(String topicName) {
+        try (AdminClient admin = AdminClient.create(kafkaAdmin.getConfigurationProperties());
+             org.apache.kafka.clients.consumer.Consumer<String, String> consumer = consumerFactory.createConsumer()) {
+
+            // Get partitions
+            List<TopicPartition> partitions = consumer.partitionsFor(topicName).stream()
+                    .map(pi -> new TopicPartition(topicName, pi.partition()))
+                    .collect(Collectors.toList());
+
+            // Get end offsets
+            Map<TopicPartition, Long> endOffsets = consumer.endOffsets(partitions);
+
+            // Create delete records map
+            Map<TopicPartition, RecordsToDelete> deleteMap = new HashMap<>();
+            for (Map.Entry<TopicPartition, Long> entry : endOffsets.entrySet()) {
+                if (entry.getValue() > 0) {
+                    deleteMap.put(entry.getKey(), RecordsToDelete.beforeOffset(entry.getValue()));
+                }
+            }
+
+            if (!deleteMap.isEmpty()) {
+                admin.deleteRecords(deleteMap).all().get();
+            }
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to delete topic messages: {}", topicName, e);
+            return false;
+        }
+    }
+
+    @Override
+    public List<Map<String, Object>> getTopicMessages(String topicName, int count) {
+        List<Map<String, Object>> messages = new ArrayList<>();
+        try (org.apache.kafka.clients.consumer.Consumer<String, String> consumer = consumerFactory.createConsumer()) {
+            List<TopicPartition> partitions = consumer.partitionsFor(topicName).stream()
+                    .map(pi -> new TopicPartition(topicName, pi.partition()))
+                    .collect(Collectors.toList());
+
+            consumer.assign(partitions);
+
+            // Seek to end - count
+            Map<TopicPartition, Long> endOffsets = consumer.endOffsets(partitions);
+            for (TopicPartition tp : partitions) {
+                long end = endOffsets.getOrDefault(tp, 0L);
+                long start = Math.max(0, end - count); // Heuristic: seek back N from end per partition
+                consumer.seek(tp, start);
+            }
+
+            // Poll
+            org.apache.kafka.clients.consumer.ConsumerRecords<String, String> records = consumer.poll(java.time.Duration.ofMillis(2000));
+            for (org.apache.kafka.clients.consumer.ConsumerRecord<String, String> record : records) {
+                Map<String, Object> map = new HashMap<>();
+                map.put("partition", record.partition());
+                map.put("offset", record.offset());
+                map.put("key", record.key());
+                map.put("value", record.value());
+                map.put("timestamp", record.timestamp());
+                messages.add(map);
+                if (messages.size() >= count) break;
+            }
+            // Sort by timestamp desc
+            messages.sort((m1, m2) -> Long.compare((Long) m2.get("timestamp"), (Long) m1.get("timestamp")));
+            if (messages.size() > count) {
+                messages = messages.subList(0, count);
+            }
+        } catch (Exception e) {
+            log.error("Failed to get topic messages: {}", topicName, e);
+        }
+        return messages;
+    }
 }

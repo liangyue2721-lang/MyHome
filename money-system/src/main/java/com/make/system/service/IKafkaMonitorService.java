@@ -10,4 +10,19 @@ public interface IKafkaMonitorService {
     List<KafkaTopicInfo> getTopics();
     List<String> getConsumerGroups();
     List<KafkaConsumerInfo> getConsumerGroupDetails(List<String> groupIds);
+
+    /**
+     * 删除Topic
+     */
+    boolean deleteTopic(String topicName);
+
+    /**
+     * 清空Topic消息 (删除至当前LogEndOffset)
+     */
+    boolean deleteTopicMessages(String topicName);
+
+    /**
+     * 获取Topic消息详情 (采样最近N条)
+     */
+    List<Map<String, Object>> getTopicMessages(String topicName, int count);
 }

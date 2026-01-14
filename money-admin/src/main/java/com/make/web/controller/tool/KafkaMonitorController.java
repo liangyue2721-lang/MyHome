@@ -1,5 +1,6 @@
 package com.make.web.controller.tool;
 
+import com.make.common.core.controller.BaseController;
 import com.make.common.core.domain.AjaxResult;
 import com.make.system.domain.KafkaConsumerInfo;
 import com.make.system.domain.KafkaTopicInfo;
@@ -15,7 +16,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/tool/kafka")
-public class KafkaMonitorController {
+public class KafkaMonitorController extends BaseController {
 
     @Resource
     private IKafkaMonitorService kafkaMonitorService;
@@ -39,5 +40,23 @@ public class KafkaMonitorController {
     public AjaxResult getConsumerDetails(@RequestBody List<String> groupIds) {
         List<KafkaConsumerInfo> list = kafkaMonitorService.getConsumerGroupDetails(groupIds);
         return AjaxResult.success(list);
+    }
+
+    @PreAuthorize("@ss.hasPermi('tool:kafka:remove')")
+    @DeleteMapping("/topic/{topicName}")
+    public AjaxResult deleteTopic(@PathVariable String topicName) {
+        return toAjax(kafkaMonitorService.deleteTopic(topicName));
+    }
+
+    @PreAuthorize("@ss.hasPermi('tool:kafka:remove')")
+    @DeleteMapping("/topic/{topicName}/messages")
+    public AjaxResult deleteTopicMessages(@PathVariable String topicName) {
+        return toAjax(kafkaMonitorService.deleteTopicMessages(topicName));
+    }
+
+    @PreAuthorize("@ss.hasPermi('tool:kafka:list')")
+    @GetMapping("/topic/{topicName}/messages")
+    public AjaxResult getTopicMessages(@PathVariable String topicName, @RequestParam(defaultValue = "10") int count) {
+        return AjaxResult.success(kafkaMonitorService.getTopicMessages(topicName, count));
     }
 }
