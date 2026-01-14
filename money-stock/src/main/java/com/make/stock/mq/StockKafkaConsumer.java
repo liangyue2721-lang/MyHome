@@ -152,19 +152,21 @@ public class StockKafkaConsumer {
                         stockRefreshHandler.refreshStock(task);
                     } finally {
                         queueService.releaseLock(task.getStockCode(), currentNodeId);
-
-                        // Decrement batch
-                        long remaining = queueService.decrementBatch(task.getTraceId());
-                        if (remaining == 0) {
-                            log.info("Batch completed (traceId={}). Triggering next batch...", task.getTraceId());
-                            stockWatchProcessor.triggerNextBatch();
-                        } else if (remaining < 0) {
-                             if (queueService.tryLockRecovery(task.getTraceId())) {
-                                 log.info("Recovery lock acquired. Triggering next batch... traceId={}", task.getTraceId());
-                                 stockWatchProcessor.triggerNextBatch();
-                             }
-                        }
                     }
+                } else {
+                    log.debug("Skipping stock {} (locked by another node)", task.getStockCode());
+                }
+
+                // Decrement batch regardless of lock acquisition (skipped tasks count as processed)
+                long remaining = queueService.decrementBatch(task.getTraceId());
+                if (remaining == 0) {
+                    log.info("Batch completed (traceId={}). Triggering next batch...", task.getTraceId());
+                    stockWatchProcessor.triggerNextBatch();
+                } else if (remaining < 0) {
+                     if (queueService.tryLockRecovery(task.getTraceId())) {
+                         log.info("Recovery lock acquired. Triggering next batch... traceId={}", task.getTraceId());
+                         stockWatchProcessor.triggerNextBatch();
+                     }
                 }
             } catch (Exception e) {
                 log.error("Failed to process stock refresh task: {}", json, e);

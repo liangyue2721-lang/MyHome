@@ -17,6 +17,38 @@
         </el-table>
       </el-tab-pane>
 
+      <el-tab-pane label="Stock Tasks" name="stockTasks">
+        <el-table v-loading="stockLoading" :data="stockTasks" style="width: 100%">
+          <el-table-column prop="stockCode" label="Code" width="100" />
+          <el-table-column prop="stockName" label="Name" width="120" />
+          <el-table-column prop="status" label="Status" width="100">
+            <template slot-scope="scope">
+              <el-tag :type="getStatusType(scope.row.status)">{{ scope.row.status }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="occupiedByNode" label="Node" width="140" show-overflow-tooltip />
+          <el-table-column prop="traceId" label="Trace ID" width="250" show-overflow-tooltip />
+          <el-table-column prop="lastResult" label="Last Result" show-overflow-tooltip />
+          <el-table-column prop="lastUpdateTime" label="Update Time" width="160">
+            <template slot-scope="scope">
+              {{ parseTime(scope.row.lastUpdateTime) }}
+            </template>
+          </el-table-column>
+        </el-table>
+        <div class="pagination-container">
+          <el-pagination
+            background
+            layout="total, sizes, prev, pager, next, jumper"
+            :total="stockTotal"
+            :page-sizes="[10, 20, 50]"
+            :page-size.sync="stockParams.pageSize"
+            :current-page.sync="stockParams.pageNum"
+            @current-change="handleStockPageChange"
+            @size-change="handleStockSizeChange"
+          />
+        </div>
+      </el-tab-pane>
+
       <el-tab-pane label="Consumer Groups" name="consumers">
         <el-row :gutter="20">
           <el-col :span="6">
@@ -106,7 +138,15 @@ export default {
       selectedGroup: null,
       selectedGroupDetails: null,
       messageDialogVisible: false,
-      topicMessages: []
+      topicMessages: [],
+      // Stock Task Data
+      stockLoading: false,
+      stockTasks: [],
+      stockTotal: 0,
+      stockParams: {
+        pageNum: 1,
+        pageSize: 10
+      }
     };
   },
   created() {
@@ -118,7 +158,36 @@ export default {
         this.getTopics();
       } else if (tab.name === 'consumers') {
         this.getConsumers();
+      } else if (tab.name === 'stockTasks') {
+        this.getStockTasks();
       }
+    },
+    getStockTasks() {
+      this.stockLoading = true;
+      request({
+        url: '/monitor/stock-task/list',
+        method: 'get',
+        params: this.stockParams
+      }).then(response => {
+        this.stockTasks = response.rows;
+        this.stockTotal = response.total;
+        this.stockLoading = false;
+      });
+    },
+    handleStockPageChange(val) {
+      this.stockParams.pageNum = val;
+      this.getStockTasks();
+    },
+    handleStockSizeChange(val) {
+      this.stockParams.pageSize = val;
+      this.getStockTasks();
+    },
+    getStatusType(status) {
+      if (status === 'RUNNING') return 'primary';
+      if (status === 'SUCCESS') return 'success';
+      if (status === 'FAILED') return 'danger';
+      if (status === 'WAITING') return 'warning';
+      return 'info';
     },
     getTopics() {
       this.loading = true;
