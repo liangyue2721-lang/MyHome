@@ -3,8 +3,8 @@ package com.make.web.controller.pie;
 import com.make.common.core.domain.AjaxResult;
 import com.make.finance.domain.dto.CCBCreditCardTransactionEmail;
 import com.make.finance.service.ICbcCreditCardTransactionService;
-import com.make.quartz.service.IRealTimeService;
-import com.make.quartz.util.email.EmailReader;
+import com.make.finance.service.scheduled.finance.CreditCardService;
+import com.make.finance.util.email.EmailReader;
 import com.make.web.service.ISyncService;
 import org.apache.commons.collections4.CollectionUtils;
 import org.slf4j.Logger;
@@ -43,7 +43,7 @@ public class SyncController {
     private static boolean queryStatus = false;
 
     @Resource
-    private IRealTimeService realTimeService;
+    private CreditCardService creditCardService;
 
     @Resource
     private ICbcCreditCardTransactionService cbcCreditCardTransactionService;
@@ -65,7 +65,7 @@ public class SyncController {
             queryStatus = true;
             List<CCBCreditCardTransactionEmail> CCBCreditCardTransactionList = EmailReader.getSmsCode();
             if (CollectionUtils.isNotEmpty(CCBCreditCardTransactionList)) {
-                realTimeService.saveCCBCreditCardTransaction(CCBCreditCardTransactionList);
+                creditCardService.saveCCBCreditCardTransaction(CCBCreditCardTransactionList);
             }
         } catch (Exception e) {
             log.error("执行realTimeTask查询并记录建设银行信用卡流水失败:", e);

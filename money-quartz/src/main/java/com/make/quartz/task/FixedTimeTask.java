@@ -1,8 +1,9 @@
 package com.make.quartz.task;
 
-import com.make.quartz.service.IRealTimeService;
+import com.make.common.constant.KafkaTopics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
@@ -22,10 +23,8 @@ public class FixedTimeTask {
     // 日志记录器
     private static final Logger log = LoggerFactory.getLogger(FixedTimeTask.class);
 
-
     @Resource
-    private IRealTimeService realTimeService;
-
+    private KafkaTemplate<String, String> kafkaTemplate;
 
     public static String get(String urlString) throws Exception {
         URL url = new URL(urlString);
@@ -55,14 +54,8 @@ public class FixedTimeTask {
      * @throws Exception
      */
     public void refreshNewStockInformation() {
-        long startTime = System.currentTimeMillis();
-        try {
-            realTimeService.refreshNewStockInformation();
-        } catch (Exception e) {
-            log.error("执行查询异常:", e);
-        }
-        long endTime = System.currentTimeMillis();
-        log.info("获取新股申购股票任务,耗时{}ms", endTime - startTime);
+        log.info("触发任务：获取新股申购股票 [TOPIC_NEW_STOCK_INFO]");
+        kafkaTemplate.send(KafkaTopics.TOPIC_NEW_STOCK_INFO, "trigger");
     }
 
 
@@ -72,14 +65,10 @@ public class FixedTimeTask {
      * @throws Exception
      */
     public void updateDepositAmount() {
-        long startTime = System.currentTimeMillis();
-        try {
-            realTimeService.updateDepositAmount();
-            realTimeService.updateICBCDepositAmount(1L, 7L);
-        } catch (Exception e) {
-            log.error("存款金额更新异常:", e);
-        }
-        long endTime = System.currentTimeMillis();
-        log.info("存款金额更新任务,耗时{}ms", endTime - startTime);
+        log.info("触发任务：更新存款金额 [TOPIC_DEPOSIT_UPDATE]");
+        kafkaTemplate.send(KafkaTopics.TOPIC_DEPOSIT_UPDATE, "trigger");
+
+        log.info("触发任务：更新工商银行存款 [TOPIC_ICBC_DEPOSIT_UPDATE]");
+        kafkaTemplate.send(KafkaTopics.TOPIC_ICBC_DEPOSIT_UPDATE, "trigger");
     }
 }
