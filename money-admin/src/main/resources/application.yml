@@ -93,6 +93,18 @@ spring:
         max-active: 128
         # 连接池最大阻塞等待时间 从-1ms改为30s
         max-wait: 30s
+  # Kafka配置
+  kafka:
+    bootstrap-servers: 115.190.121.53:10093
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      group-id: money-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
   # Quartz配置
   quartz:
     bootstrapEnabled: true
