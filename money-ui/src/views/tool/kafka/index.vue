@@ -125,7 +125,7 @@
 </template>
 
 <script>
-import { listTopics, listConsumers, getConsumerDetails, deleteTopic, deleteTopicMessages, getTopicMessages } from "@/api/tool/kafka";
+import { listTopics, listConsumers, getConsumerDetails, deleteTopic, deleteTopicMessages, getTopicMessages, listStockTasks } from "@/api/tool/kafka";
 
 export default {
   name: "KafkaMonitor",
@@ -164,11 +164,7 @@ export default {
     },
     getStockTasks() {
       this.stockLoading = true;
-      request({
-        url: '/monitor/stock-task/list',
-        method: 'get',
-        params: this.stockParams
-      }).then(response => {
+      listStockTasks(this.stockParams).then(response => {
         this.stockTasks = response.rows;
         this.stockTotal = response.total;
         this.stockLoading = false;

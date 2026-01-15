@@ -49,3 +49,12 @@ export function getTopicMessages(topicName, count) {
     params: { count }
   })
 }
+
+// List stock tasks (paginated)
+export function listStockTasks(query) {
+  return request({
+    url: '/monitor/stock-task/list',
+    method: 'get',
+    params: query
+  })
+}
