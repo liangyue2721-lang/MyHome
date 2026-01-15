@@ -20,20 +20,15 @@ public class SystemTaskConsumer {
     private static final Logger log = LoggerFactory.getLogger(SystemTaskConsumer.class);
 
     @Resource
-    private DatabaseBackupExecutor databaseBackupExecutor;
+    private SystemTaskHandler systemTaskHandler;
 
     @KafkaListener(topics = KafkaTopics.TOPIC_SYSTEM_BACKUP, groupId = "money-system-group")
     public void executeBackup(ConsumerRecord<String, String> record) {
         log.info("Consume [TOPIC_SYSTEM_BACKUP] key={}", record.key());
         try {
-            handleBackup(record.key());
+            systemTaskHandler.handleBackup(record.key());
         } catch (Exception e) {
             log.error("Database backup failed", e);
         }
-    }
-
-    @IdempotentConsumer(key = "#traceId")
-    public void handleBackup(String traceId) throws Exception {
-        databaseBackupExecutor.executeBackup();
     }
 }

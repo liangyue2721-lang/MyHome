@@ -1,4 +1,4 @@
-package com.make.quartz.util;
+package com.make.common.core;
 
 import com.make.common.utils.StringUtils;
 import com.make.common.utils.ip.IpUtils;
@@ -16,12 +16,12 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 节点注册中心（安全版）
+ * 节点注册中心（安全版 + Master选举）
  *
  * <p>设计原则：
  * - 启动阶段：优先读取配置ID，无配置则自动探测IP
  * - 运行阶段：保持ID稳定
- * - nodeId 在进程生命周期内保持稳定
+ * - Master选举：通过 Redis SETNX 争抢 Master 身份
  */
 @Component
 public class NodeRegistry implements SmartLifecycle {
@@ -30,11 +30,17 @@ public class NodeRegistry implements SmartLifecycle {
 
     private static final String NODE_SET_KEY = "mq:nodes:alive";
     private static final String NODE_TTL_PREFIX = "mq:nodes:ttl:";
+    private static final String SCHEDULER_MASTER = "SCHEDULER_MASTER";
 
     /**
      * 进程级稳定 nodeId
      */
     private static volatile String CURRENT_NODE_ID;
+
+    /**
+     * 是否为主节点
+     */
+    private volatile boolean isMaster = false;
 
     private final RedisTemplate<String, String> redisTemplate;
 
@@ -50,23 +56,23 @@ public class NodeRegistry implements SmartLifecycle {
 
     /**
      * 获取当前节点 ID
-     *
-     * <p>规则：
-     * 1. 强制使用本机 IP (Hosted IP)
-     * 2. 兜底 127.0.0.1
      */
     public static String getCurrentNodeId() {
         if (CURRENT_NODE_ID != null) {
             return CURRENT_NODE_ID;
         }
-        // Initializing early might miss Spring Context injection if called statically before init
-        // But the init() method below ensures it is set.
         return "UNKNOWN";
+    }
+
+    /**
+     * 当前是否为主节点
+     */
+    public boolean isMaster() {
+        return isMaster;
     }
 
     @PostConstruct
     public void init() {
-        // Enforce IP-only identity
         try {
             String ip = IpUtils.getHostIp();
             if (StringUtils.isNotEmpty(ip) && !"127.0.0.1".equals(ip)) {
@@ -104,40 +110,58 @@ public class NodeRegistry implements SmartLifecycle {
             if (!running) return;
             String nodeId = getCurrentNodeId();
             if ("UNKNOWN".equals(nodeId)) {
-                 // Retry init if still unknown (unlikely if @PostConstruct ran)
                  init();
                  nodeId = getCurrentNodeId();
-                 if ("UNKNOWN".equals(nodeId)) {
-                     log.warn("[NODE_ID_UNKNOWN] Still unable to determine nodeId.");
-                 }
             }
 
             try {
-                // Refresh TTL
+                // 1. Refresh Node TTL
                 redisTemplate.opsForValue().set(
                         NODE_TTL_PREFIX + nodeId,
                         "1",
                         30,
                         TimeUnit.SECONDS
                 );
-                // Ensure in Set (in case accidentally removed)
-                Long added = redisTemplate.opsForSet().add(NODE_SET_KEY, nodeId);
-                if (added != null) {
-                    if (added > 0) {
-                        log.info("[NODE_REGISTER_SUCCESS] nodeId={}", nodeId);
-                    } else if (log.isDebugEnabled()) {
-                        log.debug("[NODE_REFRESH] nodeId={} refreshed.", nodeId);
+                redisTemplate.opsForSet().add(NODE_SET_KEY, nodeId);
+
+                // 2. Master Election
+                Boolean success = redisTemplate.opsForValue().setIfAbsent(SCHEDULER_MASTER, nodeId, 30, TimeUnit.SECONDS);
+                if (Boolean.TRUE.equals(success)) {
+                    // Acquired Master Lock
+                    if (!isMaster) {
+                        log.info("[MASTER_ELECTED] I am Master now. nodeId={}", nodeId);
+                        isMaster = true;
+                    }
+                } else {
+                    // Check if I am still master and renew
+                    String currentMaster = redisTemplate.opsForValue().get(SCHEDULER_MASTER);
+                    if (nodeId.equals(currentMaster)) {
+                        redisTemplate.expire(SCHEDULER_MASTER, 30, TimeUnit.SECONDS);
+                        if (!isMaster) {
+                            log.info("[MASTER_RESTORED] Master role restored. nodeId={}", nodeId);
+                            isMaster = true;
+                        }
+                    } else {
+                        if (isMaster) {
+                            log.warn("[MASTER_LOST] Lost master role. New master is {}", currentMaster);
+                            isMaster = false;
+                        }
                     }
                 }
+
             } catch (Throwable e) {
-                // Suppress errors during shutdown or connection failure to avoid noise
                 if (running) {
-                    log.warn("[NODE_HEARTBEAT_FAIL] nodeId={} msg={}", nodeId, e.getMessage(), e);
+                    log.warn("[NODE_HEARTBEAT_FAIL] nodeId={} msg={}", nodeId, e.getMessage());
                 }
+                // In case of Redis error, assume not master to be safe (split-brain prevention)
+                // However, existing master might want to keep running if it's just a blip.
+                // For simplicity, we keep the flag as is until confirmed lost, or maybe set to false?
+                // Set to false is safer for "Production" logic.
+                // isMaster = false; // Optional: Fail-safe
             }
         }, 0, 10, TimeUnit.SECONDS);
 
-        log.info("[NODE_REGISTER] Heartbeat started. nodeId={}", getCurrentNodeId());
+        log.info("[NODE_REGISTER] Heartbeat & Master Election started. nodeId={}", getCurrentNodeId());
     }
 
     @Override
@@ -156,7 +180,6 @@ public class NodeRegistry implements SmartLifecycle {
 
     @Override
     public int getPhase() {
-        // 尽量早于 TaskExecutionService
         return Integer.MIN_VALUE;
     }
 }

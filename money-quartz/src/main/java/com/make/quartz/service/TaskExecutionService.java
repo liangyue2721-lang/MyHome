@@ -8,7 +8,7 @@ import com.make.quartz.domain.SysJobRuntime;
 import com.make.quartz.mapper.SysJobExecutionLogMapper;
 import com.make.quartz.mapper.SysJobRuntimeMapper;
 import com.make.quartz.util.JobInvokeUtil;
-import com.make.quartz.util.NodeRegistry;
+import com.make.common.core.NodeRegistry;
 import com.make.quartz.util.RedisMessageQueue;
 import com.make.quartz.util.TaskDistributor;
 import org.slf4j.Logger;

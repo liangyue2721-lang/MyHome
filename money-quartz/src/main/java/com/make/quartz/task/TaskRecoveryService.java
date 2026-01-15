@@ -7,7 +7,7 @@ import com.make.quartz.domain.SysJob;
 import com.make.quartz.domain.SysJobRuntime;
 import com.make.quartz.service.ISysJobRuntimeService;
 import com.make.quartz.service.TaskExecutionService;
-import com.make.quartz.util.NodeRegistry;
+import com.make.common.core.NodeRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.RedisTemplate;

@@ -5,6 +5,7 @@ import com.google.common.collect.Lists;
 import com.make.common.constant.KafkaTopics;
 import com.make.stock.domain.StockRefreshTask;
 import com.make.stock.service.scheduled.stock.queue.StockTaskQueueService;
+import com.make.common.core.NodeRegistry;
 import com.make.stock.domain.Watchstock;
 import com.make.stock.service.IWatchstockService;
 import org.slf4j.Logger;
@@ -27,6 +28,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * 1. 负责生产任务
  * 2. 负责启动循环 (SmartLifecycle)
  * 3. 负责触发下一轮 (Trigger Loop)
+ * 4. 仅 Master 节点执行生产
  * </p>
  */
 @Component
@@ -42,6 +44,9 @@ public class StockWatchProcessor implements SmartLifecycle {
 
     @Resource
     private KafkaTemplate<String, String> kafkaTemplate;
+
+    @Resource
+    private NodeRegistry nodeRegistry;
 
     private final AtomicBoolean running = new AtomicBoolean(false);
 
@@ -92,6 +97,15 @@ public class StockWatchProcessor implements SmartLifecycle {
      * 入口：生产自选股任务
      */
     public void processTask(String traceId) {
+        // Master Check
+        if (!nodeRegistry.isMaster()) {
+            log.debug("[StockWatchProcessor] Skipping task production (Not Master). TraceId={}", traceId);
+            // Even if not master, we must keep the loop alive to check later (e.g. if master fails over)
+            try { TimeUnit.SECONDS.sleep(10); } catch (InterruptedException ignored) {}
+            triggerNextBatch();
+            return;
+        }
+
         long start = System.currentTimeMillis();
         List<Watchstock> watchstocks = watchStockService.selectWatchstockList(null);
 

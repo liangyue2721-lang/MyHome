@@ -24,7 +24,7 @@ public class FinanceTaskConsumer {
     private static final Logger log = LoggerFactory.getLogger(FinanceTaskConsumer.class);
 
     @Resource
-    private DepositService depositService;
+    private FinanceTaskHandler financeTaskHandler;
 
     @Resource
     private CreditCardService creditCardService;
@@ -32,24 +32,13 @@ public class FinanceTaskConsumer {
     @KafkaListener(topics = KafkaTopics.TOPIC_DEPOSIT_UPDATE, groupId = "money-finance-group")
     public void updateDepositAmount(ConsumerRecord<String, String> record) {
         log.info("Consume [TOPIC_DEPOSIT_UPDATE] key={}", record.key());
-        handleDepositUpdate(record.key());
+        financeTaskHandler.handleDepositUpdate(record.key());
     }
 
     @KafkaListener(topics = KafkaTopics.TOPIC_ICBC_DEPOSIT_UPDATE, groupId = "money-finance-group")
     public void updateICBCDepositAmount(ConsumerRecord<String, String> record) {
         log.info("Consume [TOPIC_ICBC_DEPOSIT_UPDATE] key={}", record.key());
-        handleICBCDepositUpdate(record.key());
-    }
-
-    @IdempotentConsumer(key = "#traceId")
-    public void handleDepositUpdate(String traceId) {
-        depositService.updateAnnualDepositSummary();
-    }
-
-    @IdempotentConsumer(key = "#traceId")
-    public void handleICBCDepositUpdate(String traceId) {
-        // Legacy FixedTimeTask calls with 1L, 7L
-        depositService.updateICBCDepositAmount(1L, 7L);
+        financeTaskHandler.handleICBCDepositUpdate(record.key());
     }
 
 }

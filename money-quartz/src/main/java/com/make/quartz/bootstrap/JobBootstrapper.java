@@ -2,7 +2,7 @@ package com.make.quartz.bootstrap;
 
 import com.make.quartz.config.QuartzProperties;
 import com.make.quartz.service.impl.SysJobServiceImpl;
-import com.make.quartz.util.NodeRegistry;
+import com.make.common.core.NodeRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
