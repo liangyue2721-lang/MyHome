@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
+import javax.annotation.Resource;
 
 /**
  * Stock Kafka Batch Configuration
@@ -13,12 +14,19 @@ import org.springframework.kafka.core.ConsumerFactory;
 @Configuration
 public class StockKafkaBatchConfig {
 
+    @Resource
+    private StockProperties stockProperties;
+
     @Bean("stockBatchFactory")
     public ConcurrentKafkaListenerContainerFactory<String, String> stockBatchFactory(
             ConsumerFactory<String, String> consumerFactory) {
         ConcurrentKafkaListenerContainerFactory<String, String> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory);
+
+        // Increase concurrency to improve throughput (default 5 workers)
+        factory.setConcurrency(stockProperties.getStockPollWorkers());
+
         // Enable batch listener (List<ConsumerRecord> instead of single record)
         factory.setBatchListener(true);
 

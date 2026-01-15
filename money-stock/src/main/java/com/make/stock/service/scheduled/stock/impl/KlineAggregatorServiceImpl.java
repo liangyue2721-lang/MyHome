@@ -1,7 +1,7 @@
 package com.make.stock.service.scheduled.stock.impl;
 
 import com.make.common.utils.ThreadPoolUtil;
-import com.make.stock.service.scheduled.impl.StockETFrocessor;
+import com.make.stock.service.scheduled.impl.StockETFProcessor;
 import com.make.stock.service.scheduled.impl.StockKlineTaskExecutor;
 import com.make.stock.service.scheduled.impl.StockWatchProcessor;
 import com.make.stock.service.scheduled.stock.KlineAggregatorService;
@@ -30,7 +30,7 @@ public class KlineAggregatorServiceImpl implements KlineAggregatorService {
     private StockWatchProcessor stockWatchProcessor;
 
     @Resource
-    private StockETFrocessor stockETFrocessor;
+    private StockETFProcessor stockETFProcessor;
 
     @Override
     public void runStockKlineTask(int nodeId) {
@@ -55,7 +55,7 @@ public class KlineAggregatorServiceImpl implements KlineAggregatorService {
         // 2. ETF
         CompletableFuture<Void> etfTask = CompletableFuture.runAsync(() -> {
             try {
-                stockETFrocessor.processTask(traceId);
+                stockETFProcessor.processTask(traceId);
             } catch (Exception e) {
                 log.error("[KlineAggregator] ETFTask Error | TraceId: {}", traceId, e);
                 throw new RuntimeException(e);

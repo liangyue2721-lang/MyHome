@@ -20,9 +20,9 @@ import java.util.concurrent.TimeUnit;
 
 
 @Component
-public class StockETFrocessor {
+public class StockETFProcessor {
 
-    private static final Logger log = LoggerFactory.getLogger(StockETFrocessor.class);
+    private static final Logger log = LoggerFactory.getLogger(StockETFProcessor.class);
 
     @Resource
     private IEtfDataService etfDataService;

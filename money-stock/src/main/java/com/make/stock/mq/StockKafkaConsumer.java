@@ -4,6 +4,7 @@ import com.make.common.constant.KafkaTopics;
 import com.alibaba.fastjson2.JSON;
 import com.make.common.constant.KafkaTopics;
 import com.make.common.utils.ip.IpUtils;
+import com.make.common.utils.ThreadPoolUtil;
 import com.make.stock.domain.StockRefreshTask;
 import com.make.stock.service.scheduled.IRealTimeStockService;
 import com.make.stock.service.scheduled.impl.StockWatchProcessor;
@@ -23,6 +24,8 @@ import javax.annotation.Resource;
 import java.io.IOException;
 import java.util.Date;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Stock Kafka Consumer
@@ -140,37 +143,49 @@ public class StockKafkaConsumer {
         log.info("Consume [TOPIC_STOCK_REFRESH] batch size: {}", records.size());
         String currentNodeId = IpUtils.getHostIp();
 
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
+
         for (ConsumerRecord<String, String> record : records) {
             String json = record.value();
-            try {
-                StockRefreshTask task = JSON.parseObject(json, StockRefreshTask.class);
-                if (task == null) continue;
 
-                // Try lock
-                if (queueService.tryLockStock(task.getStockCode(), currentNodeId)) {
-                    try {
-                        stockRefreshHandler.refreshStock(task);
-                    } finally {
-                        queueService.releaseLock(task.getStockCode(), currentNodeId);
+            CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                try {
+                    StockRefreshTask task = JSON.parseObject(json, StockRefreshTask.class);
+                    if (task == null) return;
+
+                    // Try lock
+                    if (queueService.tryLockStock(task.getStockCode(), currentNodeId)) {
+                        try {
+                            stockRefreshHandler.refreshStock(task);
+                        } finally {
+                            queueService.releaseLock(task.getStockCode(), currentNodeId);
+                        }
+                    } else {
+                        log.debug("Skipping stock {} (locked by another node)", task.getStockCode());
                     }
-                } else {
-                    log.debug("Skipping stock {} (locked by another node)", task.getStockCode());
-                }
 
-                // Decrement batch regardless of lock acquisition (skipped tasks count as processed)
-                long remaining = queueService.decrementBatch(task.getTraceId());
-                if (remaining == 0) {
-                    log.info("Batch completed (traceId={}). Triggering next batch...", task.getTraceId());
-                    stockWatchProcessor.triggerNextBatch();
-                } else if (remaining < 0) {
-                     if (queueService.tryLockRecovery(task.getTraceId())) {
-                         log.info("Recovery lock acquired. Triggering next batch... traceId={}", task.getTraceId());
-                         stockWatchProcessor.triggerNextBatch();
-                     }
+                    // Decrement batch regardless of lock acquisition (skipped tasks count as processed)
+                    long remaining = queueService.decrementBatch(task.getTraceId());
+                    if (remaining == 0) {
+                        log.info("Batch completed (traceId={}). Triggering next batch...", task.getTraceId());
+                        stockWatchProcessor.triggerNextBatch();
+                    } else if (remaining < 0) {
+                         if (queueService.tryLockRecovery(task.getTraceId())) {
+                             log.info("Recovery lock acquired. Triggering next batch... traceId={}", task.getTraceId());
+                             stockWatchProcessor.triggerNextBatch();
+                         }
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to process stock refresh task: {}", json, e);
                 }
-            } catch (Exception e) {
-                log.error("Failed to process stock refresh task: {}", json, e);
-            }
+            }, ThreadPoolUtil.getWatchStockExecutor());
+
+            futures.add(future);
+        }
+
+        // Wait for all tasks in this batch to complete before acknowledging
+        if (!futures.isEmpty()) {
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
         }
     }
 
