@@ -1,35 +1,35 @@
 <template>
   <div class="app-container">
     <el-tabs v-model="activeName" type="card" @tab-click="handleTabClick">
-      <el-tab-pane label="Topics" name="topics">
+      <el-tab-pane label="Topics (主题)" name="topics">
         <el-table v-loading="loading" :data="topics" style="width: 100%">
-          <el-table-column prop="name" label="Topic Name" />
-          <el-table-column prop="partitionCount" label="Partitions" width="120" />
-          <el-table-column prop="replicationFactor" label="Replicas" width="120" />
-          <el-table-column prop="totalMessageCount" label="Total Messages (Approx)" width="200" />
-          <el-table-column label="Actions" width="300" align="center">
+          <el-table-column prop="name" label="Topic Name (主题名称)" />
+          <el-table-column prop="partitionCount" label="Partitions (分区数)" width="150" />
+          <el-table-column prop="replicationFactor" label="Replicas (副本数)" width="150" />
+          <el-table-column prop="totalMessageCount" label="Total Messages (消息总数)" width="220" />
+          <el-table-column label="Actions (操作)" width="300" align="center">
             <template slot-scope="scope">
-              <el-button size="mini" type="text" icon="el-icon-search" @click="handleViewMessages(scope.row)">Inspect</el-button>
-              <el-button size="mini" type="text" icon="el-icon-delete" class="text-danger" @click="handleClearMessages(scope.row)">Clear Msg</el-button>
-              <el-button size="mini" type="text" icon="el-icon-delete-solid" class="text-danger" @click="handleDeleteTopic(scope.row)">Delete</el-button>
+              <el-button size="mini" type="text" icon="el-icon-search" @click="handleViewMessages(scope.row)">Inspect (查看)</el-button>
+              <el-button size="mini" type="text" icon="el-icon-delete" class="text-danger" @click="handleClearMessages(scope.row)">Clear Msg (清空)</el-button>
+              <el-button size="mini" type="text" icon="el-icon-delete-solid" class="text-danger" @click="handleDeleteTopic(scope.row)">Delete (删除)</el-button>
             </template>
           </el-table-column>
         </el-table>
       </el-tab-pane>
 
-      <el-tab-pane label="Stock Tasks" name="stockTasks">
+      <el-tab-pane label="Stock Tasks (股票任务)" name="stockTasks">
         <el-table v-loading="stockLoading" :data="stockTasks" style="width: 100%">
-          <el-table-column prop="stockCode" label="Code" width="100" />
-          <el-table-column prop="stockName" label="Name" width="120" />
-          <el-table-column prop="status" label="Status" width="100">
+          <el-table-column prop="stockCode" label="Code (代码)" width="120" />
+          <el-table-column prop="stockName" label="Name (名称)" width="150" />
+          <el-table-column prop="status" label="Status (状态)" width="120">
             <template slot-scope="scope">
               <el-tag :type="getStatusType(scope.row.status)">{{ scope.row.status }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="occupiedByNode" label="Node" width="140" show-overflow-tooltip />
-          <el-table-column prop="traceId" label="Trace ID" width="250" show-overflow-tooltip />
-          <el-table-column prop="lastResult" label="Last Result" show-overflow-tooltip />
-          <el-table-column prop="lastUpdateTime" label="Update Time" width="160">
+          <el-table-column prop="occupiedByNode" label="Node (节点)" width="140" show-overflow-tooltip />
+          <el-table-column prop="traceId" label="Trace ID (追踪ID)" width="250" show-overflow-tooltip />
+          <el-table-column prop="lastResult" label="Last Result (最近结果)" show-overflow-tooltip />
+          <el-table-column prop="lastUpdateTime" label="Update Time (更新时间)" width="180">
             <template slot-scope="scope">
               {{ parseTime(scope.row.lastUpdateTime) }}
             </template>
@@ -49,12 +49,12 @@
         </div>
       </el-tab-pane>
 
-      <el-tab-pane label="Consumer Groups" name="consumers">
+      <el-tab-pane label="Consumer Groups (消费组)" name="consumers">
         <el-row :gutter="20">
           <el-col :span="6">
             <el-card class="box-card">
               <div slot="header">
-                <span>Groups</span>
+                <span>Groups (列表)</span>
                 <el-button style="float: right; padding: 3px 0" type="text" @click="refreshConsumers">Refresh</el-button>
               </div>
               <el-table
@@ -62,7 +62,7 @@
                 highlight-current-row
                 @current-change="handleGroupChange"
                 style="width: 100%">
-                <el-table-column label="Group ID">
+                <el-table-column label="Group ID (组ID)">
                   <template slot-scope="scope">
                     {{ scope.row }}
                   </template>
@@ -73,33 +73,33 @@
           <el-col :span="18">
             <el-card class="box-card">
               <div slot="header">
-                <span>Details: {{ selectedGroup }}</span>
+                <span>Details (详情): {{ selectedGroup }}</span>
               </div>
               <div v-if="selectedGroupDetails">
                 <el-descriptions :column="3" border>
-                  <el-descriptions-item label="State">{{ selectedGroupDetails.state }}</el-descriptions-item>
-                  <el-descriptions-item label="Coordinator">{{ selectedGroupDetails.coordinator }}</el-descriptions-item>
-                  <el-descriptions-item label="Total Lag">{{ selectedGroupDetails.totalLag }}</el-descriptions-item>
+                  <el-descriptions-item label="State (状态)">{{ selectedGroupDetails.state }}</el-descriptions-item>
+                  <el-descriptions-item label="Coordinator (协调节点)">{{ selectedGroupDetails.coordinator }}</el-descriptions-item>
+                  <el-descriptions-item label="Total Lag (总堆积)">{{ selectedGroupDetails.totalLag }}</el-descriptions-item>
                 </el-descriptions>
 
-                <el-divider content-position="left">Partitions</el-divider>
+                <el-divider content-position="left">Partitions (分区详情)</el-divider>
 
                 <el-table :data="selectedGroupDetails.partitions" style="width: 100%" stripe>
-                  <el-table-column prop="topic" label="Topic" />
-                  <el-table-column prop="partition" label="Partition" width="80" />
-                  <el-table-column prop="currentOffset" label="Current Offset" />
-                  <el-table-column prop="logEndOffset" label="End Offset" />
-                  <el-table-column prop="lag" label="Lag">
+                  <el-table-column prop="topic" label="Topic (主题)" />
+                  <el-table-column prop="partition" label="Partition (分区)" width="120" />
+                  <el-table-column prop="currentOffset" label="Current Offset (当前位移)" width="150" />
+                  <el-table-column prop="logEndOffset" label="End Offset (结束位移)" width="150" />
+                  <el-table-column prop="lag" label="Lag (堆积)">
                     <template slot-scope="scope">
                       <span :class="scope.row.lag > 0 ? 'text-danger' : 'text-success'">{{ scope.row.lag }}</span>
                     </template>
                   </el-table-column>
-                  <el-table-column prop="clientId" label="Client ID" show-overflow-tooltip />
-                  <el-table-column prop="host" label="Host" show-overflow-tooltip />
+                  <el-table-column prop="clientId" label="Client ID (客户端ID)" show-overflow-tooltip />
+                  <el-table-column prop="host" label="Host (主机)" show-overflow-tooltip />
                 </el-table>
               </div>
               <div v-else class="text-center text-muted">
-                Select a group to view details
+                Select a group to view details (请选择消费组查看详情)
               </div>
             </el-card>
           </el-col>

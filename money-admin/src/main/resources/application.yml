@@ -99,6 +99,10 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      compression-type: lz4
+      batch-size: 32768
+      properties:
+        linger.ms: 20
     consumer:
       group-id: money-group
       enable-auto-commit: false
