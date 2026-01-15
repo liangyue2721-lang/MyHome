@@ -233,10 +233,12 @@ public class StockTaskQueueService {
     public void recoverWaitingTasks() {
         try {
             log.info("Starting recovery of WAITING tasks...");
-            List<StockTaskStatus> allStatuses = getAllStatuses();
+            // Use paginated fetch to avoid loading all at once (though recover logic might need improvement for large datasets)
+            // For simplicity, we process latest 1000 tasks.
+            List<StockTaskStatus> activeTasks = getStatusesPaginated(1, 1000);
             int recoveredCount = 0;
 
-            for (StockTaskStatus status : allStatuses) {
+            for (StockTaskStatus status : activeTasks) {
                 if (StockTaskStatus.STATUS_WAITING.equals(status.getStatus())) {
                     // Re-construct task
                     StockRefreshTask task = new StockRefreshTask();
@@ -251,60 +253,81 @@ public class StockTaskQueueService {
                     recoveredCount++;
                 }
             }
-            log.info("Recovered {} WAITING tasks into queue.", recoveredCount);
+            log.info("Recovered {} WAITING tasks into queue (from recent 1000).", recoveredCount);
         } catch (Exception e) {
             log.error("Failed to recover waiting tasks", e);
         }
     }
 
     /**
-     * 获取所有状态 (用于监控列表)
-     * Strategy:
-     * 1. Fetch all members from ZSet.
-     * 2. Construct keys and MGET.
-     * 3. Lazy clean missing keys from ZSet.
+     * 获取状态列表 (支持分页)
+     *
+     * @param pageNum   Page number (1-based)
+     * @param pageSize  Page size
+     * @return List of StockTaskStatus
      */
-    public List<StockTaskStatus> getAllStatuses() {
+    public List<StockTaskStatus> getStatusesPaginated(int pageNum, int pageSize) {
         List<StockTaskStatus> list = new ArrayList<>();
         try {
-            // 1. Get all members from ZSet (ordered by time)
-            Set<String> members = stringRedisTemplate.opsForZSet().range(STATUS_INDEX_KEY, 0, -1);
+            // Optimization: Reverse Range (Show latest first)
+            long start = (long) (pageNum - 1) * pageSize;
+            long end = start + pageSize - 1;
+
+            Set<String> members = stringRedisTemplate.opsForZSet().reverseRange(STATUS_INDEX_KEY, start, end);
+
             if (members == null || members.isEmpty()) {
                 return list;
             }
 
             // 2. Construct Keys
             List<String> keys = new ArrayList<>();
-            // Keep mapping of key -> member for cleanup
             List<String> memberList = new ArrayList<>(members);
 
             for (String member : memberList) {
-                // member format: stockCode:traceId
                 keys.add(STATUS_KEY_PREFIX + member);
             }
 
             // 3. MGET
             List<String> values = stringRedisTemplate.opsForValue().multiGet(keys);
 
-            // 4. Process Results & Lazy Cleanup
+            // 4. Process
             if (values != null) {
                 for (int i = 0; i < values.size(); i++) {
                     String json = values.get(i);
                     if (StringUtils.isEmpty(json)) {
-                        // Key expired or missing -> Clean from ZSet
-                        String missingMember = memberList.get(i);
-                        stringRedisTemplate.opsForZSet().remove(STATUS_INDEX_KEY, missingMember);
+                         // Lazy clean
+                         String missingMember = memberList.get(i);
+                         stringRedisTemplate.opsForZSet().remove(STATUS_INDEX_KEY, missingMember);
                     } else {
-                        // Handle legacy double-quoted JSON
                         String cleanJson = unquoteJSON(json);
                         list.add(JSON.parseObject(cleanJson, StockTaskStatus.class));
                     }
                 }
             }
         } catch (Exception e) {
-            log.error("Failed to get all statuses", e);
+            log.error("Failed to get paginated statuses", e);
         }
         return list;
+    }
+
+    /**
+     * Get Total Count of tasks in index
+     */
+    public long getTotalStatusCount() {
+        try {
+            Long count = stringRedisTemplate.opsForZSet().zCard(STATUS_INDEX_KEY);
+            return count != null ? count : 0;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    /**
+     * 获取所有状态 (已废弃，建议使用分页版)
+     */
+    @Deprecated
+    public List<StockTaskStatus> getAllStatuses() {
+        return getStatusesPaginated(1, 1000);
     }
 
     private String getStatusKey(String stockCode, String traceId) {

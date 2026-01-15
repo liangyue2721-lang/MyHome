@@ -42,78 +42,68 @@ public class StockTaskMonitorController extends BaseController {
 
     /**
      * 获取股票刷新任务状态列表
-     * 合并 DB 中的股票信息和 Redis 中的运行状态
+     * 优化后：分页查 Redis 状态，再反查 DB 补充信息
      */
     @PreAuthorize("@ss.hasPermi('monitor:job:list')")
     @GetMapping("/list")
-    public TableDataInfo list() {
-        startPage();
-        // 1. Get all stocks from DB (Paginated)
-        List<Watchstock> stocks = watchstockService.selectWatchstockList(null);
+    public TableDataInfo list(Integer pageNum, Integer pageSize) {
+        if (pageNum == null) pageNum = 1;
+        if (pageSize == null) pageSize = 10;
 
-        // 2. Get all active statuses from Redis
-        // Note: getAllStatuses() does lazy cleanup of expired keys.
-        List<StockTaskStatus> allStatuses = stockTaskQueueService.getAllStatuses();
+        // 1. Get paginated statuses from Redis directly
+        List<StockTaskStatus> taskList = stockTaskQueueService.getStatusesPaginated(pageNum, pageSize);
+        long total = stockTaskQueueService.getTotalStatusCount();
 
-        // 3. Group by StockCode
-        Map<String, List<StockTaskStatus>> stockTaskMap = allStatuses.stream()
-                .collect(Collectors.groupingBy(StockTaskStatus::getStockCode));
+        if (taskList.isEmpty()) {
+            return getDataTable(new ArrayList<>(), total);
+        }
 
-        // 4. Merge & Aggregate
-        List<Map<String, Object>> result = new ArrayList<>();
-        for (Watchstock stock : stocks) {
-            Map<String, Object> map = new HashMap<>();
-            String code = stock.getCode();
-            map.put("stockCode", code);
-            map.put("stockName", stock.getName());
+        // 2. Collect StockCodes
+        Set<String> stockCodes = taskList.stream()
+                .map(StockTaskStatus::getStockCode)
+                .collect(Collectors.toSet());
 
-            List<StockTaskStatus> tasks = stockTaskMap.getOrDefault(code, new ArrayList<>());
-
-            if (tasks.isEmpty()) {
-                map.put("status", "IDLE");
+        // 3. Bulk Fetch Stock Info from DB (Optimization: Map code -> name)
+        // Assume watchstockService has a method to get map, or we iterate (less efficient but okay for 10 items)
+        Map<String, String> nameMap = new HashMap<>();
+        for (String code : stockCodes) {
+            Watchstock ws = watchstockService.getWatchStockByCode(code);
+            if (ws != null) {
+                nameMap.put(code, ws.getName());
             } else {
-                // A. Calculate Aggregate Status
-                StockTaskStatus primaryTask = tasks.stream()
-                        .min(Comparator.comparingInt(this::getPriority))
-                        .orElse(tasks.get(0));
-
-                map.put("status", primaryTask.getStatus());
-
-                // B. Find Latest Task (by lastUpdateTime)
-                StockTaskStatus latestTask = tasks.stream()
-                        .max(Comparator.comparingLong(StockTaskStatus::getLastUpdateTime))
-                        .orElse(tasks.get(0));
-
-                map.put("occupiedByNode", latestTask.getOccupiedByNode());
-                map.put("occupiedTime", latestTask.getOccupiedTime());
-                map.put("lastResult", latestTask.getLastResult());
-                map.put("traceId", latestTask.getTraceId());
-                map.put("lastUpdateTime", latestTask.getLastUpdateTime());
-
-                // C. Optional: Include top N recent tasks for debugging
-                List<StockTaskStatus> recentTasks = tasks.stream()
-                        .sorted(Comparator.comparingLong(StockTaskStatus::getLastUpdateTime).reversed())
-                        .limit(3)
-                        .collect(Collectors.toList());
-                map.put("tasks", recentTasks);
+                nameMap.put(code, "Unknown/Deleted");
             }
+        }
+
+        // 4. Build Result
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (StockTaskStatus task : taskList) {
+            Map<String, Object> map = new HashMap<>();
+            map.put("stockCode", task.getStockCode());
+            map.put("stockName", nameMap.get(task.getStockCode()));
+            map.put("status", task.getStatus());
+            map.put("occupiedByNode", task.getOccupiedByNode());
+            map.put("occupiedTime", task.getOccupiedTime());
+            map.put("lastResult", task.getLastResult());
+            map.put("traceId", task.getTraceId());
+            map.put("lastUpdateTime", task.getLastUpdateTime());
             result.add(map);
         }
 
-        return getDataTable(stocks, result);
+        return getDataTable(result, total);
+    }
+
+    private TableDataInfo getDataTable(List<Map<String, Object>> rows, long total) {
+        TableDataInfo rspData = new TableDataInfo();
+        rspData.setCode(200);
+        rspData.setMsg("查询成功");
+        rspData.setRows(rows);
+        rspData.setTotal(total);
+        return rspData;
     }
 
     private int getPriority(StockTaskStatus status) {
         return PRIORITY_MAP.getOrDefault(status.getStatus(), 99);
     }
 
-    // Helper to return mapped list with pagination from original list
-    private TableDataInfo getDataTable(List<Watchstock> originalList, List<Map<String, Object>> mappedList) {
-        TableDataInfo rspData = new TableDataInfo();
-        rspData.setCode(200);
-        rspData.setMsg("查询成功");
-        rspData.setRows(mappedList);
-        rspData.setTotal(new com.github.pagehelper.PageInfo(originalList).getTotal());
-        return rspData;
-    }
 }
