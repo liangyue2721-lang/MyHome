@@ -99,7 +99,7 @@ public class KafkaMonitorController extends BaseController {
     /**
      * 强制重置消费流程：
      * 1. 暂停所有节点消费者 (Pub/Sub)
-     * 2. 重置 Kafka Offset 到最新 (Skip Backlog)
+     * 2. 物理删除 Topic 消息 (Truncate Log) -> 彻底释放积压
      * 3. 清空 Redis 任务状态 (Reset Status)
      * 4. 恢复所有节点消费者 (Pub/Sub)
      * 5. 立即触发新一轮任务 (Reproduce)
@@ -113,10 +113,10 @@ public class KafkaMonitorController extends BaseController {
             // Wait for propagation (heuristic)
             TimeUnit.SECONDS.sleep(2);
 
-            // 2. Reset Offset (money-stock-group, stock-refresh)
-            // Note: Currently hardcoded topics. Should be configurable or passed param.
-            // Using logic from resetConsumerOffset but hardcoded for safety in this specific flow.
-            kafkaMonitorService.resetConsumerGroupOffset("money-stock-group", "stock-refresh");
+            // 2. Delete Topic Messages (Physically truncate "stock.refresh")
+            // This implicitly resets the effective offset to the new LEO (since older segments are gone)
+            // and frees disk space.
+            kafkaMonitorService.deleteTopicMessages("stock.refresh");
 
             // 3. Clear Redis Status
             stockTaskQueueService.clearAllStatuses();
@@ -128,7 +128,7 @@ public class KafkaMonitorController extends BaseController {
             // 5. Trigger Immediate Batch
             stockWatchProcessor.triggerImmediateBatch();
 
-            return AjaxResult.success("Reset and Reproduce initiated successfully.");
+            return AjaxResult.success("Reset (Delete) and Reproduce initiated successfully.");
         } catch (Exception e) {
             return AjaxResult.error("Failed to force reset: " + e.getMessage());
         }
