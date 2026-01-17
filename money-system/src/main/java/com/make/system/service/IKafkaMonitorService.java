@@ -25,4 +25,9 @@ public interface IKafkaMonitorService {
      * 获取Topic消息详情 (采样最近N条)
      */
     List<Map<String, Object>> getTopicMessages(String topicName, int count);
+
+    /**
+     * 重置消费组 Offset 到最新 (跳过积压)
+     */
+    boolean resetConsumerGroupOffset(String groupId, String topic);
 }

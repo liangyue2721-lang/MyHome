@@ -227,6 +227,21 @@ public class StockTaskQueueService {
     }
 
     /**
+     * 清空所有任务状态 (紧急运维)
+     */
+    public void clearAllStatuses() {
+        try {
+            // 1. Delete the index
+            stringRedisTemplate.delete(STATUS_INDEX_KEY);
+            // 2. Note: Individual status keys (stock:refresh:status:...) will expire by TTL (5-30min).
+            // We do not scan/keys* them to avoid blocking Redis.
+            log.warn("Cleared stock task status index.");
+        } catch (Exception e) {
+            log.error("Failed to clear all statuses", e);
+        }
+    }
+
+    /**
      * 恢复 WAITING 状态的任务（系统启动时调用）
      * 防止任务在 Redis Queue 丢失但 Status 仍为 WAITING 的不一致情况。
      */

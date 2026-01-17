@@ -18,6 +18,10 @@
       </el-tab-pane>
 
       <el-tab-pane label="Stock Tasks (股票任务)" name="stockTasks">
+        <el-row style="margin-bottom: 10px;">
+          <el-button type="danger" icon="el-icon-delete" @click="handleClearStockStatus">Clear All Status (清空所有状态)</el-button>
+          <span style="margin-left: 10px; color: #909399; font-size: 12px;">Warning: This clears the monitoring view only. (此操作仅清空监控视图)</span>
+        </el-row>
         <el-table v-loading="stockLoading" :data="stockTasks" style="width: 100%">
           <el-table-column prop="stockCode" label="Code (代码)" width="120" />
           <el-table-column prop="stockName" label="Name (名称)" width="150" />
@@ -74,6 +78,13 @@
             <el-card class="box-card">
               <div slot="header">
                 <span>Details (详情): {{ selectedGroup }}</span>
+                <el-button
+                  v-if="selectedGroup && selectedGroupDetails && selectedGroupDetails.totalLag > 0"
+                  style="float: right; padding: 3px 0; color: #F56C6C"
+                  type="text"
+                  @click="handleResetOffset">
+                  Skip Backlog (跳过积压)
+                </el-button>
               </div>
               <div v-if="selectedGroupDetails">
                 <el-descriptions :column="3" border>
@@ -125,7 +136,7 @@
 </template>
 
 <script>
-import { listTopics, listConsumers, getConsumerDetails, deleteTopic, deleteTopicMessages, getTopicMessages, listStockTasks } from "@/api/tool/kafka";
+import { listTopics, listConsumers, getConsumerDetails, deleteTopic, deleteTopicMessages, getTopicMessages, listStockTasks, resetConsumerOffset, clearStockStatus } from "@/api/tool/kafka";
 
 export default {
   name: "KafkaMonitor",
@@ -245,6 +256,49 @@ export default {
       }).then(() => {
         this.$modal.msgSuccess("Topic deleted successfully");
         this.getTopics();
+      }).catch(() => {});
+    },
+    handleResetOffset() {
+      if (!this.selectedGroup || !this.selectedGroupDetails) return;
+
+      // Determine topic(s) to reset. For simplicity, we reset all topics in the group or ask user.
+      // API currently requires topic. Let's iterate partitions or pick the first topic found in details.
+      // Better: Reset logic in backend should probably handle "Group Level" reset, but user asked for button.
+      // Let's assume we reset the topic with highest lag or loop through unique topics.
+
+      const topics = [...new Set(this.selectedGroupDetails.partitions.map(p => p.topic))];
+
+      if (topics.length === 0) return;
+
+      const confirmMsg = `Reset offsets to LATEST for group "${this.selectedGroup}" on topics: ${topics.join(', ')}? This skips all pending messages.`;
+
+      this.$confirm(confirmMsg, 'Critical Warning', {
+        confirmButtonText: 'Confirm Reset',
+        cancelButtonText: 'Cancel',
+        type: 'error'
+      }).then(() => {
+         // Chain promises if multiple topics
+         const promises = topics.map(topic => resetConsumerOffset(this.selectedGroup, topic));
+         return Promise.all(promises);
+      }).then(() => {
+        this.$modal.msgSuccess("Offsets reset successfully. Consumers may need a moment to update.");
+        this.refreshConsumers();
+      }).catch(err => {
+        if (err !== 'cancel') {
+           this.$modal.msgError("Failed to reset offsets: " + err);
+        }
+      });
+    },
+    handleClearStockStatus() {
+      this.$confirm('Clear all "Running/Waiting" stock task statuses from Redis? This fixes the dashboard if it shows stuck tasks.', 'Warning', {
+        confirmButtonText: 'Confirm Clear',
+        cancelButtonText: 'Cancel',
+        type: 'warning'
+      }).then(() => {
+        return clearStockStatus();
+      }).then(() => {
+        this.$modal.msgSuccess("Status index cleared.");
+        this.getStockTasks();
       }).catch(() => {});
     }
   }

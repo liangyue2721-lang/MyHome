@@ -58,3 +58,20 @@ export function listStockTasks(query) {
     params: query
   })
 }
+
+// Reset Consumer Group Offset (Skip Backlog)
+export function resetConsumerOffset(groupId, topic) {
+  return request({
+    url: '/tool/kafka/consumer/reset-offset',
+    method: 'post',
+    params: { groupId, topic }
+  })
+}
+
+// Clear Redis Stock Status
+export function clearStockStatus() {
+  return request({
+    url: '/tool/kafka/redis/clear-stock-status',
+    method: 'post'
+  })
+}

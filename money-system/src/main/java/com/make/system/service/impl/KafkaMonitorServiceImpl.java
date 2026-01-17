@@ -250,4 +250,37 @@ public class KafkaMonitorServiceImpl implements IKafkaMonitorService {
         }
         return messages;
     }
+
+    @Override
+    public boolean resetConsumerGroupOffset(String groupId, String topic) {
+        try (AdminClient admin = AdminClient.create(kafkaAdmin.getConfigurationProperties());
+             org.apache.kafka.clients.consumer.Consumer<String, String> consumer = consumerFactory.createConsumer()) {
+
+            // 1. Get partitions for topic
+            List<TopicPartition> partitions = consumer.partitionsFor(topic).stream()
+                    .map(pi -> new TopicPartition(topic, pi.partition()))
+                    .collect(Collectors.toList());
+
+            // 2. Get latest offsets (Log End Offset)
+            Map<TopicPartition, Long> endOffsets = consumer.endOffsets(partitions);
+
+            // 3. Prepare offsets map for alteration
+            Map<TopicPartition, OffsetAndMetadata> newOffsets = new HashMap<>();
+            for (Map.Entry<TopicPartition, Long> entry : endOffsets.entrySet()) {
+                newOffsets.put(entry.getKey(), new OffsetAndMetadata(entry.getValue()));
+            }
+
+            // 4. Alter consumer group offsets
+            // Note: Consumer group should ideally be inactive, but this forces the commit.
+            // Active consumers might need a rebalance to pick it up, or will see it on next poll if commit succeeds.
+            AlterConsumerGroupOffsetsResult result = admin.alterConsumerGroupOffsets(groupId, newOffsets);
+            result.all().get();
+
+            log.info("Successfully reset offsets for group {} topic {} to end.", groupId, topic);
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to reset consumer group offset. group={}, topic={}", groupId, topic, e);
+            return false;
+        }
+    }
 }
