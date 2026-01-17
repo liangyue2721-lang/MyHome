@@ -19,8 +19,9 @@
 
       <el-tab-pane label="Stock Tasks (股票任务)" name="stockTasks">
         <el-row style="margin-bottom: 10px;">
-          <el-button type="danger" icon="el-icon-delete" @click="handleClearStockStatus">Clear All Status (清空所有状态)</el-button>
-          <span style="margin-left: 10px; color: #909399; font-size: 12px;">Warning: This clears the monitoring view only. (此操作仅清空监控视图)</span>
+          <el-button type="danger" icon="el-icon-refresh-left" @click="handleForceReset">Force Reset (强制重置)</el-button>
+          <el-button type="warning" icon="el-icon-delete" @click="handleClearStockStatus" plain>Clear Status (清空状态)</el-button>
+          <span style="margin-left: 10px; color: #909399; font-size: 12px;">Force Reset: Stop Consumers -> Reset Offset -> Clear Status -> Restart -> Trigger New Batch</span>
         </el-row>
         <el-table v-loading="stockLoading" :data="stockTasks" style="width: 100%">
           <el-table-column prop="stockCode" label="Code (代码)" width="120" />
@@ -136,7 +137,7 @@
 </template>
 
 <script>
-import { listTopics, listConsumers, getConsumerDetails, deleteTopic, deleteTopicMessages, getTopicMessages, listStockTasks, resetConsumerOffset, clearStockStatus } from "@/api/tool/kafka";
+import { listTopics, listConsumers, getConsumerDetails, deleteTopic, deleteTopicMessages, getTopicMessages, listStockTasks, resetConsumerOffset, clearStockStatus, forceResetAndReproduce } from "@/api/tool/kafka";
 
 export default {
   name: "KafkaMonitor",
@@ -300,6 +301,31 @@ export default {
         this.$modal.msgSuccess("Status index cleared.");
         this.getStockTasks();
       }).catch(() => {});
+    },
+    handleForceReset() {
+      this.$confirm(
+        'This will PAUSE all consumers, RESET offsets, CLEAR status, and RESTART the task loop. Are you sure?',
+        'Critical Reset',
+        {
+          confirmButtonText: 'FORCE RESET',
+          cancelButtonText: 'Cancel',
+          type: 'error'
+        }
+      ).then(() => {
+        this.stockLoading = true;
+        return forceResetAndReproduce();
+      }).then(response => {
+        this.$modal.msgSuccess(response.msg || "Reset sequence initiated.");
+        // Wait a bit before refreshing list to show new tasks
+        setTimeout(() => {
+          this.getStockTasks();
+        }, 3000);
+      }).catch(err => {
+        this.stockLoading = false;
+        if (err !== 'cancel') {
+          this.$modal.msgError("Reset failed: " + err);
+        }
+      });
     }
   }
 };

@@ -94,6 +94,14 @@ public class StockWatchProcessor implements SmartLifecycle {
     }
 
     /**
+     * 立即触发新批次 (Public for Admin Control)
+     */
+    public void triggerImmediateBatch() {
+        if (!running.get()) running.set(true);
+        triggerNextBatch();
+    }
+
+    /**
      * 入口：生产自选股任务
      */
     public void processTask(String traceId) {

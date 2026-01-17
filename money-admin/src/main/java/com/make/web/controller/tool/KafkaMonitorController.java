@@ -6,11 +6,15 @@ import com.make.system.domain.KafkaConsumerInfo;
 import com.make.system.domain.KafkaTopicInfo;
 import com.make.system.service.IKafkaMonitorService;
 import com.make.stock.service.scheduled.stock.queue.StockTaskQueueService;
+import com.make.stock.service.scheduled.impl.StockWatchProcessor;
+import com.make.stock.mq.StockConsumerLifecycleManager;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Kafka Monitor Controller
@@ -24,6 +28,12 @@ public class KafkaMonitorController extends BaseController {
 
     @Resource
     private StockTaskQueueService stockTaskQueueService;
+
+    @Resource
+    private StockWatchProcessor stockWatchProcessor;
+
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
 
     @PreAuthorize("@ss.hasPermi('tool:kafka:list')")
     @GetMapping("/topics")
@@ -84,5 +94,43 @@ public class KafkaMonitorController extends BaseController {
         }
         stockTaskQueueService.deleteStatus(stockCode, traceId);
         return AjaxResult.success();
+    }
+
+    /**
+     * 强制重置消费流程：
+     * 1. 暂停所有节点消费者 (Pub/Sub)
+     * 2. 重置 Kafka Offset 到最新 (Skip Backlog)
+     * 3. 清空 Redis 任务状态 (Reset Status)
+     * 4. 恢复所有节点消费者 (Pub/Sub)
+     * 5. 立即触发新一轮任务 (Reproduce)
+     */
+    @PreAuthorize("@ss.hasPermi('tool:kafka:remove')")
+    @PostMapping("/force-reset-reproduce")
+    public AjaxResult forceResetAndReproduce() {
+        try {
+            // 1. Pause Consumers
+            stringRedisTemplate.convertAndSend(StockConsumerLifecycleManager.CHANNEL, StockConsumerLifecycleManager.CMD_PAUSE);
+            // Wait for propagation (heuristic)
+            TimeUnit.SECONDS.sleep(2);
+
+            // 2. Reset Offset (money-stock-group, stock-refresh)
+            // Note: Currently hardcoded topics. Should be configurable or passed param.
+            // Using logic from resetConsumerOffset but hardcoded for safety in this specific flow.
+            kafkaMonitorService.resetConsumerGroupOffset("money-stock-group", "stock-refresh");
+
+            // 3. Clear Redis Status
+            stockTaskQueueService.clearAllStatuses();
+
+            // 4. Resume Consumers
+            stringRedisTemplate.convertAndSend(StockConsumerLifecycleManager.CHANNEL, StockConsumerLifecycleManager.CMD_RESUME);
+            TimeUnit.SECONDS.sleep(1);
+
+            // 5. Trigger Immediate Batch
+            stockWatchProcessor.triggerImmediateBatch();
+
+            return AjaxResult.success("Reset and Reproduce initiated successfully.");
+        } catch (Exception e) {
+            return AjaxResult.error("Failed to force reset: " + e.getMessage());
+        }
     }
 }

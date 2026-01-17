@@ -75,3 +75,11 @@ export function clearStockStatus() {
     method: 'post'
   })
 }
+
+// Force Reset and Reproduce (Orchestration)
+export function forceResetAndReproduce() {
+  return request({
+    url: '/tool/kafka/force-reset-reproduce',
+    method: 'post'
+  })
+}
