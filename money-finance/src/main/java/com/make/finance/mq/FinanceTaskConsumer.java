@@ -41,4 +41,10 @@ public class FinanceTaskConsumer {
         financeTaskHandler.handleICBCDepositUpdate(record.key());
     }
 
+    @KafkaListener(topics = KafkaTopics.TOPIC_CCB_CREDIT_CARD, groupId = "money-finance-group")
+    public void handleCcbCreditCard(ConsumerRecord<String, String> record) {
+        log.info("Consume [TOPIC_CCB_CREDIT_CARD] key={}", record.key());
+        financeTaskHandler.handleCcbCreditCard(record.key());
+    }
+
 }

@@ -454,7 +454,7 @@ public class StockRefreshHandler implements IStockRefreshHandler {
         StockTaskStatus s = new StockTaskStatus();
         s.setStockCode(stockCode);
         s.setStatus(status);
-        s.setOccupiedByNode(null);
+        s.setOccupiedByNode(com.make.common.utils.ip.IpUtils.getHostIp());
         s.setOccupiedTime(System.currentTimeMillis());
         s.setTraceId(traceId);
         s.setLastResult(result);
