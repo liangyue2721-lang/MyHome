@@ -82,7 +82,20 @@ public class StockTaskMonitorController extends BaseController {
             map.put("stockCode", task.getStockCode());
             map.put("stockName", nameMap.get(task.getStockCode()));
             map.put("status", task.getStatus());
-            map.put("occupiedByNode", task.getOccupiedByNode());
+
+            // Handle Node Display Logic
+            String node = task.getOccupiedByNode();
+            if (node == null || node.trim().isEmpty()) {
+                if (StockTaskStatus.STATUS_WAITING.equals(task.getStatus())) {
+                    node = "Waiting for Node";
+                } else if (StockTaskStatus.STATUS_RUNNING.equals(task.getStatus())) {
+                    node = "Unknown Node";
+                } else {
+                    node = "-";
+                }
+            }
+            map.put("occupiedByNode", node);
+
             map.put("occupiedTime", task.getOccupiedTime());
             map.put("lastResult", task.getLastResult());
             map.put("traceId", task.getTraceId());
