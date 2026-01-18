@@ -283,40 +283,51 @@ public class StockTaskQueueService {
      */
     public List<StockTaskStatus> getStatusesPaginated(int pageNum, int pageSize) {
         List<StockTaskStatus> list = new ArrayList<>();
+        long start = (long) (pageNum - 1) * pageSize;
+        int maxAttempts = 10;
+        int attempt = 0;
+
         try {
-            // Optimization: Reverse Range (Show latest first)
-            long start = (long) (pageNum - 1) * pageSize;
-            long end = start + pageSize - 1;
+            while (list.size() < pageSize && attempt < maxAttempts) {
+                attempt++;
 
-            Set<String> members = stringRedisTemplate.opsForZSet().reverseRange(STATUS_INDEX_KEY, start, end);
+                // Calculate current read pointer in ZSet
+                long currentZSetIndex = start + list.size();
+                long end = currentZSetIndex + (pageSize - list.size()) - 1;
 
-            if (members == null || members.isEmpty()) {
-                return list;
-            }
+                Set<String> members = stringRedisTemplate.opsForZSet().reverseRange(STATUS_INDEX_KEY, currentZSetIndex, end);
 
-            // 2. Construct Keys
-            List<String> keys = new ArrayList<>();
-            List<String> memberList = new ArrayList<>(members);
+                if (members == null || members.isEmpty()) {
+                    break;
+                }
 
-            for (String member : memberList) {
-                keys.add(STATUS_KEY_PREFIX + member);
-            }
+                List<String> keys = new ArrayList<>();
+                List<String> memberList = new ArrayList<>(members);
+                for (String member : memberList) {
+                    keys.add(STATUS_KEY_PREFIX + member);
+                }
 
-            // 3. MGET
-            List<String> values = stringRedisTemplate.opsForValue().multiGet(keys);
+                List<String> values = stringRedisTemplate.opsForValue().multiGet(keys);
+                if (values == null) break;
 
-            // 4. Process
-            if (values != null) {
+                List<String> invalidMembers = new ArrayList<>();
+
                 for (int i = 0; i < values.size(); i++) {
                     String json = values.get(i);
                     if (StringUtils.isEmpty(json)) {
-                         // Lazy clean
-                         String missingMember = memberList.get(i);
-                         stringRedisTemplate.opsForZSet().remove(STATUS_INDEX_KEY, missingMember);
+                        invalidMembers.add(memberList.get(i));
                     } else {
-                        String cleanJson = unquoteJSON(json);
-                        list.add(JSON.parseObject(cleanJson, StockTaskStatus.class));
+                        try {
+                            String cleanJson = unquoteJSON(json);
+                            list.add(JSON.parseObject(cleanJson, StockTaskStatus.class));
+                        } catch (Exception e) {
+                            invalidMembers.add(memberList.get(i));
+                        }
                     }
+                }
+
+                if (!invalidMembers.isEmpty()) {
+                    stringRedisTemplate.opsForZSet().remove(STATUS_INDEX_KEY, invalidMembers.toArray());
                 }
             }
         } catch (Exception e) {
