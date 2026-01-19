@@ -42,8 +42,7 @@ public class StockTaskQueueService {
     private static final String LOCK_PREFIX = "stock:refresh:lock:";
     private static final String STATUS_KEY_PREFIX = "stock:refresh:status:"; // + stockCode + : + traceId
     private static final String STATUS_INDEX_KEY = "stock:refresh:status:index";
-    private static final String BATCH_COUNT_PREFIX = "stock:batch:count:"; // + traceId
-    private static final String RECOVERY_LOCK_PREFIX = "stock:batch:recovery:"; // + traceId
+    private static final String ACTIVE_KEY_PREFIX = "stock:refresh:active:"; // + stockCode
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
@@ -141,65 +140,52 @@ public class StockTaskQueueService {
     }
 
     /**
-     * 初始化批次计数器
+     * 刷新活跃状态 (表示该股票正在循环中)
      */
-    public void initBatch(String traceId, int total) {
-        if (StringUtils.isEmpty(traceId) || total <= 0) return;
+    public void refreshActiveState(String stockCode, String traceId) {
         try {
-            String key = BATCH_COUNT_PREFIX + traceId;
-            // StringRedisTemplate stores "100", not "\"100\""
-            stringRedisTemplate.opsForValue().set(key, String.valueOf(total), 60, TimeUnit.MINUTES);
+            String key = ACTIVE_KEY_PREFIX + stockCode;
+            // 5 minutes TTL acts as the heartbeat/watchdog threshold
+            stringRedisTemplate.opsForValue().set(key, traceId, 5, TimeUnit.MINUTES);
         } catch (Exception e) {
-            log.error("Failed to init batch count: {}", traceId, e);
-        }
-    }
-
-    public long decrementBatch(String traceId) {
-        if (StringUtils.isEmpty(traceId)) return -1;
-        String key = BATCH_COUNT_PREFIX + traceId;
-        try {
-            String current = stringRedisTemplate.opsForValue().get(key);
-
-            // 1) key 不存在：你可以选择返回 -1，或认为剩余 0
-            if (StringUtils.isEmpty(current)) {
-                return -1;
-            }
-
-            // 2) 非整数：自愈（删掉脏数据），避免一直报错
-            // Handle legacy double-quoted values (e.g., "\"100\"") by deleting them
-            // StringRedisTemplate reads raw bytes. "\"100\"" does not match "-?\\d+".
-            if (!current.matches("-?\\d+")) {
-                log.error("Batch count key is not integer (likely legacy format). key={}, value={}", key, current);
-                stringRedisTemplate.delete(key);
-                return -1;
-            }
-
-            Long remaining = stringRedisTemplate.opsForValue().decrement(key);
-            if (remaining == null) return -1;
-
-            // Renew TTL on every decrement to prevent expiration during slow batches
-            stringRedisTemplate.expire(key, 60, TimeUnit.MINUTES);
-
-            // 3) 可选：到 0 或以下就清理 key，避免继续递减到负数
-            if (remaining <= 0) {
-                stringRedisTemplate.delete(key);
-            }
-            return remaining;
-        } catch (Exception e) {
-            log.error("Failed to decrement batch count: {}", traceId, e);
-            return -1;
+            log.error("Failed to refresh active state for {}", stockCode, e);
         }
     }
 
     /**
-     * 尝试获取恢复锁 (用于自循环断链时的兜底触发)
+     * 批量检查活跃状态
+     * @return List corresponding to stockCodes, true if active, false otherwise
      */
-    public boolean tryLockRecovery(String traceId) {
-        String key = RECOVERY_LOCK_PREFIX + traceId;
-        Boolean success = stringRedisTemplate.opsForValue().setIfAbsent(key, "LOCKED", 30, TimeUnit.SECONDS);
-        return success != null && success;
-    }
+    public List<Boolean> checkActiveStates(List<String> stockCodes) {
+        List<Boolean> results = new ArrayList<>();
+        if (stockCodes == null || stockCodes.isEmpty()) {
+            return results;
+        }
 
+        try {
+            List<String> keys = stockCodes.stream()
+                    .map(code -> ACTIVE_KEY_PREFIX + code)
+                    .collect(Collectors.toList());
+
+            List<String> values = stringRedisTemplate.opsForValue().multiGet(keys);
+            if (values != null) {
+                for (String val : values) {
+                    results.add(StringUtils.isNotEmpty(val));
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to check active states", e);
+            // Fallback: assume all active to prevent flood, or all inactive?
+            // Safer to return empty or assume active to avoid storm.
+            // But if we assume active, loop stops.
+            // If we assume inactive, we might double schedule.
+            // Let's return what we have.
+            for (int i = 0; i < stockCodes.size() - results.size(); i++) {
+                 results.add(true); // Fail-safe: assume active
+            }
+        }
+        return results;
+    }
 
     /**
      * 投递任务

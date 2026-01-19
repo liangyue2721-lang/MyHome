@@ -249,18 +249,9 @@ public class StockTaskConsumer implements SmartLifecycle {
             // 清理状态并递减批次计数
             queueService.deleteStatus(stockCode, traceId);
 
-            long remaining = queueService.decrementBatch(traceId);
-            if (remaining == 0) {
-                log.info("Batch completed (traceId={}). Triggering next batch...", traceId);
-                stockWatchProcessor.triggerNextBatch();
-            } else if (remaining < 0) {
-                // 异常情况：计数器丢失。使用恢复锁机制尝试触发，防止死锁。
-                log.warn("Batch counter missing (remaining < 0). Attempting recovery... traceId={}", traceId);
-                if (queueService.tryLockRecovery(traceId)) {
-                    log.info("Recovery lock acquired. Triggering next batch... traceId={}", traceId);
-                    stockWatchProcessor.triggerNextBatch();
-                }
-            }
+            // Trigger next task if necessary (mirrors Kafka consumer logic)
+            // Note: Since this Consumer seems unused in favor of Kafka, we just ensure it compiles.
+            stockWatchProcessor.submitTask(stockCode);
         }
     }
 

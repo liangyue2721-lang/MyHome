@@ -49,6 +49,7 @@ public class StockWatchProcessor implements SmartLifecycle {
     private NodeRegistry nodeRegistry;
 
     private final AtomicBoolean running = new AtomicBoolean(false);
+    private java.util.concurrent.ScheduledExecutorService watchdogExecutor;
 
     /**
      * SmartLifecycle: Start the loop on boot
@@ -56,15 +57,23 @@ public class StockWatchProcessor implements SmartLifecycle {
     @Override
     public void start() {
         if (running.compareAndSet(false, true)) {
-            log.info("StockWatchProcessor started. Triggering first batch...");
-            // Delay slightly to ensure system fully ready
-            CompletableFuture.delayedExecutor(5, TimeUnit.SECONDS).execute(this::triggerNextBatch);
+            log.info("StockWatchProcessor started. Starting Watchdog...");
+            watchdogExecutor = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "StockWatchDog");
+                t.setDaemon(true);
+                return t;
+            });
+            // Run Watchdog every 30 seconds
+            watchdogExecutor.scheduleWithFixedDelay(this::runWatchdog, 5, 30, TimeUnit.SECONDS);
         }
     }
 
     @Override
     public void stop() {
         running.set(false);
+        if (watchdogExecutor != null) {
+            watchdogExecutor.shutdown();
+        }
     }
 
     @Override
@@ -78,77 +87,74 @@ public class StockWatchProcessor implements SmartLifecycle {
     }
 
     /**
-     * 触发下一轮批次 (Async)
+     * Submit a Single Task (Public, called by Consumer or Watchdog)
+     * Triggers the "Next Task" for this specific stock.
      */
-    public void triggerNextBatch() {
+    public void submitTask(String stockCode) {
         if (!running.get()) return;
 
-        CompletableFuture.runAsync(() -> {
-            String nextTraceId = UUID.randomUUID().toString().replace("-", "");
-            log.info("Triggering next batch loop. TraceId={}", nextTraceId);
-            processTask(nextTraceId);
-        }).exceptionally(e -> {
-            log.error("Failed to trigger next batch", e);
-            return null;
-        });
+        try {
+            String traceId = UUID.randomUUID().toString().replace("-", "");
+            // Mark active immediately (Refresh Heartbeat)
+            stockTaskQueueService.refreshActiveState(stockCode, traceId);
+
+            StockRefreshTask task = new StockRefreshTask();
+            task.setTaskId(UUID.randomUUID().toString());
+            task.setStockCode(stockCode);
+            task.setTaskType("REFRESH_PRICE");
+            task.setCreateTime(System.currentTimeMillis());
+            task.setTraceId(traceId);
+
+            kafkaTemplate.send(KafkaTopics.TOPIC_STOCK_REFRESH, stockCode, JSON.toJSONString(task));
+            log.debug("Submitted next task for stock: {}, traceId: {}", stockCode, traceId);
+        } catch (Exception e) {
+            log.error("Failed to submit task for stock: {}", stockCode, e);
+        }
     }
 
     /**
-     * 立即触发新批次 (Public for Admin Control)
+     * Watchdog (Master Only)
+     * Scans all stocks and restarts loop if inactive.
      */
-    public void triggerImmediateBatch() {
-        if (!running.get()) running.set(true);
-        triggerNextBatch();
-    }
+    public void runWatchdog() {
+        if (!running.get()) return;
 
-    /**
-     * 入口：生产自选股任务
-     */
-    public void processTask(String traceId) {
-        // Master Check
+        // Master Only
         if (!nodeRegistry.isMaster()) {
-            log.debug("[StockWatchProcessor] Skipping task production (Not Master). TraceId={}", traceId);
-            // Even if not master, we must keep the loop alive to check later (e.g. if master fails over)
-            try { TimeUnit.SECONDS.sleep(10); } catch (InterruptedException ignored) {}
-            triggerNextBatch();
             return;
         }
 
-        long start = System.currentTimeMillis();
-        List<Watchstock> watchstocks = watchStockService.selectWatchstockList(null);
+        try {
+            List<Watchstock> watchstocks = watchStockService.selectWatchstockList(null);
+            if (watchstocks == null || watchstocks.isEmpty()) return;
 
-        if (watchstocks == null || watchstocks.isEmpty()) {
-            log.warn("自选股任务生产结束：没有需要更新的股票 TraceId={}", traceId);
-            // If empty, we should probably sleep and retry to keep loop alive?
-            // For now, let's trigger next batch with delay
-             try { TimeUnit.SECONDS.sleep(10); } catch (InterruptedException ignored) {}
-             triggerNextBatch();
-            return;
-        }
-
-        // Init Batch Counter
-        stockTaskQueueService.initBatch(traceId, watchstocks.size());
-
-        log.info("=====【自选股任务生产开始】===== TraceId={} 总数：{}", traceId, watchstocks.size());
-
-        for (Watchstock ws : watchstocks) {
-            try {
-                StockRefreshTask task = new StockRefreshTask();
-                task.setTaskId(UUID.randomUUID().toString());
-                task.setStockCode(ws.getCode());
-                task.setTaskType("REFRESH_PRICE");
-                task.setCreateTime(System.currentTimeMillis());
-                task.setTraceId(traceId);
-
-                // Use stockCode as key to ensure same stock goes to same partition
-                kafkaTemplate.send(KafkaTopics.TOPIC_STOCK_REFRESH, ws.getCode(), JSON.toJSONString(task));
-            } catch (Exception e) {
-                log.error("生产任务失败: {}", ws.getCode(), e);
+            List<String> codes = new java.util.ArrayList<>();
+            for (Watchstock ws : watchstocks) {
+                codes.add(ws.getCode());
             }
-        }
 
-        long cost = System.currentTimeMillis() - start;
-        log.info("=====【自选股任务生产结束】===== TraceId={} 总耗时={} ms , 投递数量={}",
-                traceId, cost, watchstocks.size());
+            // Check Active States (Batch MGET)
+            List<Boolean> activeStates = stockTaskQueueService.checkActiveStates(codes);
+            int restarted = 0;
+
+            for (int i = 0; i < codes.size(); i++) {
+                // If checking failed (size mismatch), break or skip
+                if (i >= activeStates.size()) break;
+
+                boolean isActive = activeStates.get(i);
+                if (!isActive) {
+                    // Not active -> Restart Loop
+                    submitTask(codes.get(i));
+                    restarted++;
+                }
+            }
+
+            if (restarted > 0) {
+                log.info("[Watchdog] Restarted loops for {} inactive stocks (Total: {})", restarted, codes.size());
+            }
+
+        } catch (Exception e) {
+            log.error("Watchdog failed", e);
+        }
     }
 }

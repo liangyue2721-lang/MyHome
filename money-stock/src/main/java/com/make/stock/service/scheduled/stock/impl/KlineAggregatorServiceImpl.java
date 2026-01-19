@@ -42,7 +42,7 @@ public class KlineAggregatorServiceImpl implements KlineAggregatorService {
         // 1. 自选股
         CompletableFuture<Void> watchTask = CompletableFuture.runAsync(() -> {
             try {
-                stockWatchProcessor.processTask(traceId);
+                stockWatchProcessor.runWatchdog();
             } catch (Exception e) {
                 log.error("[KlineAggregator] WatchTask Error | TraceId: {}", traceId, e);
                 throw new RuntimeException(e); // Propagate exception to future

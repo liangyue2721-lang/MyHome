@@ -14,6 +14,7 @@ public class WatchTaskServiceImpl implements WatchTaskService {
 
     @Override
     public void executeWatchTask(String traceId) {
-        stockWatchProcessor.processTask(traceId);
+        // processTask is deprecated. Use Watchdog to ensure loops are running.
+        stockWatchProcessor.runWatchdog();
     }
 }

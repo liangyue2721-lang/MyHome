@@ -160,6 +160,9 @@ public class StockKafkaConsumer {
                             } finally {
                                 queueService.releaseLock(task.getStockCode(), currentNodeId);
                             }
+                            // Only trigger next task if we actually processed this one
+                            // If skipped (locked by others), the lock holder will trigger the next one.
+                            stockWatchProcessor.submitTask(task.getStockCode());
                         } else {
                             log.debug("Skipping stock {} (locked by another node)", task.getStockCode());
                         }
@@ -167,17 +170,6 @@ public class StockKafkaConsumer {
                         // Always delete status (whether executed or skipped) to prevent zombie tasks in monitoring
                         queueService.deleteStatus(task.getStockCode(), task.getTraceId());
 
-                        // Decrement batch regardless of lock acquisition (skipped tasks count as processed)
-                        long remaining = queueService.decrementBatch(task.getTraceId());
-                        if (remaining == 0) {
-                            log.info("Batch completed (traceId={}). Triggering next batch...", task.getTraceId());
-                            stockWatchProcessor.triggerNextBatch();
-                        } else if (remaining < 0) {
-                             if (queueService.tryLockRecovery(task.getTraceId())) {
-                                 log.info("Recovery lock acquired. Triggering next batch... traceId={}", task.getTraceId());
-                                 stockWatchProcessor.triggerNextBatch();
-                             }
-                        }
                     } catch (Exception e) {
                         log.error("Failed to process stock refresh task: {}", json, e);
                     }

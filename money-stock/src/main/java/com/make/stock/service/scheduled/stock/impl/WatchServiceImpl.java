@@ -36,7 +36,7 @@ public class WatchServiceImpl implements WatchService {
 
         distributedLockService.tryLock(lockKey, traceId, 60, 0, () -> {
             log.info("【WatchService】开始更新自选股利润 TraceId={}", traceId);
-            stockWatchProcessor.processTask(traceId);
+            stockWatchProcessor.runWatchdog();
         });
     }
 
