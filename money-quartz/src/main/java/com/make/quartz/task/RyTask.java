@@ -1,9 +1,11 @@
 package com.make.quartz.task;
 
+/*
 import org.springframework.stereotype.Component;
 import com.make.common.utils.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+*/
 
 /**
  * 定时任务调度测试
@@ -12,6 +14,7 @@ import org.slf4j.LoggerFactory;
  */
 //@Component("ryTask")
 public class RyTask {
+    /*
     private static final Logger log = LoggerFactory.getLogger(RyTask.class);
 
     public void ryMultipleParams(String s, Boolean b, Long l, Double d, Integer i) {
@@ -25,4 +28,5 @@ public class RyTask {
     public void ryNoParams() {
         log.info("执行无参方法");
     }
+    */
 }
