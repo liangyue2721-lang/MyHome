@@ -135,6 +135,10 @@ public class NodeRegistry implements SmartLifecycle {
                 } else {
                     // Check if I am still master and renew
                     String currentMaster = redisTemplate.opsForValue().get(SCHEDULER_MASTER);
+
+                    // Log Current Master (Requirement: All nodes output master info)
+                    log.info("[MASTER_INFO] Current Master: {}", currentMaster);
+
                     if (nodeId.equals(currentMaster)) {
                         redisTemplate.expire(SCHEDULER_MASTER, 30, TimeUnit.SECONDS);
                         if (!isMaster) {

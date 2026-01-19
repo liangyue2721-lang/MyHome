@@ -7,14 +7,19 @@ import com.make.stock.domain.StockTaskStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import com.make.common.core.NodeRegistry;
+import com.make.common.utils.ThreadPoolUtil;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -42,6 +47,98 @@ public class StockTaskQueueService {
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
+
+    @Resource
+    private NodeRegistry nodeRegistry;
+
+    private ScheduledExecutorService cleanupExecutor;
+
+    @PostConstruct
+    public void startCleanupMonitor() {
+        cleanupExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "StockTaskCleanupMonitor");
+            t.setDaemon(true);
+            return t;
+        });
+
+        // Run every 30 seconds
+        cleanupExecutor.scheduleWithFixedDelay(this::activeCleanup, 30, 30, TimeUnit.SECONDS);
+    }
+
+    /**
+     * Active Cleanup (Master Only)
+     * Scans ZSet and removes zombie entries using multi-threading.
+     */
+    private void activeCleanup() {
+        if (!nodeRegistry.isMaster()) {
+            return;
+        }
+
+        long total = getTotalStatusCount();
+        if (total < 1000) {
+            return; // No need to clean small sets aggressively
+        }
+
+        log.info("[ACTIVE_CLEANUP] Starting active cleanup. Total items: {}", total);
+
+        int chunkSize = 2000;
+        long pages = (total + chunkSize - 1) / chunkSize;
+
+        // Limit concurrency to avoid overloading Redis
+        int maxConcurrency = 5;
+
+        // We iterate backwards to avoid index shifting issues affecting "unseen" items as much as possible,
+        // although removing items shifts indices. Since we just want to "clean as much as possible", exact coverage is less critical than throughput.
+        // Better strategy: Range 0 to N, check, remove.
+        // Actually, "scan-and-clean" on a changing ZSet is tricky.
+        // Simplest robust way: Fetch top N, check, remove invalid. Repeat.
+        // If we fetch 0-2000, and remove 500, the next 0-2000 will contain 1500 old + 500 new.
+        // So we can just repeatedly fetch 0-2000 until we find no invalid items, or just sweep through.
+
+        for (int i = 0; i < Math.min(pages, 10); i++) { // Limit to 10 chunks per run to avoid long blocking
+             final long start = i * chunkSize;
+             final long end = start + chunkSize - 1;
+
+             ThreadPoolUtil.getCoreExecutor().submit(() -> {
+                 try {
+                     cleanupChunk(start, end);
+                 } catch (Exception e) {
+                     log.error("Cleanup chunk failed", e);
+                 }
+             });
+        }
+    }
+
+    private void cleanupChunk(long start, long end) {
+        try {
+            Set<String> members = stringRedisTemplate.opsForZSet().range(STATUS_INDEX_KEY, start, end);
+            if (members == null || members.isEmpty()) return;
+
+            List<String> keys = new ArrayList<>();
+            List<String> memberList = new ArrayList<>(members);
+            for (String member : memberList) {
+                keys.add(STATUS_KEY_PREFIX + member);
+            }
+
+            List<String> values = stringRedisTemplate.opsForValue().multiGet(keys);
+            List<String> toRemove = new ArrayList<>();
+
+            if (values != null) {
+                for (int j = 0; j < values.size(); j++) {
+                    if (StringUtils.isEmpty(values.get(j))) {
+                        toRemove.add(memberList.get(j));
+                    }
+                }
+            }
+
+            if (!toRemove.isEmpty()) {
+                stringRedisTemplate.opsForZSet().remove(STATUS_INDEX_KEY, toRemove.toArray());
+                log.info("[ACTIVE_CLEANUP] Removed {} zombie entries in range {}-{}", toRemove.size(), start, end);
+            }
+        } catch (Exception e) {
+            log.error("Error in cleanup chunk", e);
+        }
+    }
 
     /**
      * 初始化批次计数器
