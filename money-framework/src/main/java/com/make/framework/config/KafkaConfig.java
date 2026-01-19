@@ -35,7 +35,7 @@ public class KafkaConfig {
      * even if the Broker sees 127.0.0.1 as the Host.
      */
     @Bean
-    public ConsumerFactory<Object, Object> kafkaConsumerFactory(KafkaProperties properties) {
+    public ConsumerFactory<String, String> kafkaConsumerFactory(KafkaProperties properties) {
         Map<String, Object> config = properties.buildConsumerProperties();
 
         String ip = IpUtils.getHostIp();
