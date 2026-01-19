@@ -318,9 +318,6 @@ async def fetch_json_with_browser(url: str, request_id: str, max_retry: int = 3)
     trace = TraceAdapter(trace_logger, {"request_id": request_id})
     trace.info(f"Fetch start url={url}")
 
-    if PAGE_POOL.empty():
-        raise HTTPException(status_code=503, detail="Browser busy")
-
     async with SEMAPHORE:
         page = await PAGE_POOL.get()
         try:

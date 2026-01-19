@@ -183,6 +183,7 @@ python:
       nodeId: 2
   service:
     url: http://localhost:8000
+    timeout: 30000
 watchStockExecutor:
   corePoolSize": 10
   maxPoolSize: 10
