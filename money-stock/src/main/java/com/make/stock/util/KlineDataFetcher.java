@@ -117,18 +117,28 @@ public class KlineDataFetcher {
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<Object> entity = new HttpEntity<>(body, headers);
 
+        // 把请求体序列化成 JSON，用于日志
+        String bodyJson = null;
+        try {
+            bodyJson = JSON.toJSONString(body);
+        } catch (Exception ignore) {
+            bodyJson = String.valueOf(body);
+        }
+
         ResponseEntity<String> response;
         try {
             // 发起 HTTP POST 请求
             response = restTemplate.postForEntity(url, entity, String.class);
         } catch (Exception e) {
-            log.error("HTTP call failed: {}", url, e);
+            log.error("HTTP call failed: url={}, body={}", url, truncate(bodyJson), e);
             throw new PythonServiceException(500, "Python service unreachable");
         }
 
         // 检查 HTTP 状态码
         if (!response.getStatusCode().is2xxSuccessful()
                 || response.getBody() == null) {
+            log.error("HTTP status not ok: url={}, status={}, body={}",
+                    url, response.getStatusCodeValue(), truncate(bodyJson));
             throw new PythonServiceException(
                     response.getStatusCodeValue(), response.getBody());
         }
@@ -137,10 +147,12 @@ public class KlineDataFetcher {
             // 解析 JSON 响应
             return JSON.parseObject(response.getBody(), typeRef);
         } catch (JSONException e) {
-            log.error("JSON parse error, path={}, body={}", path, truncate(response.getBody()), e);
+            log.error("JSON parse error, url={}, reqBody={}, respBody={}",
+                    url, truncate(bodyJson), truncate(response.getBody()), e);
             throw new PythonServiceException(502, "Invalid JSON from python");
         }
     }
+
 
     /* =====================================================
      * 二、🔥 新增：通用 JSON 代理能力
