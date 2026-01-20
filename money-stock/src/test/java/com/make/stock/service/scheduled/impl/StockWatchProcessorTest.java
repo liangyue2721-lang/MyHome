@@ -56,8 +56,10 @@ public class StockWatchProcessorTest {
         // Verify active state refreshed
         verify(stockTaskQueueService).refreshActiveState(eq(stockCode), anyString());
 
-        // Verify Kafka sent
-        verify(kafkaTemplate).send(eq(KafkaTopics.TOPIC_STOCK_REFRESH), eq(stockCode), anyString());
+        // Verify Redis Enqueue (Replaces Kafka)
+        verify(stockTaskQueueService).enqueue(any());
+        // Verify Kafka NOT sent
+        verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -75,11 +77,12 @@ public class StockWatchProcessorTest {
 
         stockWatchProcessor.runWatchdog();
 
-        // Verify GOOG restarted
-        verify(kafkaTemplate).send(eq(KafkaTopics.TOPIC_STOCK_REFRESH), eq("GOOG"), anyString());
+        // Verify GOOG restarted (Enqueued)
+        verify(stockTaskQueueService, times(1)).enqueue(argThat(task -> "GOOG".equals(task.getStockCode())));
 
-        // Verify AAPL NOT restarted (only 1 send total)
-        verify(kafkaTemplate, times(1)).send(anyString(), anyString(), anyString());
+        // Verify AAPL NOT restarted
+        // Only 1 enqueue total
+        verify(stockTaskQueueService, times(1)).enqueue(any());
     }
 
     @Test
@@ -89,6 +92,6 @@ public class StockWatchProcessorTest {
         stockWatchProcessor.runWatchdog();
 
         verify(watchStockService, never()).selectWatchstockList(any());
-        verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
+        verify(stockTaskQueueService, never()).enqueue(any());
     }
 }

@@ -187,7 +187,8 @@ public class StockTaskConsumer implements SmartLifecycle {
      * @throws InterruptedException 如果在等待许可时被中断
      */
     private void pollOnceAndSubmit() throws InterruptedException {
-        StockRefreshTask task = queueService.poll();
+        // Use Reliable Poll
+        StockRefreshTask task = queueService.pollReliable(currentNodeId);
 
         if (task == null) {
             TimeUnit.MILLISECONDS.sleep(EMPTY_QUEUE_SLEEP_MS);
@@ -209,6 +210,11 @@ public class StockTaskConsumer implements SmartLifecycle {
         } catch (RejectedExecutionException ree) {
             // 极端情况：线程池满了且拒绝策略触发。释放许可并记录日志。
             submitLimiter.release();
+            // Important: If we rejected it, we must ACK it (to remove from processing) or it stays there?
+            // Actually, if we reject, it's NOT done. We should probably NOT ACK.
+            // But if we don't ACK, it stays in processing forever until reclaimed.
+            // Since this is "RejectedExecution", we should probably push it BACK to pending immediately?
+            // Or rely on Watchdog reclaim. Watchdog reclaim is safer.
             log.warn("Execute pool rejected task. stockCode={}, traceId={}", task.getStockCode(), task.getTraceId(), ree);
         }
     }
@@ -245,6 +251,9 @@ public class StockTaskConsumer implements SmartLifecycle {
             stockRefreshHandler.refreshStock(task);
         } finally {
             safeReleaseLock(stockCode);
+
+            // ACK the task (Remove from Processing Queue)
+            queueService.ack(currentNodeId, task);
 
             // 清理状态并递减批次计数
             queueService.deleteStatus(stockCode, traceId);

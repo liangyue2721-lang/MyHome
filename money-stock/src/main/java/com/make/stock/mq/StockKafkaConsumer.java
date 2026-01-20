@@ -137,54 +137,10 @@ public class StockKafkaConsumer {
         klineAggregatorService.runStockKlineTask(1);
     }
 
-    @KafkaListener(topics = KafkaTopics.TOPIC_STOCK_REFRESH, groupId = "money-stock-group", containerFactory = "stockBatchFactory", properties = {"max.poll.records=10"})
+    // DEPRECATED: Switched to Redis Queue (StockTaskConsumer) for better distribution on single-partition topics.
+    // @KafkaListener(topics = KafkaTopics.TOPIC_STOCK_REFRESH, groupId = "money-stock-group", containerFactory = "stockBatchFactory", properties = {"max.poll.records=10"})
     public void stockRefresh(List<ConsumerRecord<String, String>> records) {
-        log.info("Consume [TOPIC_STOCK_REFRESH] batch size: {}", records.size());
-        String currentNodeId = IpUtils.getHostIp();
-
-        List<CompletableFuture<Void>> futures = new ArrayList<>();
-
-        for (ConsumerRecord<String, String> record : records) {
-            String json = record.value();
-
-            try {
-                CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
-                    try {
-                        StockRefreshTask task = JSON.parseObject(json, StockRefreshTask.class);
-                        if (task == null) return;
-
-                        // Try lock
-                        if (queueService.tryLockStock(task.getStockCode(), currentNodeId)) {
-                            try {
-                                stockRefreshHandler.refreshStock(task);
-                            } finally {
-                                queueService.releaseLock(task.getStockCode(), currentNodeId);
-                            }
-                            // Only trigger next task if we actually processed this one
-                            // If skipped (locked by others), the lock holder will trigger the next one.
-                            stockWatchProcessor.submitTask(task.getStockCode());
-                        } else {
-                            log.debug("Skipping stock {} (locked by another node)", task.getStockCode());
-                        }
-
-                        // Always delete status (whether executed or skipped) to prevent zombie tasks in monitoring
-                        queueService.deleteStatus(task.getStockCode(), task.getTraceId());
-
-                    } catch (Exception e) {
-                        log.error("Failed to process stock refresh task: {}", json, e);
-                    }
-                }, ThreadPoolUtil.getWatchStockExecutor());
-
-                futures.add(future);
-            } catch (Exception e) {
-                log.error("Failed to submit task to executor (skipping in this batch): {}", json, e);
-            }
-        }
-
-        // Wait for all tasks in this batch to complete before acknowledging
-        if (!futures.isEmpty()) {
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-        }
+        log.warn("Ignoring Kafka [TOPIC_STOCK_REFRESH] (Deprecated). Should use Redis Queue.");
     }
 
     private Date getDateMidnight() {

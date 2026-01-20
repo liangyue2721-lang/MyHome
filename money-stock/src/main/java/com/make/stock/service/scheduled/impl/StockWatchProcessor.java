@@ -105,7 +105,8 @@ public class StockWatchProcessor implements SmartLifecycle {
             task.setCreateTime(System.currentTimeMillis());
             task.setTraceId(traceId);
 
-            kafkaTemplate.send(KafkaTopics.TOPIC_STOCK_REFRESH, stockCode, JSON.toJSONString(task));
+            // Use Redis Queue for reliable distribution (replacing Kafka for this loop)
+            stockTaskQueueService.enqueue(task);
             log.debug("Submitted next task for stock: {}, traceId: {}", stockCode, traceId);
         } catch (Exception e) {
             log.error("Failed to submit task for stock: {}", stockCode, e);

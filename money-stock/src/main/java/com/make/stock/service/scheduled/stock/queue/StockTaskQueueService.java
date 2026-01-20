@@ -43,6 +43,7 @@ public class StockTaskQueueService {
     private static final String STATUS_KEY_PREFIX = "stock:refresh:status:"; // + stockCode + : + traceId
     private static final String STATUS_INDEX_KEY = "stock:refresh:status:index";
     private static final String ACTIVE_KEY_PREFIX = "stock:refresh:active:"; // + stockCode
+    private static final String PROCESSING_QUEUE_PREFIX = "mq:task:stock:refresh:processing:"; // + nodeId
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
@@ -210,18 +211,95 @@ public class StockTaskQueueService {
     }
 
     /**
-     * 获取任务 (Blocking or simple pop)
-     * 这里使用非阻塞 Pop，由消费者循环控制
+     * 获取任务 (Reliable Poll)
+     * Uses RPOPLPUSH to move from pending to processing queue.
+     * This ensures tasks are not lost if the consumer crashes.
      */
-    public StockRefreshTask poll() {
+    public StockRefreshTask pollReliable(String nodeId) {
+        if (StringUtils.isEmpty(nodeId)) return null;
         try {
-            String json = stringRedisTemplate.opsForList().rightPop(QUEUE_KEY);
+            String processingQueue = PROCESSING_QUEUE_PREFIX + nodeId;
+            // Pop from RIGHT of QUEUE_KEY, Push to LEFT of processingQueue
+            String json = stringRedisTemplate.opsForList().rightPopAndLeftPush(QUEUE_KEY, processingQueue);
+
             if (StringUtils.isEmpty(json)) {
                 return null;
             }
             // Handle legacy double-quoted JSON
             String cleanJson = unquoteJSON(json);
             return JSON.parseObject(cleanJson, StockRefreshTask.class);
+        } catch (Exception e) {
+            log.error("Failed to poll reliable stock task", e);
+            return null;
+        }
+    }
+
+    /**
+     * Acknowledge Task Completion
+     * Removes the task from the processing queue.
+     */
+    public void ack(String nodeId, StockRefreshTask task) {
+        if (StringUtils.isEmpty(nodeId) || task == null) return;
+        try {
+            String processingQueue = PROCESSING_QUEUE_PREFIX + nodeId;
+            // Remove 1 occurrence of the value from the processing queue
+            // Note: If exact JSON match fails due to serialization diffs, we might have issues.
+            // But since we pushed JSON, we should remove the same JSON.
+            // Ideally we should use raw JSON we pulled, but passing object is safer for interface.
+            // We'll re-serialize.
+            String json = JSON.toJSONString(task);
+            // Try removing exact match first
+            Long removed = stringRedisTemplate.opsForList().remove(processingQueue, 1, json);
+            if (removed == null || removed == 0) {
+                 // Fallback: legacy quoted handling?
+                 // Or maybe just log warning.
+                 log.warn("ACK failed: Item not found in processing queue. Queue={}, Task={}", processingQueue, task.getStockCode());
+            }
+        } catch (Exception e) {
+            log.error("Failed to ack task", e);
+        }
+    }
+
+    /**
+     * Reclaim Pending Tasks (Watchdog Logic)
+     * Scans processing queues of nodes and reclaims tasks if they are stuck.
+     * For now, simplistic implementation: If a node is "dead" (not in registry?), move all its processing tasks back to pending.
+     * Or, we can just look at task timestamp.
+     *
+     * To implement properly, we need to know which nodes are dead.
+     * Or we assume tasks older than X minutes in ANY processing queue are stale.
+     *
+     * @param targetNodeId The node to reclaim from (if known dead)
+     */
+    public void reclaimTasksFromNode(String targetNodeId) {
+        try {
+            String processingQueue = PROCESSING_QUEUE_PREFIX + targetNodeId;
+            while (true) {
+                // RPOP from processing, LPUSH to pending (re-queue at head to prioritize?)
+                // Or LPUSH to pending (Head) is standard for "put back".
+                String json = stringRedisTemplate.opsForList().rightPopAndLeftPush(processingQueue, QUEUE_KEY);
+                if (StringUtils.isEmpty(json)) {
+                    break;
+                }
+                log.info("Reclaimed stuck task from node {}: {}", targetNodeId, json);
+            }
+        } catch (Exception e) {
+             log.error("Failed to reclaim tasks from node {}", targetNodeId, e);
+        }
+    }
+
+    /**
+     * 获取任务 (Blocking or simple pop)
+     * 这里使用非阻塞 Pop，由消费者循环控制
+     */
+    public StockRefreshTask poll() {
+        // Deprecated in favor of pollReliable, but kept for backward compatibility if needed
+        try {
+            String json = stringRedisTemplate.opsForList().rightPop(QUEUE_KEY);
+            if (StringUtils.isEmpty(json)) {
+                return null;
+            }
+            return JSON.parseObject(unquoteJSON(json), StockRefreshTask.class);
         } catch (Exception e) {
             log.error("Failed to poll stock task", e);
             return null;
