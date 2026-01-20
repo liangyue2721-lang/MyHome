@@ -125,8 +125,8 @@ public class KafkaMonitorController extends BaseController {
             stringRedisTemplate.convertAndSend(StockConsumerLifecycleManager.CHANNEL, StockConsumerLifecycleManager.CMD_RESUME);
             TimeUnit.SECONDS.sleep(1);
 
-            // 5. Trigger Immediate Batch
-            stockWatchProcessor.triggerImmediateBatch();
+            // 5. Trigger Immediate Batch (Run Watchdog to restart loops)
+            stockWatchProcessor.runWatchdog();
 
             return AjaxResult.success("Reset (Delete) and Reproduce initiated successfully.");
         } catch (Exception e) {
