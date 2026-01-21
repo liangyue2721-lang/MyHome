@@ -110,4 +110,14 @@ public class StockKlineTaskServiceImpl implements IStockKlineTaskService {
         }
         stockKlineTaskMapper.batchFinishTask(taskIds);
     }
+
+    @Override
+    public List<StockKlineTask> selectPendingTaskLimit(int limit) {
+        return stockKlineTaskMapper.selectPendingTaskLimit(limit);
+    }
+
+    @Override
+    public void updateTaskTime(Long id) {
+        stockKlineTaskMapper.updateTaskTime(id);
+    }
 }
