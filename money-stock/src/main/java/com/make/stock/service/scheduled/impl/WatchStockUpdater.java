@@ -115,7 +115,7 @@ public class WatchStockUpdater {
             return;
         }
 
-        if (info.getPrice() == null) {
+        if (info.getOpenPrice() == null) {
             log.warn("实时行情价格数据为空，股票代码: {}", watchstock.getCode());
             return;
         }
