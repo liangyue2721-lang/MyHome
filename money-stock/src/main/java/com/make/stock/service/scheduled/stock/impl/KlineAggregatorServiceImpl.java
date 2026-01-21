@@ -65,18 +65,10 @@ public class KlineAggregatorServiceImpl implements KlineAggregatorService {
             return null;
         });
 
-        // 3. 历史K线
+        // 3. 历史K线 (已升级为 SmartLifecycle 自驱动模式，无需主动触发)
         CompletableFuture<Void> klineTask = CompletableFuture.runAsync(() -> {
-            try {
-                taskExecutor.executeAll(nodeId, traceId);
-            } catch (Exception e) {
-                log.error("[KlineAggregator] KlineTask Error | TraceId: {}", traceId, e);
-                throw new RuntimeException(e);
-            }
-        }, ThreadPoolUtil.getWatchStockExecutor()).exceptionally(e -> {
-            log.error("[KlineAggregator] KlineTask Failed | TraceId: {}", traceId, e);
-            return null;
-        });
+            log.info("[KlineAggregator] KlineTask is now self-driving (SmartLifecycle). No explicit trigger needed. TraceId: {}", traceId);
+        }, ThreadPoolUtil.getWatchStockExecutor());
 
         try {
             // join() will throw CompletionException if any future failed (and wasn't handled by exceptionally,

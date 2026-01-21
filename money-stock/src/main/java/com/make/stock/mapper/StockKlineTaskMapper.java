@@ -64,4 +64,17 @@ public interface StockKlineTaskMapper {
     List<StockKlineTask> getStockAllTask();
 
     void batchFinishTask(@Param("list") List<Long> taskIds);
+
+    /**
+     * 获取待处理任务 (Limit)
+     * @param limit 限制条数
+     * @return 任务列表
+     */
+    List<StockKlineTask> selectPendingTaskLimit(@Param("limit") int limit);
+
+    /**
+     * 更新任务时间 (Claim)
+     * @param id 任务ID
+     */
+    void updateTaskTime(@Param("id") Long id);
 }

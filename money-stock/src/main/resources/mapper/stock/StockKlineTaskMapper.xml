@@ -48,6 +48,19 @@
         order by update_time asc
     </select>
 
+    <select id="selectPendingTaskLimit" resultMap="StockKlineTaskResult">
+        <include refid="selectStockKlineTaskVo"/>
+        where task_status IN (0, 3)
+        order by update_time asc
+        limit #{limit}
+    </select>
+
+    <update id="updateTaskTime">
+        update stock_kline_task
+        set update_time = now()
+        where id = #{id}
+    </update>
+
 
     <insert id="insertStockKlineTask" parameterType="StockKlineTask" useGeneratedKeys="true" keyProperty="id">
         insert into stock_kline_task

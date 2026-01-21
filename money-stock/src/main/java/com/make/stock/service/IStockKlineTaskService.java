@@ -63,4 +63,17 @@ public interface IStockKlineTaskService {
     List<StockKlineTask> getStockAllTask(int nodeId);
 
     void batchFinishTask(List<Long> successTasks);
+
+    /**
+     * 获取待处理任务 (Limit)
+     * @param limit 限制条数
+     * @return 任务列表
+     */
+    List<StockKlineTask> selectPendingTaskLimit(int limit);
+
+    /**
+     * 更新任务时间
+     * @param id 任务ID
+     */
+    void updateTaskTime(Long id);
 }
