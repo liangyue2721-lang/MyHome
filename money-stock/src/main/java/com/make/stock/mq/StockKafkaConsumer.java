@@ -6,6 +6,8 @@ import com.make.common.utils.ip.IpUtils;
 import com.make.common.utils.ThreadPoolUtil;
 import com.make.stock.domain.StockRefreshTask;
 import com.make.stock.service.scheduled.IRealTimeStockService;
+import com.make.stock.service.scheduled.impl.StockETFProcessor;
+import com.make.stock.service.scheduled.impl.StockKlineTaskExecutor;
 import com.make.stock.service.scheduled.impl.StockWatchProcessor;
 import com.make.stock.service.scheduled.stock.KlineAggregatorService;
 import com.make.stock.service.scheduled.stock.ProfitService;
@@ -55,6 +57,12 @@ public class StockKafkaConsumer {
 
     @Resource
     private StockWatchProcessor stockWatchProcessor;
+
+    @Resource
+    private StockETFProcessor stockETFProcessor;
+
+    @Resource
+    private StockKlineTaskExecutor stockKlineTaskExecutor;
 
     @Resource
     private IRealTimeStockService realTimeStockService; // For legacy methods if any
@@ -135,6 +143,24 @@ public class StockKafkaConsumer {
         // Assuming payload might contain nodeId, but for now safely invoke.
         // Actually runStockKlineTask seems to take int nodeId.
         klineAggregatorService.runStockKlineTask(1);
+    }
+
+    /**
+     * ETF 任务消费 (单任务)
+     */
+    @KafkaListener(topics = KafkaTopics.TOPIC_ETF_TASK, groupId = "money-stock-group", concurrency = "3")
+    public void processEtfTask(ConsumerRecord<String, String> record) {
+        log.debug("Consume [TOPIC_ETF_TASK] key={}", record.key());
+        stockETFProcessor.processSingleTask(record.value());
+    }
+
+    /**
+     * Kline 任务消费 (单任务)
+     */
+    @KafkaListener(topics = KafkaTopics.TOPIC_KLINE_TASK, groupId = "money-stock-group", concurrency = "5")
+    public void processKlineTask(ConsumerRecord<String, String> record) {
+        log.debug("Consume [TOPIC_KLINE_TASK] key={}", record.key());
+        stockKlineTaskExecutor.processSingleTask(record.value());
     }
 
     // DEPRECATED: Switched to Redis Queue (StockTaskConsumer) for better distribution on single-partition topics.

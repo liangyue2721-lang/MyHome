@@ -14,6 +14,6 @@ public class EtfTaskServiceImpl implements EtfTaskService {
 
     @Override
     public void executeEtfTask(String traceId) {
-        stockETFProcessor.processTask(traceId);
+        stockETFProcessor.submitTasks(traceId);
     }
 }

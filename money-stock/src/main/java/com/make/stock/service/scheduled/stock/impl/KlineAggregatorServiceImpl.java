@@ -53,9 +53,11 @@ public class KlineAggregatorServiceImpl implements KlineAggregatorService {
         });
 
         // 2. ETF
+        // 重构说明：生产 Kafka 消息，交由消费者集群处理
         CompletableFuture<Void> etfTask = CompletableFuture.runAsync(() -> {
             try {
-                stockETFProcessor.processTask(traceId);
+                // 提交任务到 Kafka (忽略 NodeId)
+                stockETFProcessor.submitTasks(traceId);
             } catch (Exception e) {
                 log.error("[KlineAggregator] ETFTask Error | TraceId: {}", traceId, e);
                 throw new RuntimeException(e);
@@ -66,9 +68,11 @@ public class KlineAggregatorServiceImpl implements KlineAggregatorService {
         });
 
         // 3. 历史K线
+        // 重构说明：生产 Kafka 消息，交由消费者集群处理
         CompletableFuture<Void> klineTask = CompletableFuture.runAsync(() -> {
             try {
-                taskExecutor.executeAll(nodeId, traceId);
+                // 提交任务到 Kafka (忽略 NodeId)
+                taskExecutor.submitTasks(traceId);
             } catch (Exception e) {
                 log.error("[KlineAggregator] KlineTask Error | TraceId: {}", traceId, e);
                 throw new RuntimeException(e);

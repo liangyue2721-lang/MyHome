@@ -19,6 +19,8 @@ public class KafkaTopics {
     public static final String TOPIC_ARCHIVE_DAILY_STOCK = "stock.archive.daily";
     public static final String TOPIC_WATCH_STOCK_YEAR_LOW = "stock.watch.year.low";
     public static final String TOPIC_STOCK_PRICE_TASK = "stock.price.task";
+    public static final String TOPIC_ETF_TASK = "stock.etf.task";
+    public static final String TOPIC_KLINE_TASK = "stock.kline.task";
 
     /**
      * Finance Related Topics
