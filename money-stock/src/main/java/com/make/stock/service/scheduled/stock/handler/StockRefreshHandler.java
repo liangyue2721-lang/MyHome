@@ -134,13 +134,16 @@ public class StockRefreshHandler implements IStockRefreshHandler {
                 dbStatus = "SUCCESS";
                 dbResult = "Price=" + info.getPrice();
 
-                BigDecimal currentPrice = BigDecimal.valueOf(info.getLowPrice());
+            } else {
+                dbResult = "Price= null";
+            }
+
+            if (ws.getLowPrice() != null && ws.getThresholdPrice() != null) {
+                BigDecimal currentPrice = ws.getLowPrice();
                 BigDecimal threshold = ws.getThresholdPrice();
                 if (threshold != null && currentPrice.compareTo(threshold) < 0) {
                     sendNotification(task, ws);
                 }
-            } else {
-                dbResult = "Price= null";
             }
 
         } catch (Exception e) {
