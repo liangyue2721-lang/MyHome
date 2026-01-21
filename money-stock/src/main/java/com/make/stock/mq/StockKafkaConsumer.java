@@ -9,7 +9,6 @@ import com.make.stock.service.scheduled.IRealTimeStockService;
 import com.make.stock.service.scheduled.impl.StockETFProcessor;
 import com.make.stock.service.scheduled.impl.StockKlineTaskExecutor;
 import com.make.stock.service.scheduled.impl.StockWatchProcessor;
-import com.make.stock.service.scheduled.stock.KlineAggregatorService;
 import com.make.stock.service.scheduled.stock.ProfitService;
 import com.make.stock.service.scheduled.stock.StockInfoService;
 import com.make.stock.service.scheduled.stock.WatchService;
@@ -45,9 +44,6 @@ public class StockKafkaConsumer {
 
     @Resource
     private ProfitService profitService;
-
-    @Resource
-    private KlineAggregatorService klineAggregatorService;
 
     @Resource
     private StockTaskQueueService queueService;
@@ -132,17 +128,6 @@ public class StockKafkaConsumer {
     public void updateWatchStockYearLow(ConsumerRecord<String, String> record) {
         log.info("Consume [TOPIC_WATCH_STOCK_YEAR_LOW]");
         watchService.updateWatchStockYearLow();
-    }
-
-    @KafkaListener(topics = KafkaTopics.TOPIC_STOCK_PRICE_TASK, groupId = "money-stock-group")
-    public void updateStockPriceTaskRunning(ConsumerRecord<String, String> record) {
-        log.info("Consume [TOPIC_STOCK_PRICE_TASK]");
-        // Quartz passed nodeId. Here we can use a default or parse from payload if needed.
-        // runStockKlineTask(nodeId) logic uses nodeId to identify who is running.
-        // We can pass 0 or 1, or parse from payload if Quartz sent it.
-        // Assuming payload might contain nodeId, but for now safely invoke.
-        // Actually runStockKlineTask seems to take int nodeId.
-        klineAggregatorService.runStockKlineTask(1);
     }
 
     /**

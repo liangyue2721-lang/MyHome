@@ -2,6 +2,7 @@ package com.make.stock.service.scheduled.impl;
 
 import com.alibaba.fastjson2.JSON;
 import com.make.common.constant.KafkaTopics;
+import com.make.common.core.NodeRegistry;
 import com.make.stock.domain.EtfData;
 import com.make.stock.domain.dto.EtfRealtimeInfo;
 import com.make.stock.service.IEtfDataService;
@@ -9,6 +10,7 @@ import com.make.stock.util.KlineDataFetcher;
 import org.apache.commons.collections4.CollectionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.SmartLifecycle;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
@@ -16,18 +18,24 @@ import javax.annotation.Resource;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * ETF 任务处理器
  * <p>
  * 重构说明：
  * 采用 Kafka 生产-消费模型，实现动态负载均衡。
- * 1. submitTasks: 生产者，查询所有 ETF 并生产单条任务消息推送到 Kafka。
- * 2. processSingleTask: 消费者，监听 Topic 处理单个 ETF 数据更新。
+ * 1. SmartLifecycle & Watchdog: 实现自驱动，每5分钟Master节点自动扫描并提交任务。
+ * 2. submitTasks: 生产者，查询所有 ETF 并生产单条任务消息推送到 Kafka。
+ * 3. processSingleTask: 消费者，监听 Topic 处理单个 ETF 数据更新。
  * </p>
  */
 @Component
-public class StockETFProcessor {
+public class StockETFProcessor implements SmartLifecycle {
 
     private static final Logger log = LoggerFactory.getLogger(StockETFProcessor.class);
 
@@ -36,6 +44,65 @@ public class StockETFProcessor {
 
     @Resource
     private KafkaTemplate<String, String> kafkaTemplate;
+
+    @Resource
+    private NodeRegistry nodeRegistry;
+
+    private final AtomicBoolean running = new AtomicBoolean(false);
+    private ScheduledExecutorService watchdogExecutor;
+
+    @Override
+    public void start() {
+        if (running.compareAndSet(false, true)) {
+            log.info("StockETFProcessor started. Starting Watchdog...");
+            watchdogExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "EtfWatchDog");
+                t.setDaemon(true);
+                return t;
+            });
+            // Run Watchdog every 5 minutes
+            watchdogExecutor.scheduleWithFixedDelay(this::runWatchdog, 1, 5, TimeUnit.MINUTES);
+        }
+    }
+
+    @Override
+    public void stop() {
+        running.set(false);
+        if (watchdogExecutor != null) {
+            watchdogExecutor.shutdown();
+        }
+    }
+
+    @Override
+    public boolean isRunning() {
+        return running.get();
+    }
+
+    @Override
+    public int getPhase() {
+        return Integer.MAX_VALUE - 1;
+    }
+
+    /**
+     * 看门狗 (Master Only)
+     * 定期扫描并提交所有 ETF 任务
+     */
+    public void runWatchdog() {
+        if (!running.get()) return;
+
+        // Master Only
+        if (!nodeRegistry.isMaster()) {
+            return;
+        }
+
+        try {
+            String traceId = UUID.randomUUID().toString().replace("-", "");
+            log.info("[ETF-Watchdog] 触发自动扫描 TraceId={}", traceId);
+            submitTasks(traceId);
+        } catch (Exception e) {
+            log.error("[ETF-Watchdog] 扫描异常", e);
+        }
+    }
 
     /**
      * 提交所有 ETF 任务到 Kafka (Producer)
