@@ -60,8 +60,8 @@ public class StockETFProcessor implements SmartLifecycle {
                 t.setDaemon(true);
                 return t;
             });
-            // Run Watchdog every 5 minutes
-            watchdogExecutor.scheduleWithFixedDelay(this::runWatchdog, 1, 5, TimeUnit.MINUTES);
+            // Run Watchdog every 5 minutes (Initial delay 10s)
+            watchdogExecutor.scheduleWithFixedDelay(this::runWatchdog, 10, 300, TimeUnit.SECONDS);
         }
     }
 
@@ -92,6 +92,7 @@ public class StockETFProcessor implements SmartLifecycle {
 
         // Master Only
         if (!nodeRegistry.isMaster()) {
+            log.debug("[ETF-Watchdog] Not Master, skipping scan.");
             return;
         }
 
