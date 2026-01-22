@@ -14,6 +14,7 @@ import org.springframework.context.SmartLifecycle;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
+import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
 import java.util.HashMap;
 import java.util.List;
@@ -51,6 +52,11 @@ public class StockETFProcessor implements SmartLifecycle {
     private final AtomicBoolean running = new AtomicBoolean(false);
     private ScheduledExecutorService watchdogExecutor;
 
+    @PostConstruct
+    public void init() {
+        log.info("StockETFProcessor bean initialized.");
+    }
+
     @Override
     public void start() {
         if (running.compareAndSet(false, true)) {
@@ -62,6 +68,8 @@ public class StockETFProcessor implements SmartLifecycle {
             });
             // Run Watchdog every 5 minutes (Initial delay 10s)
             watchdogExecutor.scheduleWithFixedDelay(this::runWatchdog, 10, 300, TimeUnit.SECONDS);
+        } else {
+            log.warn("StockETFProcessor start called but already running.");
         }
     }
 
@@ -71,6 +79,7 @@ public class StockETFProcessor implements SmartLifecycle {
         if (watchdogExecutor != null) {
             watchdogExecutor.shutdown();
         }
+        log.info("StockETFProcessor stopped.");
     }
 
     @Override
@@ -81,6 +90,11 @@ public class StockETFProcessor implements SmartLifecycle {
     @Override
     public int getPhase() {
         return Integer.MAX_VALUE - 1;
+    }
+
+    @Override
+    public boolean isAutoStartup() {
+        return true;
     }
 
     /**

@@ -13,6 +13,7 @@ import org.springframework.context.SmartLifecycle;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
+import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
@@ -61,6 +62,11 @@ public class StockKlineTaskExecutor implements SmartLifecycle {
     private final AtomicBoolean running = new AtomicBoolean(false);
     private ScheduledExecutorService watchdogExecutor;
 
+    @PostConstruct
+    public void init() {
+        log.info("StockKlineTaskExecutor bean initialized.");
+    }
+
     @Override
     public void start() {
         if (running.compareAndSet(false, true)) {
@@ -72,6 +78,8 @@ public class StockKlineTaskExecutor implements SmartLifecycle {
             });
             // Run Watchdog every 5 minutes (Initial delay 10s)
             watchdogExecutor.scheduleWithFixedDelay(this::runWatchdog, 10, 300, TimeUnit.SECONDS);
+        } else {
+            log.warn("StockKlineTaskExecutor start called but already running.");
         }
     }
 
@@ -81,6 +89,7 @@ public class StockKlineTaskExecutor implements SmartLifecycle {
         if (watchdogExecutor != null) {
             watchdogExecutor.shutdown();
         }
+        log.info("StockKlineTaskExecutor stopped.");
     }
 
     @Override
@@ -91,6 +100,11 @@ public class StockKlineTaskExecutor implements SmartLifecycle {
     @Override
     public int getPhase() {
         return Integer.MAX_VALUE - 1;
+    }
+
+    @Override
+    public boolean isAutoStartup() {
+        return true;
     }
 
     /**
