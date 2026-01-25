@@ -49,6 +49,7 @@
             <if test="serverName != null  and serverName != ''">and server_name like concat('%', #{serverName}, '%')
             </if>
             <if test="ipAddress != null  and ipAddress != ''">and ip_address = #{ipAddress}</if>
+            <if test="status != null  and status != ''">and status = #{status}</if>
             <if test="provider != null  and provider != ''">and provider = #{provider}</if>
             <if test="purchaseDate != null ">and purchase_date = #{purchaseDate}</if>
             <if test="expireDate != null ">and expire_date = #{expireDate}</if>
