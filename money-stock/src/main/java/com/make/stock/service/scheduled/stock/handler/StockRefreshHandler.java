@@ -118,6 +118,14 @@ public class StockRefreshHandler implements IStockRefreshHandler {
                 return;
             }
 
+            if (ws.getLowPrice() != null && ws.getThresholdPrice() != null) {
+                BigDecimal currentPrice = ws.getLowPrice();
+                BigDecimal threshold = ws.getThresholdPrice();
+                if (threshold != null && currentPrice.compareTo(threshold) < 0) {
+                    sendNotification(task, ws);
+                }
+            }
+
             // 5. 更新 WatchStock 实体与数据库
             watchStockUpdater.updateFromRealtimeInfo(ws, info);
             watchstockService.updateWatchstock(ws);
