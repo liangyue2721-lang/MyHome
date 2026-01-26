@@ -36,9 +36,10 @@ public class StockKlineServiceImplTest {
 
     @Test
     public void testSelectStockRanking_HighVsHigh() {
-        // Setup
-        LocalDate start = LocalDate.of(2024, 1, 1);
-        LocalDate end = LocalDate.of(2024, 12, 31);
+        // Setup - Simulate "Today" is end of 2024 to make logic predictable
+        // However, the service uses LocalDate.now(), which I cannot easily mock without a clock injection.
+        // So I will rely on "any(LocalDate.class)" for the generic call, but I know the logic uses now().
+        // For this test, I'll update to use the single-arg method and match arguments leniently or infer dates.
 
         List<StockRankingStat> names = new ArrayList<>();
         StockRankingStat s = new StockRankingStat();
@@ -55,7 +56,8 @@ public class StockKlineServiceImplTest {
         k1.setHigh(new BigDecimal("200"));
         k1.setLow(new BigDecimal("150"));
         k1.setClose(new BigDecimal("180"));
-        k1.setTradeDate(java.sql.Date.valueOf(start));
+        // Use a generic recent date
+        k1.setTradeDate(java.sql.Date.valueOf(LocalDate.now()));
         currentData.add(k1);
 
         List<StockKline> prevData = new ArrayList<>();
@@ -64,14 +66,22 @@ public class StockKlineServiceImplTest {
         k2.setHigh(new BigDecimal("100"));
         k2.setLow(new BigDecimal("50"));
         k2.setClose(new BigDecimal("80"));
-        k2.setTradeDate(java.sql.Date.valueOf(start.minusYears(1)));
+        k2.setTradeDate(java.sql.Date.valueOf(LocalDate.now().minusYears(1)));
         prevData.add(k2);
 
-        when(stockKlineMapper.selectStockKlineByRange(start, end)).thenReturn(currentData);
-        when(stockKlineMapper.selectStockKlineByRange(start.minusYears(1), end.minusYears(1))).thenReturn(prevData);
+        // Match any date range because exact dates depend on 'now'
+        when(stockKlineMapper.selectStockKlineByRange(any(LocalDate.class), any(LocalDate.class))).thenAnswer(invocation -> {
+            LocalDate start = invocation.getArgument(0);
+            LocalDate end = invocation.getArgument(1);
+            if (start.getYear() == LocalDate.now().getYear()) {
+                return currentData;
+            } else {
+                return prevData;
+            }
+        });
 
         // Execute
-        List<StockRankingStat> result = stockKlineService.selectStockRanking("HIGH_VS_HIGH", start, end);
+        List<StockRankingStat> result = stockKlineService.selectStockRanking("HIGH_VS_HIGH");
 
         // Verify
         assertEquals(1, result.size());

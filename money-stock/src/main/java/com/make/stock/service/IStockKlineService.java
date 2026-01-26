@@ -95,11 +95,9 @@ public interface IStockKlineService {
     List<StockKline> queryWeekAllStockKline(String stockCode, List<LocalDate> tradeDateList);
 
     /**
-     * Get ranking statistics by type and date range.
+     * Get ranking statistics by type.
      * @param type The ranking type
-     * @param startDate Start date (optional)
-     * @param endDate End date (optional)
      * @return List of ranking stats
      */
-    List<StockRankingStat> selectStockRanking(String type, LocalDate startDate, LocalDate endDate);
+    List<StockRankingStat> selectStockRanking(String type);
 }

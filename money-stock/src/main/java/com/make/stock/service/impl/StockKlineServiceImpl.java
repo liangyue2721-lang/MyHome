@@ -5,6 +5,7 @@ import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -154,14 +155,23 @@ public class StockKlineServiceImpl implements IStockKlineService {
     }
 
     @Override
-    public List<StockRankingStat> selectStockRanking(String type, LocalDate startDate, LocalDate endDate) {
-        if (startDate == null) {
-            startDate = LocalDate.of(LocalDate.now().getYear(), 1, 1);
-        }
-        if (endDate == null) {
-            endDate = LocalDate.now();
+    public List<StockRankingStat> selectStockRanking(String type) {
+        LocalDate endDate = LocalDate.now();
+        LocalDate startDate;
+
+        if (type.startsWith("WEEKLY")) {
+            // For Weekly stats, we need at least 2 weeks of data
+            // Fetch last 30 days to be safe and cover holidays/weekends
+            startDate = endDate.minusDays(30);
+        } else {
+            // For Yearly stats, default to start of current year
+            startDate = LocalDate.of(endDate.getYear(), 1, 1);
         }
 
+        return calculateStockRanking(type, startDate, endDate);
+    }
+
+    private List<StockRankingStat> calculateStockRanking(String type, LocalDate startDate, LocalDate endDate) {
         boolean isYearlyType = type.startsWith("HIGH_VS_HIGH") || type.startsWith("LOW_VS_LOW")
                 || type.startsWith("LATEST_VS_HIGH") || type.startsWith("LATEST_VS_LOW");
         boolean isWeeklyType = type.startsWith("WEEKLY");
@@ -170,9 +180,13 @@ public class StockKlineServiceImpl implements IStockKlineService {
 
         List<StockKline> prevData = new ArrayList<>();
         if (isYearlyType) {
-            LocalDate prevStartDate = startDate.minusYears(1);
-            LocalDate prevEndDate = endDate.minusYears(1);
-            prevData = stockKlineMapper.selectStockKlineByRange(prevStartDate, prevEndDate);
+            // Fix: For yearly comparison, we want the FULL previous year (Jan 1 to Dec 31)
+            // Not just YTD of previous year.
+            // Example: If current is 2024-01-01 to 2024-11-20
+            // We want previous to be 2023-01-01 to 2023-12-31
+            LocalDate prevYearStart = LocalDate.of(startDate.getYear() - 1, 1, 1);
+            LocalDate prevYearEnd = LocalDate.of(startDate.getYear() - 1, 12, 31);
+            prevData = stockKlineMapper.selectStockKlineByRange(prevYearStart, prevYearEnd);
         }
 
         // Map Stock Names
