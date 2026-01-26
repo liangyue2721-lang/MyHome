@@ -95,6 +95,7 @@
     <select id="selectStockKlineByRange" resultMap="StockKlineResult">
         <include refid="selectStockKlineVo"/>
         WHERE trade_date BETWEEN #{startDate} AND #{endDate}
+        ORDER BY trade_date ASC
     </select>
 
     <select id="selectStockNames" resultType="com.make.stock.domain.vo.StockRankingStat">
