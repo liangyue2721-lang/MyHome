@@ -7,6 +7,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
+import com.make.common.utils.DateUtils;
 import com.make.finance.domain.vo.LabelEntity;
 import com.make.finance.enums.IncomeSourceEnum;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,6 +58,7 @@ public class IncomeServiceImpl implements IIncomeService {
      */
     @Override
     public int insertIncome(Income income) {
+        income.setCreatedAt(DateUtils.getNowDate());
         return incomeMapper.insertIncome(income);
     }
 
@@ -68,6 +70,7 @@ public class IncomeServiceImpl implements IIncomeService {
      */
     @Override
     public int updateIncome(Income income) {
+        income.setUpdatedAt(DateUtils.getNowDate());
         return incomeMapper.updateIncome(income);
     }
 

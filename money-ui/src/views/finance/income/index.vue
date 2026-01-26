@@ -167,14 +167,6 @@
                           placeholder="请选择收入日期">
           </el-date-picker>
         </el-form-item>
-        <el-form-item label="记录时间" prop="createdAt">
-          <el-date-picker clearable
-                          v-model="form.createdAt"
-                          type="date"
-                          value-format="yyyy-MM-dd"
-                          placeholder="请选择记录时间">
-          </el-date-picker>
-        </el-form-item>
       </el-form>
       <div slot="footer" class="dialog-footer">
         <el-button type="primary" @click="submitForm">确 定</el-button>
