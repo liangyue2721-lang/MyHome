@@ -467,7 +467,7 @@ public class StockRefreshHandler implements IStockRefreshHandler {
                     JSON.toJSONString(notice, JSONWriter.Feature.PrettyFormat)
             );
 
-            SendEmail.notification(htmlContent, subject);
+            SendEmail.sendHtml(htmlContent, subject, "lyp0028nxyf@163.com");
 
         } catch (Exception e) {
             log.error("Failed to send price alert for {}", task.getStockCode(), e);

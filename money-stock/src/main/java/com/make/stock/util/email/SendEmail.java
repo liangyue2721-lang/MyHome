@@ -99,4 +99,30 @@ public final class SendEmail {
         }
 
     }
+    /**
+     * 发送 HTML 邮件（推荐使用）
+     *
+     * @param htmlContent HTML 格式正文
+     * @param subject     邮件主题
+     * @param to          收件人邮箱
+     */
+    public static void sendHtml(String htmlContent, String subject, String to) {
+        try {
+            Session session = createSession();
+
+            MimeMessage message = new MimeMessage(session);
+            message.setSubject(subject, "UTF-8");
+
+            // HTML 邮件核心
+            message.setContent(htmlContent, "text/html;charset=UTF-8");
+
+            message.setFrom(new InternetAddress("lyp0028nxyf@163.com"));
+            message.setRecipient(Message.RecipientType.TO, new InternetAddress(to));
+
+            Transport.send(message);
+        } catch (Exception e) {
+            log.error("发送 HTML 邮件失败 {}", e.getMessage());
+        }
+    }
+
 }
