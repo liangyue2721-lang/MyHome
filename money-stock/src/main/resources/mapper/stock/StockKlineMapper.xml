@@ -93,8 +93,7 @@
     </select>
 
     <select id="selectStockKlineByRange" resultMap="StockKlineResult">
-        SELECT stock_code, trade_date, high, low, `close`
-        FROM stock_kline
+        <include refid="selectStockKlineVo"/>
         WHERE trade_date BETWEEN #{startDate} AND #{endDate}
     </select>
 

@@ -5,7 +5,6 @@ import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -13,6 +12,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import com.make.common.utils.DateUtils;
@@ -181,9 +181,6 @@ public class StockKlineServiceImpl implements IStockKlineService {
         List<StockKline> prevData = new ArrayList<>();
         if (isYearlyType) {
             // Fix: For yearly comparison, we want the FULL previous year (Jan 1 to Dec 31)
-            // Not just YTD of previous year.
-            // Example: If current is 2024-01-01 to 2024-11-20
-            // We want previous to be 2023-01-01 to 2023-12-31
             LocalDate prevYearStart = LocalDate.of(startDate.getYear() - 1, 1, 1);
             LocalDate prevYearEnd = LocalDate.of(startDate.getYear() - 1, 12, 31);
             prevData = stockKlineMapper.selectStockKlineByRange(prevYearStart, prevYearEnd);
@@ -213,8 +210,16 @@ public class StockKlineServiceImpl implements IStockKlineService {
             BigDecimal prevVal = null;
             BigDecimal sortValue = null;
 
-            BigDecimal currMaxHigh = currKlines.stream().map(StockKline::getHigh).max(Comparator.naturalOrder()).orElse(BigDecimal.ZERO);
-            BigDecimal currMinLow = currKlines.stream().map(StockKline::getLow).min(Comparator.naturalOrder()).orElse(BigDecimal.ZERO);
+            // Safe calculation with null checks
+            BigDecimal currMaxHigh = currKlines.stream()
+                    .map(StockKline::getHigh)
+                    .filter(Objects::nonNull)
+                    .max(Comparator.naturalOrder()).orElse(BigDecimal.ZERO);
+
+            BigDecimal currMinLow = currKlines.stream()
+                    .map(StockKline::getLow)
+                    .filter(Objects::nonNull)
+                    .min(Comparator.naturalOrder()).orElse(BigDecimal.ZERO);
 
             BigDecimal currClose = currKlines.stream()
                     .max(Comparator.comparing(StockKline::getTradeDate))
@@ -223,8 +228,15 @@ public class StockKlineServiceImpl implements IStockKlineService {
             if (isYearlyType) {
                  if (prevKlines.isEmpty()) continue;
 
-                 BigDecimal prevMaxHigh = prevKlines.stream().map(StockKline::getHigh).max(Comparator.naturalOrder()).orElse(BigDecimal.ZERO);
-                 BigDecimal prevMinLow = prevKlines.stream().map(StockKline::getLow).min(Comparator.naturalOrder()).orElse(BigDecimal.ZERO);
+                 BigDecimal prevMaxHigh = prevKlines.stream()
+                         .map(StockKline::getHigh)
+                         .filter(Objects::nonNull)
+                         .max(Comparator.naturalOrder()).orElse(BigDecimal.ZERO);
+
+                 BigDecimal prevMinLow = prevKlines.stream()
+                         .map(StockKline::getLow)
+                         .filter(Objects::nonNull)
+                         .min(Comparator.naturalOrder()).orElse(BigDecimal.ZERO);
 
                  switch (type) {
                      case "HIGH_VS_HIGH":
