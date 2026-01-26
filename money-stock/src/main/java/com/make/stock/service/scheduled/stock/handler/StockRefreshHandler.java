@@ -1,6 +1,7 @@
 package com.make.stock.service.scheduled.stock.handler;
 
 import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONWriter;
 import com.make.common.utils.ThreadPoolUtil;
 import com.make.finance.domain.YearlyInvestmentSummary;
 import com.make.finance.service.IYearlyInvestmentSummaryService;
@@ -28,17 +29,17 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.Year;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Date;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
 
 /**
  * 股票刷新业务处理器实现类
@@ -438,12 +439,33 @@ public class StockRefreshHandler implements IStockRefreshHandler {
             notice.setSecurityName(ws.getName());
             notice.setCurrentPrice(ws.getNewPrice());
 
-            String message = "价格已突破提醒价位";
-            SendEmail.notification(JSON.toJSONString(notice), notice.getSecurityName() + message);
+            String subject = String.format("股票价格预警：%s(%s)",
+                    notice.getSecurityName(), notice.getSecurityCode());
+
+            String htmlContent = String.format(
+                    "<h3>价格预警触发</h3>" +
+                            "<p>您关注的股票已触发预设价格条件：</p>" +
+                            "<ul>" +
+                            "  <li><strong>代码：</strong>%s</li>" +
+                            "  <li><strong>名称：</strong>%s</li>" +
+                            "  <li><strong>当前价格：</strong>%s</li>" +
+                            "  <li><strong>触发时间：</strong>%s</li>" +
+                            "</ul>" +
+                            "<h4>通知数据结构：</h4><pre>%s</pre>",
+                    notice.getSecurityCode(),
+                    notice.getSecurityName(),
+                    notice.getCurrentPrice(),
+                    LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
+                    JSON.toJSONString(notice, JSONWriter.Feature.PrettyFormat)
+            );
+
+            SendEmail.notification(htmlContent, subject);
+
         } catch (Exception e) {
             log.error("Failed to send price alert for {}", task.getStockCode(), e);
         }
     }
+
 
     /**
      * 更新 Redis 中的任务状态
