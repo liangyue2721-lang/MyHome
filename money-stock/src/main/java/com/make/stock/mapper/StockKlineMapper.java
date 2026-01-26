@@ -3,6 +3,7 @@ package com.make.stock.mapper;
 import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 import com.make.stock.domain.StockKline;
 import com.make.stock.domain.vo.StockRankingStat;
@@ -94,52 +95,12 @@ public interface StockKlineMapper {
     List<StockKline> queryWeekAllStockKline(@Param("stockCode") String stockCode, @Param("tradeDateList") List<LocalDate> tradeDateList);
 
     /**
-     * Ranking 1: Current Max High vs Last Max High
+     * 查询指定日期范围内的K线数据 (简化字段)
      */
-    List<StockRankingStat> selectHighVsHighRanking();
+    List<StockKline> selectStockKlineByRange(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
 
     /**
-     * Ranking 2: Current Min Low vs Last Min Low
+     * 查询所有关注股票的名称
      */
-    List<StockRankingStat> selectLowVsLowRanking();
-
-    /**
-     * Ranking 3: Current Latest Close vs Last Max High
-     */
-    List<StockRankingStat> selectLatestVsHighRanking();
-
-    /**
-     * Ranking 4: Current Latest Close vs Last Min Low
-     */
-    List<StockRankingStat> selectLatestVsLowRanking();
-
-    /**
-     * Ranking 5: Weekly Gain Ranking
-     */
-    List<StockRankingStat> selectWeeklyGainRanking();
-
-    /**
-     * Ranking 6: Weekly Loss Ranking
-     */
-    List<StockRankingStat> selectWeeklyLossRanking();
-
-    /**
-     * Ranking: Current Latest vs Current Max High (DESC - Closest to High)
-     */
-    List<StockRankingStat> selectHighVsLatestHighRanking();
-
-    /**
-     * Ranking: Current Latest vs Current Max High (ASC - Dropped Most from High)
-     */
-    List<StockRankingStat> selectHighVsLatestLowRanking();
-
-    /**
-     * Ranking: Current Latest vs Current Min Low (DESC - Rose Most from Low)
-     */
-    List<StockRankingStat> selectLowVsLatestHighRanking();
-
-    /**
-     * Ranking: Current Latest vs Current Min Low (ASC - Closest to Low)
-     */
-    List<StockRankingStat> selectLowVsLatestLowRanking();
+    List<StockRankingStat> selectStockNames();
 }

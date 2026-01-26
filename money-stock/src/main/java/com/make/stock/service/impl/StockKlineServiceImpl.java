@@ -1,9 +1,18 @@
 package com.make.stock.service.impl;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import com.make.common.utils.DateUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -145,30 +154,183 @@ public class StockKlineServiceImpl implements IStockKlineService {
     }
 
     @Override
-    public List<StockRankingStat> selectStockRanking(String type) {
-        switch (type) {
-            case "HIGH_VS_HIGH":
-                return stockKlineMapper.selectHighVsHighRanking();
-            case "LOW_VS_LOW":
-                return stockKlineMapper.selectLowVsLowRanking();
-            case "LATEST_VS_HIGH":
-                return stockKlineMapper.selectLatestVsHighRanking();
-            case "LATEST_VS_LOW":
-                return stockKlineMapper.selectLatestVsLowRanking();
-            case "WEEKLY_GAIN":
-                return stockKlineMapper.selectWeeklyGainRanking();
-            case "WEEKLY_LOSS":
-                return stockKlineMapper.selectWeeklyLossRanking();
-            case "HIGH_VS_LATEST_HIGH":
-                return stockKlineMapper.selectHighVsLatestHighRanking();
-            case "HIGH_VS_LATEST_LOW":
-                return stockKlineMapper.selectHighVsLatestLowRanking();
-            case "LOW_VS_LATEST_HIGH":
-                return stockKlineMapper.selectLowVsLatestHighRanking();
-            case "LOW_VS_LATEST_LOW":
-                return stockKlineMapper.selectLowVsLatestLowRanking();
-            default:
-                return Collections.emptyList();
+    public List<StockRankingStat> selectStockRanking(String type, LocalDate startDate, LocalDate endDate) {
+        if (startDate == null) {
+            startDate = LocalDate.of(LocalDate.now().getYear(), 1, 1);
         }
+        if (endDate == null) {
+            endDate = LocalDate.now();
+        }
+
+        boolean isYearlyType = type.startsWith("HIGH_VS_HIGH") || type.startsWith("LOW_VS_LOW")
+                || type.startsWith("LATEST_VS_HIGH") || type.startsWith("LATEST_VS_LOW");
+        boolean isWeeklyType = type.startsWith("WEEKLY");
+
+        List<StockKline> currentData = stockKlineMapper.selectStockKlineByRange(startDate, endDate);
+
+        List<StockKline> prevData = new ArrayList<>();
+        if (isYearlyType) {
+            LocalDate prevStartDate = startDate.minusYears(1);
+            LocalDate prevEndDate = endDate.minusYears(1);
+            prevData = stockKlineMapper.selectStockKlineByRange(prevStartDate, prevEndDate);
+        }
+
+        // Map Stock Names
+        List<StockRankingStat> nameStats = stockKlineMapper.selectStockNames();
+        Map<String, String> stockNames = new HashMap<>();
+        for (StockRankingStat s : nameStats) {
+            if (s.getStockCode() != null && s.getStockName() != null) {
+                stockNames.put(s.getStockCode(), s.getStockName());
+            }
+        }
+
+        Map<String, List<StockKline>> currentGrouped = currentData.stream().collect(Collectors.groupingBy(StockKline::getStockCode));
+        Map<String, List<StockKline>> prevGrouped = prevData.stream().collect(Collectors.groupingBy(StockKline::getStockCode));
+
+        List<RankingWrapper> wrappers = new ArrayList<>();
+
+        for (String stockCode : currentGrouped.keySet()) {
+            List<StockKline> currKlines = currentGrouped.get(stockCode);
+            List<StockKline> prevKlines = prevGrouped.getOrDefault(stockCode, Collections.emptyList());
+
+            if (currKlines.isEmpty()) continue;
+
+            BigDecimal currentVal = null;
+            BigDecimal prevVal = null;
+            BigDecimal sortValue = null;
+
+            BigDecimal currMaxHigh = currKlines.stream().map(StockKline::getHigh).max(Comparator.naturalOrder()).orElse(BigDecimal.ZERO);
+            BigDecimal currMinLow = currKlines.stream().map(StockKline::getLow).min(Comparator.naturalOrder()).orElse(BigDecimal.ZERO);
+
+            BigDecimal currClose = currKlines.stream()
+                    .max(Comparator.comparing(StockKline::getTradeDate))
+                    .map(StockKline::getClose).orElse(BigDecimal.ZERO);
+
+            if (isYearlyType) {
+                 if (prevKlines.isEmpty()) continue;
+
+                 BigDecimal prevMaxHigh = prevKlines.stream().map(StockKline::getHigh).max(Comparator.naturalOrder()).orElse(BigDecimal.ZERO);
+                 BigDecimal prevMinLow = prevKlines.stream().map(StockKline::getLow).min(Comparator.naturalOrder()).orElse(BigDecimal.ZERO);
+
+                 switch (type) {
+                     case "HIGH_VS_HIGH":
+                         currentVal = currMaxHigh;
+                         prevVal = prevMaxHigh;
+                         if (prevVal.compareTo(BigDecimal.ZERO) != 0) {
+                             sortValue = currentVal.divide(prevVal, 4, RoundingMode.HALF_UP);
+                         }
+                         break;
+                     case "LOW_VS_LOW":
+                         currentVal = currMinLow;
+                         prevVal = prevMinLow;
+                         if (prevVal.compareTo(BigDecimal.ZERO) != 0) {
+                             sortValue = currentVal.divide(prevVal, 4, RoundingMode.HALF_UP);
+                         }
+                         break;
+                     case "LATEST_VS_HIGH":
+                         currentVal = currClose;
+                         prevVal = prevMaxHigh;
+                         if (prevVal.compareTo(BigDecimal.ZERO) != 0) {
+                             sortValue = currentVal.divide(prevVal, 4, RoundingMode.HALF_UP);
+                         }
+                         break;
+                     case "LATEST_VS_LOW":
+                         currentVal = currClose;
+                         prevVal = prevMinLow;
+                         if (prevVal.compareTo(BigDecimal.ZERO) != 0) {
+                             sortValue = currentVal.divide(prevVal, 4, RoundingMode.HALF_UP);
+                         }
+                         break;
+                 }
+            } else if (isWeeklyType) {
+                LocalDate baseDate = endDate;
+                LocalDate currWeekStart = baseDate.with(DayOfWeek.MONDAY);
+                LocalDate prevWeekStart = currWeekStart.minusWeeks(1);
+
+                List<StockKline> thisWeekKlines = new ArrayList<>();
+                List<StockKline> lastWeekKlines = new ArrayList<>();
+
+                for (StockKline k : currKlines) {
+                    LocalDate kDate = convertToLocalDate(k.getTradeDate());
+                    if (!kDate.isBefore(currWeekStart)) {
+                        thisWeekKlines.add(k);
+                    } else if (!kDate.isBefore(prevWeekStart) && kDate.isBefore(currWeekStart)) {
+                        lastWeekKlines.add(k);
+                    }
+                }
+
+                if (thisWeekKlines.isEmpty() || lastWeekKlines.isEmpty()) continue;
+
+                BigDecimal thisWeekClose = thisWeekKlines.stream().max(Comparator.comparing(StockKline::getTradeDate)).map(StockKline::getClose).orElse(BigDecimal.ZERO);
+                BigDecimal lastWeekClose = lastWeekKlines.stream().max(Comparator.comparing(StockKline::getTradeDate)).map(StockKline::getClose).orElse(BigDecimal.ZERO);
+
+                currentVal = thisWeekClose;
+                prevVal = lastWeekClose;
+
+                if (prevVal.compareTo(BigDecimal.ZERO) != 0) {
+                    sortValue = currentVal.subtract(prevVal).divide(prevVal, 4, RoundingMode.HALF_UP);
+                }
+
+            } else {
+                switch (type) {
+                    case "HIGH_VS_LATEST_HIGH":
+                    case "HIGH_VS_LATEST_LOW":
+                        currentVal = currClose;
+                        prevVal = currMaxHigh;
+                        if (prevVal.compareTo(BigDecimal.ZERO) != 0) {
+                            sortValue = currentVal.divide(prevVal, 4, RoundingMode.HALF_UP);
+                        }
+                        break;
+                    case "LOW_VS_LATEST_HIGH":
+                    case "LOW_VS_LATEST_LOW":
+                        currentVal = currClose;
+                        prevVal = currMinLow;
+                         if (prevVal.compareTo(BigDecimal.ZERO) != 0) {
+                            sortValue = currentVal.divide(prevVal, 4, RoundingMode.HALF_UP);
+                        }
+                        break;
+                }
+            }
+
+            if (sortValue != null) {
+                StockRankingStat stat = new StockRankingStat();
+                stat.setStockCode(stockCode);
+                stat.setStockName(stockNames.getOrDefault(stockCode, stockCode));
+                stat.setCurrentValue(currentVal);
+                stat.setPrevValue(prevVal);
+                wrappers.add(new RankingWrapper(stat, sortValue));
+            }
+        }
+
+        boolean isAsc = "WEEKLY_LOSS".equals(type)
+                     || "HIGH_VS_LATEST_LOW".equals(type)
+                     || "LOW_VS_LATEST_LOW".equals(type);
+
+        Comparator<RankingWrapper> comparator = Comparator.comparing(w -> w.sortValue);
+        if (!isAsc) {
+            comparator = comparator.reversed();
+        }
+        return wrappers.stream()
+                .sorted(comparator)
+                .limit(10)
+                .map(w -> w.stat)
+                .collect(Collectors.toList());
+    }
+
+    private static class RankingWrapper {
+        StockRankingStat stat;
+        BigDecimal sortValue;
+
+        RankingWrapper(StockRankingStat stat, BigDecimal sortValue) {
+            this.stat = stat;
+            this.sortValue = sortValue;
+        }
+    }
+
+    private LocalDate convertToLocalDate(Date date) {
+        if (date instanceof java.sql.Date) {
+            return ((java.sql.Date) date).toLocalDate();
+        }
+        return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
     }
 }
