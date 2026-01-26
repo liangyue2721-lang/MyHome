@@ -442,13 +442,13 @@ public class StockRefreshHandler implements IStockRefreshHandler {
             ws.setNum(ws.getNum() + 1);
             watchstockService.updateWatchstock(ws);
 
-            StockListingNotice notice = new StockListingNotice();
-            notice.setSecurityCode(ws.getCode());
-            notice.setSecurityName(ws.getName());
-            notice.setCurrentPrice(ws.getNewPrice());
+            Watchstock notice = new Watchstock();
+            notice.setCode(ws.getCode());
+            notice.setName(ws.getName());
+            notice.setNewPrice(ws.getNewPrice());
 
             String subject = String.format("股票价格预警：%s(%s)",
-                    notice.getSecurityName(), notice.getSecurityCode());
+                    notice.getName(), notice.getCode());
 
             String htmlContent = String.format(
                     "<h3>价格预警触发</h3>" +
@@ -457,12 +457,14 @@ public class StockRefreshHandler implements IStockRefreshHandler {
                             "  <li><strong>代码：</strong>%s</li>" +
                             "  <li><strong>名称：</strong>%s</li>" +
                             "  <li><strong>当前价格：</strong>%s</li>" +
+                            "  <li><strong>预警价格：</strong>%s</li>" +
                             "  <li><strong>触发时间：</strong>%s</li>" +
                             "</ul>" +
                             "<h4>通知数据结构：</h4><pre>%s</pre>",
-                    notice.getSecurityCode(),
-                    notice.getSecurityName(),
-                    notice.getCurrentPrice(),
+                    notice.getCode(),
+                    notice.getName(),
+                    notice.getNewPrice(),
+                    notice.getThresholdPrice(),
                     LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
                     JSON.toJSONString(notice, JSONWriter.Feature.PrettyFormat)
             );
