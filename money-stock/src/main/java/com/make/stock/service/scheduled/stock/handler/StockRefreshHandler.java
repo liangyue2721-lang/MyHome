@@ -448,7 +448,7 @@ public class StockRefreshHandler implements IStockRefreshHandler {
             notice.setNewPrice(ws.getNewPrice());
 
             String subject = String.format("股票价格预警：%s(%s)",
-                    notice.getName(), notice.getCode());
+                    ws.getName(), ws.getCode());
 
             String htmlContent = String.format(
                     "<h3>价格预警触发</h3>" +
@@ -461,10 +461,10 @@ public class StockRefreshHandler implements IStockRefreshHandler {
                             "  <li><strong>触发时间：</strong>%s</li>" +
                             "</ul>" +
                             "<h4>通知数据结构：</h4><pre>%s</pre>",
-                    notice.getCode(),
-                    notice.getName(),
-                    notice.getNewPrice(),
-                    notice.getThresholdPrice(),
+                    ws.getCode(),
+                    ws.getName(),
+                    ws.getNewPrice(),
+                    ws.getThresholdPrice(),
                     LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
                     JSON.toJSONString(notice, JSONWriter.Feature.PrettyFormat)
             );
