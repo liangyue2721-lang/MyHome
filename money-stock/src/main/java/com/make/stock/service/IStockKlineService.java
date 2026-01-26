@@ -96,7 +96,7 @@ public interface IStockKlineService {
 
     /**
      * Get ranking statistics by type.
-     * @param type The ranking type (HIGH_VS_HIGH, LOW_VS_LOW, LATEST_VS_HIGH)
+     * @param type The ranking type
      * @return List of ranking stats
      */
     List<StockRankingStat> selectStockRanking(String type);
