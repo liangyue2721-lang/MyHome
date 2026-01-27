@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.stock.mapper.StockTickMapper">
+    
+    <resultMap type="StockTick" id="StockTickResult">
+        <result property="id"    column="id"    />
+        <result property="stockCode"    column="stock_code"    />
+        <result property="tradeDate"    column="trade_date"    />
+        <result property="tradeTime"    column="trade_time"    />
+        <result property="price"    column="price"    />
+        <result property="volume"    column="volume"    />
+        <result property="sideCode"    column="side_code"    />
+        <result property="tickCount"    column="tick_count"    />
+        <result property="avgVol"    column="avg_vol"    />
+        <result property="isBigMoney"    column="is_big_money"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateTime"    column="update_time"    />
+    </resultMap>
+
+    <sql id="selectStockTickVo">
+        select id, stock_code, trade_date, trade_time, price, volume, side_code, tick_count, avg_vol, is_big_money, create_time, update_time from stock_tick
+    </sql>
+
+    <select id="selectStockTickList" parameterType="StockTick" resultMap="StockTickResult">
+        <include refid="selectStockTickVo"/>
+        <where>  
+            <if test="stockCode != null  and stockCode != ''"> and stock_code = #{stockCode}</if>
+            <if test="tradeDate != null "> and trade_date = #{tradeDate}</if>
+            <if test="tradeTime != null "> and trade_time = #{tradeTime}</if>
+            <if test="price != null "> and price = #{price}</if>
+            <if test="volume != null "> and volume = #{volume}</if>
+            <if test="sideCode != null "> and side_code = #{sideCode}</if>
+            <if test="tickCount != null "> and tick_count = #{tickCount}</if>
+            <if test="avgVol != null "> and avg_vol = #{avgVol}</if>
+            <if test="isBigMoney != null "> and is_big_money = #{isBigMoney}</if>
+        </where>
+    </select>
+    
+    <select id="selectStockTickById" parameterType="String" resultMap="StockTickResult">
+        <include refid="selectStockTickVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertStockTick" parameterType="StockTick" useGeneratedKeys="true" keyProperty="id">
+        insert into stock_tick
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="stockCode != null and stockCode != ''">stock_code,</if>
+            <if test="tradeDate != null">trade_date,</if>
+            <if test="tradeTime != null">trade_time,</if>
+            <if test="price != null">price,</if>
+            <if test="volume != null">volume,</if>
+            <if test="sideCode != null">side_code,</if>
+            <if test="tickCount != null">tick_count,</if>
+            <if test="avgVol != null">avg_vol,</if>
+            <if test="isBigMoney != null">is_big_money,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateTime != null">update_time,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="stockCode != null and stockCode != ''">#{stockCode},</if>
+            <if test="tradeDate != null">#{tradeDate},</if>
+            <if test="tradeTime != null">#{tradeTime},</if>
+            <if test="price != null">#{price},</if>
+            <if test="volume != null">#{volume},</if>
+            <if test="sideCode != null">#{sideCode},</if>
+            <if test="tickCount != null">#{tickCount},</if>
+            <if test="avgVol != null">#{avgVol},</if>
+            <if test="isBigMoney != null">#{isBigMoney},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+         </trim>
+    </insert>
+
+    <update id="updateStockTick" parameterType="StockTick">
+        update stock_tick
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="stockCode != null and stockCode != ''">stock_code = #{stockCode},</if>
+            <if test="tradeDate != null">trade_date = #{tradeDate},</if>
+            <if test="tradeTime != null">trade_time = #{tradeTime},</if>
+            <if test="price != null">price = #{price},</if>
+            <if test="volume != null">volume = #{volume},</if>
+            <if test="sideCode != null">side_code = #{sideCode},</if>
+            <if test="tickCount != null">tick_count = #{tickCount},</if>
+            <if test="avgVol != null">avg_vol = #{avgVol},</if>
+            <if test="isBigMoney != null">is_big_money = #{isBigMoney},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteStockTickById" parameterType="String">
+        delete from stock_tick where id = #{id}
+    </delete>
+
+    <delete id="deleteStockTickByIds" parameterType="String">
+        delete from stock_tick where id in 
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>
