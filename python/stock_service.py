@@ -384,6 +384,10 @@ class GenericJsonRequest(BaseModel):
     url: str
 
 
+class TickRequest(BaseModel):
+    secid: str
+
+
 # =========================================================
 # 实时行情辅助函数
 # =========================================================
@@ -426,6 +430,54 @@ def standardize_realtime_data(data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def normalize_record(obj: Dict[str, Any]) -> Dict[str, Any]:
+    """清洗 Key 隐藏字符并补齐字段"""
+    clean = {}
+    for k, v in obj.items():
+        nk = re.sub(r"[\r\n\t ]+", "", k)
+        if nk:
+            clean[nk] = v
+
+    # 确保字段完整性
+    required = ["stockCode", "time", "price", "volume", "side", "sideCode", "tickCount", "avgVol"]
+    for f in required:
+        if f not in clean:
+            clean[f] = None
+    return clean
+
+
+def standardize_tick(data: Dict[str, Any], stock_code: str) -> list:
+    """解析东方财富实时明细数据"""
+    details = data.get("details", [])
+    result = []
+    side_map = {"1": "买入", "2": "卖出", "4": "中性"}
+
+    for item in details:
+        parts = item.split(",")
+        if len(parts) < 5:
+            continue
+        try:
+            vol = int(parts[2])
+            ticks = int(parts[3])
+            side_code = parts[4]
+            avg_vol = vol / ticks if ticks > 0 else 0
+
+            raw_obj = {
+                "stockCode": stock_code,
+                "time": parts[0],
+                "price": float(parts[1]),
+                "volume": vol,
+                "side": side_map.get(side_code, "其他"),
+                "sideCode": side_code,
+                "tickCount": ticks,
+                "avgVol": round(avg_vol, 2)
+            }
+            result.append(normalize_record(raw_obj))
+        except Exception:
+            continue
+    return result
+
+
 # =========================================================
 # 接口定义
 # =========================================================
@@ -453,6 +505,31 @@ async def etf_realtime(req: RealtimeRequest, request: Request):
     if not raw or not raw.get("data"):
         raise HTTPException(status_code=404, detail="Not Found")
     return standardize_realtime_data(raw["data"])
+
+
+@app.post("/stock/ticks")
+async def stock_ticks(req: TickRequest, request: Request):
+    """
+    获取实时分笔交易数据 (Snapshot)
+    """
+    secid = normalize_secid(req.secid)
+
+    parts = secid.split('.')
+    stock_code = parts[1] if len(parts) > 1 else secid
+
+    ts = int(time.time() * 1000)
+    url = (
+        "https://push2.eastmoney.com/api/qt/stock/details/get?"
+        f"secid={secid}&ut=bd1d9ddb04089700cf9c27f6f7426281&"
+        "fields1=f1,f2,f3,f4&fields2=f51,f52,f53,f54,f55&"
+        f"pos=-200&num=200&cb=jQuery_{ts}&_={ts}"
+    )
+
+    raw = await fetch_json_with_browser(url, request.state.request_id)
+    if not raw or not raw.get("data"):
+        return []
+
+    return standardize_tick(raw["data"], stock_code)
 
 
 @app.post("/stock/kline")

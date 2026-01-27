@@ -358,6 +358,15 @@ public class KlineDataFetcher {
         );
     }
 
+    public static JSONArray fetchStockTicks(String secid, String market) {
+        return callPythonSyncData(
+                "/stock/ticks",
+                Map.of("secid", formatFullSecid(secid, market)),
+                new TypeReference<JSONArray>() {
+                }
+        );
+    }
+
     /* =====================================================
      * 工具方法
      * ===================================================== */

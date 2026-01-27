@@ -188,6 +188,31 @@ echo Result: FAIL
 del test.tmp body.json 2>nul
 echo.
 
+REM =================================================
+echo [8/8] Stock Ticks
+echo -------------------------------------------------
+echo {"secid":"1.600000"} > body.json
+
+echo Request:
+type body.json
+echo.
+
+curl -s -X POST -H "Content-Type: application/json" -d @body.json %BASE_URL%/stock/ticks > test.tmp
+if errorlevel 1 goto FAIL8
+
+echo Response:
+type test.tmp
+echo.
+
+for %%A in (test.tmp) do if %%~zA EQU 0 goto FAIL8
+echo Result: PASS
+goto NEXT8
+:FAIL8
+echo Result: FAIL
+:NEXT8
+del test.tmp body.json 2>nul
+echo.
+
 echo ==========================================
 echo Self-Test Finished
 echo ==========================================
