@@ -522,7 +522,7 @@ async def stock_ticks(req: TickRequest, request: Request):
         "https://push2.eastmoney.com/api/qt/stock/details/get?"
         f"secid={secid}&ut=bd1d9ddb04089700cf9c27f6f7426281&"
         "fields1=f1,f2,f3,f4&fields2=f51,f52,f53,f54,f55&"
-        f"pos=-200&num=200&cb=jQuery_{ts}&_={ts}"
+        f"pos=-1000000&num=1000000&cb=jQuery_{ts}&_={ts}"
     )
 
     raw = await fetch_json_with_browser(url, request.state.request_id)
