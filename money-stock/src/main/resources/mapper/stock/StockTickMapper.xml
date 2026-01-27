@@ -101,4 +101,17 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             #{id}
         </foreach>
     </delete>
+
+    <insert id="insertStockTickBatch" parameterType="java.util.List" useGeneratedKeys="true" keyProperty="id">
+        insert into stock_tick (stock_code, trade_date, trade_time, price, volume, side_code, tick_count, avg_vol, is_big_money, create_time, update_time)
+        values
+        <foreach collection="list" item="item" index="index" separator=",">
+            (#{item.stockCode}, #{item.tradeDate}, #{item.tradeTime}, #{item.price}, #{item.volume}, #{item.sideCode}, #{item.tickCount}, #{item.avgVol}, #{item.isBigMoney}, #{item.createTime}, #{item.updateTime})
+        </foreach>
+    </insert>
+
+    <select id="selectMaxTickCount" resultType="Long">
+        select max(tick_count) from stock_tick
+        where stock_code = #{stockCode} and trade_date = #{tradeDate}
+    </select>
 </mapper>

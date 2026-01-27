@@ -1,7 +1,9 @@
 package com.make.stock.mapper;
 
+import java.util.Date;
 import java.util.List;
 
+import org.apache.ibatis.annotations.Param;
 import com.make.stock.domain.StockTick;
 
 /**
@@ -59,4 +61,21 @@ public interface StockTickMapper {
      * @return 结果
      */
     public int deleteStockTickByIds(String[] ids);
+
+    /**
+     * 批量新增股票逐笔成交明细
+     *
+     * @param stockTickList 股票逐笔成交明细列表
+     * @return 结果
+     */
+    public int insertStockTickBatch(List<StockTick> stockTickList);
+
+    /**
+     * 查询指定日期最大的 tickCount
+     *
+     * @param stockCode 股票代码
+     * @param tradeDate 交易日期
+     * @return 最大 tickCount
+     */
+    public Long selectMaxTickCount(@Param("stockCode") String stockCode, @Param("tradeDate") Date tradeDate);
 }
