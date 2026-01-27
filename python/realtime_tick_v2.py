@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-#  参数名,数据类型,对应接口字段,说明
-#  stockCode,String,外部传入,6 位股票代码
-#  time,String,f51,成交时刻 (HH:mm:ss)
-#  price,Float,f52,每股成交价
-#  volume,Integer,f53,成交数量（股）
-#  sideCode,String,f55,"1:买, 2:卖, 4:中性"
-#  tickCount,Integer,f54,该聚合时刻包含的原始订单笔数
+# 索引位置,对应字段,参数名称,示例值,说明
+# parts[0],f51,time,09:48:14,成交时刻
+# parts[1],f52,price,58.78,成交价格
+# parts[2],f53,volume,11857,成交总量（股）
+# parts[3],f54,tickCount,2845,该时刻包含的原始订单笔数
+# parts[4],f55,sideCode,1,"1:买, 2:卖, 4:中性"
 import sys
 import json
 import re
@@ -35,11 +34,9 @@ def setup_logger():
         file_formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] %(message)s', '%Y-%m-%d %H:%M:%S')
         console_formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s', '%H:%M:%S')
 
-        # 文件处理器
         fh = TimedRotatingFileHandler(os.path.join(LOG_DIR, "tick_worker.log"), when="midnight", encoding="utf-8", backupCount=30)
         fh.setFormatter(file_formatter)
 
-        # 控制台处理器
         ch = logging.StreamHandler()
         ch.setFormatter(console_formatter)
 
@@ -76,67 +73,6 @@ def parse_json_or_jsonp(text):
     except:
         return None
 
-# -------------------- 抓取与解析逻辑 --------------------
-
-def fetch_json_by_browser(api_url, max_retry=3):
-    """使用 Playwright 模拟浏览器环境抓取数据"""
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(locale="zh-CN", user_agent=random_ua())
-        page = context.new_page()
-
-        for attempt in range(1, max_retry + 1):
-            start_time = time.time()
-            try:
-                page.goto(api_url, timeout=20000, wait_until="domcontentloaded")
-                text = page.evaluate("() => document.body.innerText || ''").strip()
-                duration = (time.time() - start_time) * 1000
-
-                if not text or text.startswith("<"):
-                    raise Exception("返回内容非合法JSON")
-
-                parsed = parse_json_or_jsonp(text)
-                if parsed:
-                    logger.info(f"API请求成功 | 耗时: {duration:.0f}ms | 长度: {len(text)}")
-                    return parsed
-            except Exception as e:
-                logger.warning(f"抓取失败 (重试 {attempt}/{max_retry}): {e}")
-                time.sleep(1)
-
-        browser.close()
-        return None
-
-def standardize_tick(data, stock_code):
-    """
-    将原始明细解析为标准格式。
-    - parts[3]: 成交笔数 (tickCount)
-    - parts[4]: 买卖方向 (side)
-    """
-    details = data.get("details", [])
-    result = []
-    # 1: 买入, 2: 卖出, 4: 中性
-    side_map = {"1": "买入", "2": "卖出", "4": "中性"}
-
-    for item in details:
-        parts = item.split(",")
-        if len(parts) < 5: continue
-
-        try:
-            raw_side = parts[4]
-            result.append({
-                "stockCode": stock_code,
-                "companyName": "", # 允许为空
-                "time": parts[0],
-                "price": float(parts[1]),
-                "volume": int(parts[2]),
-                "side": side_map.get(raw_side, "其他"),
-                "sideCode": raw_side,
-                "tickCount": int(parts[3])
-            })
-        except:
-            continue
-    return result
-
 def build_f1_url(secid):
     """构造带有鉴权与格式参数的 URL"""
     base = "https://push2.eastmoney.com/api/qt/stock/details/get"
@@ -153,57 +89,126 @@ def build_f1_url(secid):
     }
     return f"{base}?{'&'.join([f'{k}={v}' for k, v in params.items()])}"
 
-# -------------------- 主程序 --------------------
+def standardize_tick(data, stock_code):
+    """标准化成交数据格式"""
+    details = data.get("details", [])
+    result = []
+    side_map = {"1": "买入", "2": "卖出", "4": "中性"}
+
+    for item in details:
+        parts = item.split(",")
+        if len(parts) < 5: continue
+        try:
+            raw_side = parts[4]
+            result.append({
+                "stockCode": stock_code,
+                "companyName": "",
+                "time": parts[0],
+                "price": float(parts[1]),
+                "volume": int(parts[2]),
+                "side": side_map.get(raw_side, "其他"),
+                "sideCode": raw_side,
+                "tickCount": int(parts[3])
+            })
+        except:
+            continue
+    return result
+
+# -------------------- 多股运行逻辑 --------------------
+
+def start_multi_monitor(secid_list):
+    """
+    初始化每只股票的状态并启动主循环
+    """
+    # 预处理每只股票的配置
+    stock_tasks = []
+    for sid in secid_list:
+        clean_code = sid.split('.')[-1] if '.' in sid else sid
+        stock_tasks.append({
+            "secid": sid,
+            "code": clean_code,
+            "last_seen": set()
+        })
+
+    logger.info(f"==== 监控启动 | 股票总数: {len(stock_tasks)} ====")
+
+    with sync_playwright() as p:
+        # 性能优化：在循环外启动浏览器并常驻
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(locale="zh-CN", user_agent=random_ua())
+        page = context.new_page()
+
+        # 预热首页
+        try:
+            page.goto("https://quote.eastmoney.com/", timeout=10000)
+            time.sleep(1)
+        except:
+            pass
+
+        try:
+            while True:
+                for task in stock_tasks:
+                    sid = task["secid"]
+                    code = task["code"]
+                    api_url = build_f1_url(sid)
+
+                    try:
+                        # 核心抓取：在同一个 Page 中跳转，大幅提高速度
+                        page.goto(api_url, timeout=10000, wait_until="domcontentloaded")
+                        text = page.evaluate("() => document.body.innerText || ''").strip()
+
+                        if not text or text.startswith("<"):
+                            continue
+
+                        parsed = parse_json_or_jsonp(text)
+                        if not parsed:
+                            continue
+
+                        data = parsed.get("data") or {}
+                        ticks = standardize_tick(data, code)
+
+                        new_count = 0
+                        for tick in ticks:
+                            # 独立股票的唯一键去重
+                            unique_key = (tick["time"], tick["price"], tick["volume"], tick["sideCode"])
+                            if unique_key in task["last_seen"]:
+                                continue
+
+                            task["last_seen"].add(unique_key)
+                            new_count += 1
+
+                            # 输出 JSON 数据
+                            print(json.dumps(tick, ensure_ascii=False, separators=(",", ":")))
+                            sys.stdout.flush()
+
+                        if new_count > 0:
+                            logger.info(f"代码: {code} | 更新: {new_count} 条 | 内存池: {len(task['last_seen'])}")
+
+                        # 内存回收
+                        if len(task["last_seen"]) > 5000:
+                            task["last_seen"] = set(list(task["last_seen"])[-1000:])
+
+                    except Exception as e:
+                        logger.warning(f"代码 {code} 处理异常: {e}")
+                        continue
+
+                # 轮询间隔：根据股票数量微调，防止请求过快被封
+                time.sleep(1.0)
+
+        except KeyboardInterrupt:
+            logger.info("用户终止任务")
+        finally:
+            browser.close()
+
+# -------------------- 主入口 --------------------
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python realtime_tick_v2.py <secid> (e.g., 1.601138)")
+    # 获取命令行传入的所有参数
+    args = sys.argv[1:]
+
+    if not args:
+        print("Usage: python realtime_tick_v2.py <secid1> <secid2> ...")
+        print("Example: python realtime_tick_v2.py 1.002261 1.601138")
         sys.exit(0)
 
-    # 从参数提取股票代码 (如 1.601138 -> 601138)
-    secid_input = sys.argv[1].strip()
-    stock_code_final = secid_input.split('.')[-1] if '.' in secid_input else secid_input
-
-    api_url = build_f1_url(secid_input)
-    logger.info(f"监控启动 | 代码: {stock_code_final} | 完整标识: {secid_input}")
-
-    last_seen = set()
-
-    try:
-        while True:
-            parsed = fetch_json_by_browser(api_url)
-            if not parsed:
-                time.sleep(5)
-                continue
-
-            data = parsed.get("data") or {}
-            ticks = standardize_tick(data, stock_code_final)
-
-            new_count = 0
-            for tick in ticks:
-                # 唯一键：时间+价格+量+方向代码，确保精确去重
-                unique_key = (tick["time"], tick["price"], tick["volume"], tick["sideCode"])
-                if unique_key in last_seen:
-                    continue
-
-                last_seen.add(unique_key)
-                new_count += 1
-
-                # 输出 JSON 数据至 stdout
-                print(json.dumps(tick, ensure_ascii=False, separators=(",", ":")))
-                sys.stdout.flush()
-
-            if new_count > 0:
-                logger.info(f"数据更新 | 新增: {new_count} 条 | 内存池: {len(last_seen)}")
-
-            # 内存回收，防止长期运行占用过大
-            if len(last_seen) > 5000:
-                last_seen = set(list(last_seen)[-1000:])
-                logger.info("执行内存池清理")
-
-            time.sleep(1.5)
-
-    except KeyboardInterrupt:
-        logger.info("用户终止任务")
-    except Exception as e:
-        logger.critical(f"系统异常崩溃: {e}", exc_info=True)
+    start_multi_monitor(args)
