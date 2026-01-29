@@ -167,7 +167,7 @@ def normalize_secid(code: str) -> str:
 
 @app.on_event("startup")
 async def startup():
-    global PLAYWRIGHT, BROWSER, SEMAPHORE
+    global PLAYWRIGHT, BROWSER, SEMAPHORE, CACHED_HEADERS, LAST_AUTH_TIME
 
     logger.info("Starting Playwright...")
     PLAYWRIGHT = await async_playwright().start()
@@ -211,6 +211,19 @@ async def startup():
 
     logger.info("Browser started. Page pool ready.")
 
+    # 尝试加载静态 Headers
+    headers_file = os.path.join(BASE_DIR, "headers.json")
+    if os.path.exists(headers_file):
+        try:
+            with open(headers_file, "r", encoding="utf-8") as f:
+                static_headers = json.load(f)
+                if static_headers:
+                    CACHED_HEADERS.update(static_headers)
+                    LAST_AUTH_TIME = time.time()
+                    logger.info(f"Loaded static headers from {headers_file}")
+        except Exception as e:
+            logger.error(f"Failed to load headers.json: {e}")
+
 
 @app.on_event("shutdown")
 async def shutdown():
@@ -251,6 +264,12 @@ async def _recreate_page():
 async def _refresh_auth_headers_if_needed():
     """启动可见浏览器，访问行情页，抓取真实 Headers"""
     global CACHED_HEADERS, LAST_AUTH_TIME
+
+    # 如果存在静态配置文件，则跳过动态抓取
+    headers_file = os.path.join(BASE_DIR, "headers.json")
+    if os.path.exists(headers_file) and CACHED_HEADERS:
+        logger.info(">>> [Auth] Static headers in use. Skipping dynamic refresh.")
+        return
 
     # 冷却时间检查
     if time.time() - LAST_AUTH_TIME < 60 and CACHED_HEADERS:
