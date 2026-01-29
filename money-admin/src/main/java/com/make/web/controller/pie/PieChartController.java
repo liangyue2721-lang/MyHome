@@ -144,7 +144,7 @@ public class PieChartController {
      * @return 利润折线图数据
      */
     @GetMapping("/getProfitLineData")
-    public List<SalesData> getProfitLineData() {
+    public Map<String, Object> getProfitLineData() {
         return pieChartService.getProfitLineData(SecurityUtils.getUserId());
     }
 

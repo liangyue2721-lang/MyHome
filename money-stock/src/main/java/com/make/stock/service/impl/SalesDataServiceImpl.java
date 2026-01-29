@@ -87,4 +87,26 @@ public class SalesDataServiceImpl implements ISalesDataService {
     public int deleteSalesDataById(Long id) {
         return salesDataMapper.deleteSalesDataById(id);
     }
+
+    /**
+     * 查询今年数据
+     *
+     * @param userId 用户ID
+     * @return 结果
+     */
+    @Override
+    public List<SalesData> selectSalesDataCurrentYear(Long userId) {
+        return salesDataMapper.selectSalesDataCurrentYear(userId);
+    }
+
+    /**
+     * 查询每年最新的一条数据
+     *
+     * @param userId 用户ID
+     * @return 结果
+     */
+    @Override
+    public List<SalesData> selectSalesDataYearlyMax(Long userId) {
+        return salesDataMapper.selectSalesDataYearlyMax(userId);
+    }
 }

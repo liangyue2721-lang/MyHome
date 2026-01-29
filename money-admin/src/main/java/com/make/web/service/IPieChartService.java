@@ -92,9 +92,9 @@ public interface IPieChartService {
      * 获取利润折线图数据
      *
      * @param id 用户ID
-     * @return 包含利润数据的列表
+     * @return 包含利润数据的Map
      */
-    List<SalesData> getProfitLineData(Long id);
+    Map<String, Object> getProfitLineData(Long id);
 
     /**
      * 获取每月收入柱状图数据

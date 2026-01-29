@@ -59,4 +59,20 @@ public interface SalesDataMapper {
      * @return 结果
      */
     public int deleteSalesDataByIds(Long[] ids);
+
+    /**
+     * 查询今年数据
+     *
+     * @param userId 用户ID
+     * @return 结果
+     */
+    public List<SalesData> selectSalesDataCurrentYear(Long userId);
+
+    /**
+     * 查询每年最新的一条数据
+     *
+     * @param userId 用户ID
+     * @return 结果
+     */
+    public List<SalesData> selectSalesDataYearlyMax(Long userId);
 }

@@ -74,4 +74,23 @@
             #{id}
         </foreach>
     </delete>
+
+    <select id="selectSalesDataCurrentYear" parameterType="Long" resultMap="SalesDataResult">
+        <include refid="selectSalesDataVo"/>
+        where YEAR(record_date) = YEAR(NOW()) AND user_id = #{userId}
+        ORDER BY record_date
+    </select>
+
+    <select id="selectSalesDataYearlyMax" parameterType="Long" resultMap="SalesDataResult">
+        SELECT t1.*
+        FROM sales_data t1
+        JOIN (
+        SELECT YEAR(record_date) as year_val, MAX(record_date) as max_date
+        FROM sales_data
+        WHERE user_id = #{userId}
+        GROUP BY YEAR(record_date)
+        ) t2 ON t1.record_date = t2.max_date
+        WHERE t1.user_id = #{userId}
+        ORDER BY t1.record_date
+    </select>
 </mapper>

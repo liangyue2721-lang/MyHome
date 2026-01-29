@@ -420,13 +420,28 @@ export default {
     // 4. 利润折线图渲染器
     // ------------------------------------------
     loadLineChart(key, domId, apiFn) {
-      apiFn().then(data => {
+      apiFn().then(response => {
         const chart = this.initChart(key, domId);
         if (!chart) return;
-        if (!data || !Array.isArray(data)) return;
 
-        const xData = data.map(item => item.recordDate);
-        const yData = data.map(item => item.profit);
+        let lineData = [];
+        let barData = [];
+
+        // 判断返回格式：如果是 Map/Object，则拆分数据
+        if (response && typeof response === 'object' && !Array.isArray(response)) {
+          lineData = response.line || [];
+          barData = response.bar || [];
+        } else if (Array.isArray(response)) {
+          // 兼容旧接口，全量当作 lineData
+          lineData = response;
+        }
+
+        const xDataLine = lineData.map(item => item.recordDate);
+        const yDataLine = lineData.map(item => item.profit);
+
+        // 柱状图X轴只显示年份
+        const xDataBar = barData.map(item => new Date(item.recordDate).getFullYear());
+        const yDataBar = barData.map(item => item.profit);
 
         chart.setOption({
           textStyle: {fontFamily: FONT_FAMILY},
@@ -438,32 +453,56 @@ export default {
             textStyle: {fontFamily: FONT_FAMILY},
             axisPointer: {type: 'cross', label: {backgroundColor: '#6a7985', fontFamily: FONT_FAMILY}},
             formatter: (params) => {
-              const p = params[0];
-              return `
-                <div style="font-family:${FONT_FAMILY}; font-weight:bold; margin-bottom:5px;">📅 ${p.axisValue}</div>
-                <div style="font-family:${FONT_FAMILY}; display:flex; justify-content:space-between; align-items:center;">
-                  <span>${p.marker} 利润</span>
-                  <span style="font-weight:bold; color:#409EFF; margin-left:15px; font-size:16px;">${p.value} 元</span>
-                </div>
-              `;
+              let html = `<div style="font-family:${FONT_FAMILY}; font-weight:bold; margin-bottom:5px;">📅 ${params[0].axisValue}</div>`;
+              params.forEach(p => {
+                html += `<div style="font-family:${FONT_FAMILY}; display:flex; justify-content:space-between; align-items:center;">
+                      <span>${p.marker} ${p.seriesName}</span>
+                      <span style="font-weight:bold; color:#409EFF; margin-left:15px; font-size:16px;">${p.value} 元</span>
+                    </div>`;
+              });
+              return html;
             }
           },
-          grid: {left: '3%', right: '4%', bottom: '3%', containLabel: true},
-          xAxis: {
-            type: 'category',
-            boundaryGap: false,
-            data: xData,
-            axisLine: {lineStyle: {color: '#ccc'}},
-            axisLabel: {fontFamily: FONT_FAMILY}
-          },
-          yAxis: {
-            type: 'value',
-            splitLine: {lineStyle: {color: '#f0f0f0'}},
-            axisLabel: {fontFamily: FONT_FAMILY}
-          },
+          grid: [
+            {left: '3%', right: '55%', bottom: '3%', containLabel: true},
+            {left: '55%', right: '4%', bottom: '3%', containLabel: true}
+          ],
+          xAxis: [
+            {
+              type: 'category',
+              boundaryGap: false,
+              data: xDataLine,
+              axisLine: {lineStyle: {color: '#ccc'}},
+              axisLabel: {fontFamily: FONT_FAMILY},
+              gridIndex: 0
+            },
+            {
+              type: 'category',
+              data: xDataBar,
+              axisLine: {lineStyle: {color: '#ccc'}},
+              axisLabel: {fontFamily: FONT_FAMILY},
+              gridIndex: 1
+            }
+          ],
+          yAxis: [
+            {
+              type: 'value',
+              splitLine: {lineStyle: {color: '#f0f0f0'}},
+              axisLabel: {fontFamily: FONT_FAMILY},
+              gridIndex: 0
+            },
+            {
+              type: 'value',
+              splitLine: {lineStyle: {color: '#f0f0f0'}},
+              axisLabel: {fontFamily: FONT_FAMILY},
+              gridIndex: 1
+            }
+          ],
           series: [{
-            name: '利润',
+            name: '今年利润',
             type: 'line',
+            xAxisIndex: 0,
+            yAxisIndex: 0,
             smooth: true,
             symbol: 'circle',
             symbolSize: 8,
@@ -475,7 +514,7 @@ export default {
                 {offset: 1, color: 'rgba(64, 158, 255, 0.05)'}
               ])
             },
-            data: yData,
+            data: yDataLine,
             markPoint: {
               data: [
                 {type: 'max', name: '最高', label: {formatter: '{c}', fontFamily: FONT_FAMILY}},
@@ -483,7 +522,28 @@ export default {
               ],
               label: {fontFamily: FONT_FAMILY}
             }
-          }]
+          },
+            {
+              name: '年度对比',
+              type: 'bar',
+              xAxisIndex: 1,
+              yAxisIndex: 1,
+              data: yDataBar,
+              barWidth: '40%',
+              itemStyle: {
+                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                  {offset: 0, color: '#36D1DC'},
+                  {offset: 1, color: '#5B86E5'}
+                ]),
+                borderRadius: [4, 4, 0, 0]
+              },
+              label: {
+                show: true,
+                position: 'top',
+                fontFamily: FONT_FAMILY,
+                color: '#333'
+              }
+            }]
         });
       }).catch(e => console.error(e));
     },

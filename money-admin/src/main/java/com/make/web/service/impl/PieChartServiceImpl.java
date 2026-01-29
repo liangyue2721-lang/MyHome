@@ -615,21 +615,25 @@ public class PieChartServiceImpl implements IPieChartService {
     }
 
     @Override
-    public List<SalesData> getProfitLineData(Long id) {
-        String cacheKeyPie = CacheConstants.HOMEPAGE_CACHE_PREFIX + "ProfitLineData" + "_" + id;
-        List<SalesData> cacheData = redisCache.getCacheList(cacheKeyPie);
+    public Map<String, Object> getProfitLineData(Long id) {
+        String cacheKeyPie = CacheConstants.HOMEPAGE_CACHE_PREFIX + "ProfitLineData_v2" + "_" + id;
+        Map<String, Object> cacheData = redisCache.getCacheMap(cacheKeyPie);
         if (!CollectionUtils.isEmpty(cacheData)) {
             return cacheData;
         }
-        SalesData salesData = new SalesData();
-        salesData.setUserId(id);
-        List<SalesData> dbData = salesDataService.selectSalesDataList(salesData);
-        if (!CollectionUtils.isEmpty(dbData)) {
-            redisCache.setCacheList(cacheKeyPie, dbData);
+        List<SalesData> lineData = salesDataService.selectSalesDataCurrentYear(id);
+        List<SalesData> barData = salesDataService.selectSalesDataYearlyMax(id);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("line", lineData);
+        result.put("bar", barData);
+
+        if (!CollectionUtils.isEmpty(lineData) || !CollectionUtils.isEmpty(barData)) {
+            redisCache.setCacheMap(cacheKeyPie, result);
             // 设置这个键的过期时间为 24 小时
             redisCache.setExpireTime(cacheKeyPie, 1, TimeUnit.HOURS);
         }
-        return dbData;
+        return result;
     }
 
     /**
