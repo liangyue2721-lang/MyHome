@@ -307,14 +307,6 @@ async def shutdown():
 # =========================================================
 
 async def fetch_json_with_browser(url: str, request_id: str, max_retry: int = 3):
-    """
-    使用浏览器环境 fetch 上游数据
-
-    关键原则：
-    - 一个请求独占一个 page
-    - 不共享、不 reload
-    - 请求结束必须归还 page
-    """
     trace = TraceAdapter(trace_logger, {"request_id": request_id})
     trace.info(f"Fetch start url={url}")
 
@@ -323,19 +315,38 @@ async def fetch_json_with_browser(url: str, request_id: str, max_retry: int = 3)
 
     async with SEMAPHORE:
         page = await PAGE_POOL.get()
+        page_ok = True  # 标记页面健康状态
+
         try:
             for attempt in range(1, max_retry + 1):
                 try:
+                    # =================================================
+                    # 策略 A: JS fetch (带 Referer + 超时控制)
+                    # =================================================
                     text = await page.evaluate(
                         """async (url) => {
-                            const r = await fetch(url, {
-                                credentials: 'include',
-                                headers: {
-                                    'Accept': '*/*',
-                                    'Accept-Language': 'zh-CN,zh;q=0.9'
-                                }
-                            });
-                            return await r.text();
+                            const controller = new AbortController();
+                            // 8秒超时，防止 fetch 僵死
+                            const timer = setTimeout(() => controller.abort(), 8000);
+
+                            try {
+                                const r = await fetch(url, {
+                                    method: 'GET',
+                                    credentials: 'include',
+                                    signal: controller.signal,
+                                    headers: {
+                                        'Accept': '*/*',
+                                        'Accept-Language': 'zh-CN,zh;q=0.9',
+                                        // 【关键】伪造 Referer，通过反爬校验
+                                        'Referer': 'https://quote.eastmoney.com/',
+                                        'User-Agent': navigator.userAgent
+                                    }
+                                });
+                                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                                return await r.text();
+                            } finally {
+                                clearTimeout(timer);
+                            }
                         }""",
                         url,
                     )
@@ -344,14 +355,80 @@ async def fetch_json_with_browser(url: str, request_id: str, max_retry: int = 3)
                     if parsed:
                         return parsed
 
-                except PlaywrightError as e:
-                    trace.warning(f"[Attempt {attempt}] PlaywrightError: {e}")
-                    await asyncio.sleep(0.2)
+                    # 只有当返回空内容时才视为重试理由，否则可能是被封IP
+                    if attempt == max_retry:
+                        trace.warning(f"Response parsed empty. content[:50]={text[:50]}")
 
-            raise HTTPException(status_code=500, detail="Upstream fetch failed")
+                except Exception as e:
+                    error_msg = str(e)
+                    trace.warning(f"[Attempt {attempt}] Error: {error_msg}")
+
+                    # 检查是否是页面崩溃等致命错误
+                    if "Target closed" in error_msg or "Session closed" in error_msg:
+                        page_ok = False
+                        break
+
+                    # =================================================
+                    # 策略 B: page.goto 兜底 (解决死活 fetch 不通的情况)
+                    # =================================================
+                    # 如果是 Failed to fetch，说明网络层被拦截，尝试直接跳转
+                    if "Failed to fetch" in error_msg or attempt == max_retry:
+                        try:
+                            trace.info(f"[Attempt {attempt}] Fallback to page.goto")
+                            # goto 实际上是模拟用户在地址栏回车，权限最高，最稳
+                            resp = await page.goto(url, wait_until="commit", timeout=10000)
+                            if resp and resp.ok:
+                                # innerText 获取纯文本，自动去除 <pre> 标签
+                                text = await page.evaluate("document.body.innerText")
+                                parsed = parse_json_or_jsonp(text)
+                                if parsed:
+                                    # 成功后，最好重置一下页面，防止停留在 API 页影响下次 fetch
+                                    # 但为了性能，这里不做额外跳转，依赖下一轮 fetch 的绝对路径
+                                    return parsed
+                        except Exception as goto_e:
+                            trace.error(f"Goto fallback failed: {goto_e}")
+
+                    await asyncio.sleep(0.3 * attempt)
+
+            raise HTTPException(status_code=502, detail="Upstream fetch failed")
 
         finally:
-            await PAGE_POOL.put(page)
+            # =================================================
+            # 页面回收逻辑 (保留了你的设计)
+            # =================================================
+            if page_ok:
+                await PAGE_POOL.put(page)
+            else:
+                trace.warning("Discard broken page, recreating...")
+                try:
+                    await page.close()
+                except Exception:
+                    pass
+
+                # 异步重新创建页面补满池子
+                asyncio.create_task(_recreate_page())
+
+
+async def _recreate_page():
+    """辅助函数：创建一个新页面放回池中"""
+    try:
+        # 确保 BROWSER 全局变量存在
+        if not BROWSER: return
+
+        context = await BROWSER.new_context(
+            locale="zh-CN",
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+        await context.add_init_script("() => Object.defineProperty(navigator,'webdriver',{get:()=>undefined})")
+        new_page = await context.new_page()
+
+        # 可选：预热
+        # await new_page.goto("about:blank")
+
+        await PAGE_POOL.put(new_page)
+        logger.info("Recreated page added to pool.")
+    except Exception as e:
+        logger.error(f"Failed to recreate page: {e}")
 
 
 # =========================================================
