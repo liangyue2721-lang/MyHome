@@ -21,6 +21,7 @@ import com.make.stock.service.IStockTradesService;
 import com.make.stock.service.IWatchstockService;
 import com.make.stock.util.KlineDataFetcher;
 import com.make.common.annotation.IdempotentConsumer;
+import com.make.stock.mapper.StockKlineTaskMapper;
 import org.apache.commons.collections4.CollectionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,6 +77,8 @@ public class StockRefreshHandler implements IStockRefreshHandler {
     private IStockRefreshExecuteRecordService recordService;
     @Resource
     private StockTaskQueueService queueService;
+    @Resource
+    private StockKlineTaskMapper stockKlineTaskMapper;
 
     /**
      * 处理股票刷新任务的主入口
@@ -104,15 +107,27 @@ public class StockRefreshHandler implements IStockRefreshHandler {
             }
             stockName = ws.getName();
 
-            // 3. 校验 API URL
-            String apiUrl = ws.getStockApi();
-            if (apiUrl == null || apiUrl.contains("secid=null")) {
-                dbResult = "INVALID_URL";
-                return;
+            StockRealtimeInfo info = null;
+
+            // 尝试从 K 线服务获取数据（优先策略）
+            String market = getMarketFromTask(stockCode);
+            if (market != null && !market.isEmpty()) {
+                info = fetchFromKlineData(stockCode, market);
             }
 
-            // 4. 获取实时数据（带重试机制）
-            StockRealtimeInfo info = fetchRealtimeWithRetry(apiUrl);
+            // Fallback: 如果 K 线数据获取失败，使用原有 URL 方式
+            if (info == null) {
+                // 3. 校验 API URL
+                String apiUrl = ws.getStockApi();
+                if (apiUrl == null || apiUrl.contains("secid=null")) {
+                    dbResult = "INVALID_URL";
+                    return;
+                }
+
+                // 4. 获取实时数据（带重试机制）
+                info = fetchRealtimeWithRetry(apiUrl);
+            }
+
             if (info == null) {
                 dbResult = "Fetch returned null after retry";
                 return;
@@ -162,6 +177,56 @@ public class StockRefreshHandler implements IStockRefreshHandler {
             // 9. 保存执行记录
             saveExecutionRecord(stockCode, stockName, dbStatus, dbResult, traceId);
         }
+    }
+
+    /**
+     * 尝试查询 stock_kline_task 表获取 market
+     */
+    private String getMarketFromTask(String stockCode) {
+        try {
+            StockKlineTask query = new StockKlineTask();
+            query.setStockCode(stockCode);
+            List<StockKlineTask> tasks = stockKlineTaskMapper.selectStockKlineTaskList(query);
+            if (CollectionUtils.isNotEmpty(tasks)) {
+                return tasks.get(0).getMarket();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to query market from stock_kline_task for {}", stockCode, e);
+        }
+        return null;
+    }
+
+    /**
+     * 通过 KlineDataFetcher 获取 5 日 K 线并取最新一条转换为 RealtimeInfo
+     */
+    private StockRealtimeInfo fetchFromKlineData(String stockCode, String market) {
+        try {
+            List<KlineData> klineDataList = KlineDataFetcher.fetchKlineDataFiveDay(stockCode, market);
+            if (CollectionUtils.isNotEmpty(klineDataList)) {
+                // 取最后一条（最新日期）
+                KlineData latest = klineDataList.get(klineDataList.size() - 1);
+                return convertKlineToRealtime(stockCode, latest);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch kline data for code={}, market={}", stockCode, market, e);
+        }
+        return null;
+    }
+
+    /**
+     * 将 KlineData 转换为 StockRealtimeInfo
+     */
+    private StockRealtimeInfo convertKlineToRealtime(String stockCode, KlineData kline) {
+        StockRealtimeInfo info = new StockRealtimeInfo();
+        info.setStockCode(stockCode);
+        info.setPrice(kline.getClose());
+        info.setPrevClose(kline.getPreClose());
+        info.setOpenPrice(kline.getOpen());
+        info.setHighPrice(kline.getHigh());
+        info.setLowPrice(kline.getLow());
+        info.setVolume(kline.getVolume());
+        info.setTurnover(kline.getAmount());
+        return info;
     }
 
     /**
