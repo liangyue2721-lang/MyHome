@@ -2,9 +2,11 @@
 # -*- coding: utf-8 -*-
 
 """
-Stock Data Service v1.4 (Fixed)
-修复：CACHED_HEADERS 未定义报错
-新增：自动抓取 Headers 逻辑
+Stock Data Service v1.7 (Stability Fix)
+【版本更新说明】
+1. 修复 TargetClosedError: 在浏览器关闭过程中忽略后台请求回调报错
+2. 保持 v1.6 的 SSL 修复配置
+3. 优化了并发锁逻辑
 """
 
 import os
@@ -14,6 +16,7 @@ import asyncio
 import re
 import time
 import uuid
+import random
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from logging.handlers import TimedRotatingFileHandler
@@ -27,7 +30,7 @@ from playwright.async_api import (
 )
 
 # =========================================================
-# 日志系统初始化
+# 1. 日志系统初始化
 # =========================================================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -74,30 +77,25 @@ trace_logger = _build_logger(
 logging.getLogger("uvicorn.access").disabled = True
 
 # =========================================================
-# FastAPI 应用
+# 2. FastAPI 应用 & 全局状态
 # =========================================================
 
-app = FastAPI(title="Stock Data Service", version="1.4.1")
+app = FastAPI(title="Stock Data Service", version="1.7.0")
 
-# =========================================================
-# 运行期全局对象
-# =========================================================
-
+# 核心资源
 PLAYWRIGHT: Optional[Any] = None
 BROWSER: Optional[Browser] = None
 SEMAPHORE: Optional[asyncio.Semaphore] = None
 PAGE_POOL: asyncio.Queue = asyncio.Queue()
 
-# ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-# 【修复点 1】必须在这里定义全局状态变量，否则报错
-# ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-AUTH_LOCK = asyncio.Lock()  # 互斥锁，防止同时弹出浏览器
-CACHED_HEADERS = {}  # 存储“偷”来的 Headers
-LAST_AUTH_TIME = 0  # 上次获取时间
+# 认证状态管理
+AUTH_LOCK = asyncio.Lock()  # 互斥锁
+CACHED_HEADERS = {}  # 存储抓取到的真实 Headers
+LAST_AUTH_TIME = 0  # 上次抓取时间
 
 
 # =========================================================
-# Trace 日志适配器 & 中间件
+# 3. 中间件与工具
 # =========================================================
 
 class TraceAdapter(logging.LoggerAdapter):
@@ -135,18 +133,16 @@ async def access_log_middleware(request: Request, call_next):
         }, ensure_ascii=False))
 
 
-# =========================================================
-# 工具函数
-# =========================================================
-
 def parse_json_or_jsonp(text: str):
+    """解析 JSON 或 JSONP"""
     if not text:
         return None
     try:
         return json.loads(text)
     except Exception:
         pass
-    match = re.search(r"\w+\((.*)\)\s*;?$", text, flags=re.S)
+    # 匹配 callback({...}) 格式
+    match = re.search(r"^\s*(?:jQuery\w+|callback|cb\w*)\s*\((.*)\)\s*;?\s*$", text, flags=re.S)
     if match:
         try:
             return json.loads(match.group(1))
@@ -166,7 +162,7 @@ def normalize_secid(code: str) -> str:
 
 
 # =========================================================
-# 生命周期：启动与关闭
+# 4. 生命周期管理
 # =========================================================
 
 @app.on_event("startup")
@@ -176,13 +172,17 @@ async def startup():
     logger.info("Starting Playwright...")
     PLAYWRIGHT = await async_playwright().start()
 
-    # 主服务使用 Headless 模式，且必须禁用 Web 安全策略
+    # 启动主浏览器 (Headless)
+    # 包含 SSL 修复和 Web 安全禁用
     BROWSER = await PLAYWRIGHT.chromium.launch(
         headless=True,
         args=[
             "--disable-blink-features=AutomationControlled",
-            "--disable-web-security",  # 【重要】禁用跨域
+            "--disable-web-security",
             "--disable-features=IsolateOrigins,site-per-process",
+            "--ignore-certificate-errors",  # 忽略 SSL 错误
+            "--allow-running-insecure-content",  # 允许混合内容
+            "--no-sandbox",
         ],
     )
 
@@ -192,14 +192,17 @@ async def startup():
     for i in range(page_count):
         context = await BROWSER.new_context(
             locale="zh-CN",
+            ignore_https_errors=True,
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         )
         await context.add_init_script("() => Object.defineProperty(navigator,'webdriver',{get:()=>undefined})")
         page = await context.new_page()
 
         try:
-            # 预热
+            # 预热并停靠
+            logger.info(f"Warming up page {i}...")
             await page.goto("https://quote.eastmoney.com/", wait_until="domcontentloaded", timeout=30000)
+            await page.goto("about:blank")
             logger.info(f"Warmup page {i} OK")
         except Exception as e:
             logger.warning(f"Warmup page {i} ignored: {e}")
@@ -221,90 +224,110 @@ async def shutdown():
 
 
 async def _recreate_page():
-    """辅助函数：创建一个新页面放回池中"""
+    """创建一个新页面并放入池中"""
     try:
         if not BROWSER: return
         context = await BROWSER.new_context(
             locale="zh-CN",
+            ignore_https_errors=True,
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         )
         await context.add_init_script("() => Object.defineProperty(navigator,'webdriver',{get:()=>undefined})")
         new_page = await context.new_page()
+        try:
+            await new_page.goto("about:blank")
+        except:
+            pass
         await PAGE_POOL.put(new_page)
         logger.info("Recreated page added to pool.")
     except Exception as e:
         logger.error(f"Failed to recreate page: {e}")
 
 
-# ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-# 【修复点 2】补充缺失的自动认证抓包函数
-# ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+# =========================================================
+# 5. 自动认证逻辑 (TargetClosedError 修复核心)
+# =========================================================
+
 async def _refresh_auth_headers_if_needed():
-    """
-    启动一个可见的浏览器，访问目标页面，捕获真实的 Request Headers
-    """
+    """启动可见浏览器，访问行情页，抓取真实 Headers"""
     global CACHED_HEADERS, LAST_AUTH_TIME
 
-    # 冷却时间 60秒，避免频繁弹窗
+    # 冷却时间检查
     if time.time() - LAST_AUTH_TIME < 60 and CACHED_HEADERS:
         return
 
-    logger.info(">>> 启动可见浏览器进行身份认证抓包 (Headless=False)...")
+    logger.info(">>> [Auth] Launching Auth Browser to capture headers...")
 
-    # 使用独立的 playwright 实例
-    async with await async_playwright().start() as p:
+    async with async_playwright() as p:
+        auth_browser = None
         try:
-            # 必须用有头模式
             auth_browser = await p.chromium.launch(
                 headless=False,
-                args=["--disable-blink-features=AutomationControlled"]
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--ignore-certificate-errors"
+                ]
             )
-            context = await auth_browser.new_context()
+            context = await auth_browser.new_context(ignore_https_errors=True)
             page = await context.new_page()
 
-            # Future 对象用于接收结果
             headers_future = asyncio.get_running_loop().create_future()
 
+            # ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+            # 【核心修复】增加异常捕获，防止浏览器关闭时回调报错
+            # ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
             async def handle_request(request):
-                # 监听行情接口，截获 Headers
-                if (
-                        "api/qt/stock" in request.url or "push2.eastmoney.com" in request.url) and not headers_future.done():
+                # 1. 如果任务已经完成，直接忽略后续请求
+                if headers_future.done():
+                    return
+
+                # 2. 只有目标接口才处理
+                if "api/qt/stock" not in request.url and "push2.eastmoney.com" not in request.url:
+                    return
+
+                try:
+                    # 3. 尝试获取 Headers，如果浏览器正在关闭，这里会抛错
                     headers = await request.all_headers()
-                    # 过滤掉不必要的头
+
                     valid_headers = {
                         k: v for k, v in headers.items()
                         if k.lower() not in [':method', ':scheme', ':authority', ':path', 'content-length']
                     }
+
                     if not headers_future.done():
                         headers_future.set_result(valid_headers)
+                except Exception:
+                    # 忽略所有错误（包括 TargetClosedError），因为我们可能正在关闭浏览器
+                    pass
 
             page.on("request", handle_request)
 
-            logger.info("Navigating to capture headers...")
-            # 访问平安银行行情页，触发 API
+            logger.info(">>> [Auth] Navigating to quote page...")
             await page.goto("https://quote.eastmoney.com/sz000001.html", wait_until="domcontentloaded")
 
-            # 最多等待 15 秒
-            new_headers = await asyncio.wait_for(headers_future, timeout=15.0)
+            # 等待捕获结果
+            new_headers = await asyncio.wait_for(headers_future, timeout=20.0)
 
             if new_headers:
                 CACHED_HEADERS = new_headers
                 LAST_AUTH_TIME = time.time()
-                logger.info(f"Headers captured successfully! Keys: {list(CACHED_HEADERS.keys())}")
+                safe_log_headers = {k: (v[:10] + '...') for k, v in CACHED_HEADERS.items() if len(v) > 20}
+                logger.info(f">>> [Auth] Headers captured! Sample: {json.dumps(safe_log_headers)}")
 
         except asyncio.TimeoutError:
-            logger.error("Auth browser timed out.")
+            logger.error(">>> [Auth] Timeout. No API headers captured.")
         except Exception as e:
-            logger.error(f"Auth browser failed: {e}")
+            logger.error(f">>> [Auth] Failed: {e}")
         finally:
             try:
-                await auth_browser.close()
+                if auth_browser:
+                    await auth_browser.close()
             except:
                 pass
 
 
 # =========================================================
-# 核心：基于 Page Pool 的安全 fetch
+# 6. 核心 Fetch 逻辑
 # =========================================================
 
 async def fetch_json_with_browser(url: str, request_id: str, max_retry: int = 3):
@@ -317,11 +340,12 @@ async def fetch_json_with_browser(url: str, request_id: str, max_retry: int = 3)
     async with SEMAPHORE:
         page = await PAGE_POOL.get()
         page_ok = True
+        page_dirty = False
 
         try:
             for attempt in range(1, max_retry + 1):
                 try:
-                    # 准备 Headers：如果有缓存的“真”Headers，就用它；否则用默认伪造的
+                    # 准备 Headers
                     current_headers = CACHED_HEADERS.copy() if CACHED_HEADERS else {
                         'Accept': '*/*',
                         'Accept-Language': 'zh-CN,zh;q=0.9',
@@ -329,23 +353,26 @@ async def fetch_json_with_browser(url: str, request_id: str, max_retry: int = 3)
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                     }
 
-                    # =================================================
-                    # 策略 A: JS fetch (动态注入 Headers)
-                    # =================================================
+                    # -------------------------------------------------
+                    # 策略 A: JS Fetch
+                    # -------------------------------------------------
                     text = await page.evaluate(
                         """async ([url, headers]) => {
                             const controller = new AbortController();
-                            const timer = setTimeout(() => controller.abort(), 8000);
+                            const timer = setTimeout(() => controller.abort(), 20000);
 
                             try {
                                 const r = await fetch(url, {
                                     method: 'GET',
                                     credentials: 'include',
                                     signal: controller.signal,
-                                    headers: headers  // 【修复】使用 Python 传入的全局 Headers
+                                    headers: headers
                                 });
                                 if (!r.ok) throw new Error(`HTTP ${r.status}`);
                                 return await r.text();
+                            } catch (e) {
+                                if (e.name === 'AbortError') throw new Error('Fetch timeout');
+                                throw e;
                             } finally {
                                 clearTimeout(timer);
                             }
@@ -354,50 +381,60 @@ async def fetch_json_with_browser(url: str, request_id: str, max_retry: int = 3)
                     )
 
                     parsed = parse_json_or_jsonp(text)
-                    if parsed:
-                        return parsed
+                    if parsed: return parsed
 
                     if attempt == max_retry:
                         trace.warning(f"Response parsed empty.")
 
                 except Exception as e:
                     error_msg = str(e)
-                    trace.warning(f"[Attempt {attempt}] Error: {error_msg}")
+                    trace.warning(f"[Attempt {attempt}] Error type: {type(e).__name__}, Msg: {error_msg}")
 
                     if "Target closed" in error_msg or "Session closed" in error_msg:
                         page_ok = False
                         break
 
-                    # =================================================
-                    # 触发认证刷新逻辑
-                    # =================================================
+                    # 触发认证刷新
                     if ("Failed to fetch" in error_msg or "HTTP 403" in error_msg) and attempt < max_retry:
-                        trace.warning("Detected auth failure. Launching rescue browser...")
+                        trace.warning("Auth failure detected. Trying to refresh headers...")
                         if not AUTH_LOCK.locked():
                             async with AUTH_LOCK:
                                 await _refresh_auth_headers_if_needed()
                         else:
                             await asyncio.sleep(2)
 
-                    # =================================================
-                    # 策略 B: page.goto 兜底
-                    # =================================================
-                    if ("Failed to fetch" in error_msg or attempt == max_retry) and page_ok:
+                    # -------------------------------------------------
+                    # 策略 B: Page Goto 兜底
+                    # -------------------------------------------------
+                    if (
+                            "Failed to fetch" in error_msg or "timeout" in error_msg.lower() or attempt == max_retry) and page_ok:
                         try:
                             trace.info(f"[Attempt {attempt}] Fallback to page.goto")
-                            resp = await page.goto(url, wait_until="commit", timeout=10000)
+                            resp = await page.goto(url, wait_until="commit", timeout=20000)
+                            page_dirty = True
+
                             if resp and resp.ok:
                                 text = await page.evaluate("document.body.innerText")
                                 parsed = parse_json_or_jsonp(text)
                                 if parsed: return parsed
+                            else:
+                                trace.warning(f"Goto response not ok: {resp.status if resp else 'No resp'}")
+
                         except Exception as goto_e:
                             trace.error(f"Goto fallback failed: {goto_e}")
 
-                    await asyncio.sleep(0.3 * attempt)
+                    # 随机等待
+                    await asyncio.sleep(0.5 * attempt + random.random() * 0.5)
 
             raise HTTPException(status_code=502, detail="Upstream fetch failed")
 
         finally:
+            if page_ok and page_dirty:
+                try:
+                    await page.goto("about:blank")
+                except Exception:
+                    page_ok = False
+
             if page_ok:
                 await PAGE_POOL.put(page)
             else:
@@ -410,7 +447,7 @@ async def fetch_json_with_browser(url: str, request_id: str, max_retry: int = 3)
 
 
 # =========================================================
-# 请求模型与接口实现 (保持不变)
+# 7. 数据模型与接口
 # =========================================================
 
 class RealtimeRequest(BaseModel):
@@ -520,6 +557,7 @@ def health():
         "browser": BROWSER is not None,
         "page_pool": PAGE_POOL.qsize(),
         "cached_headers_keys": list(CACHED_HEADERS.keys()) if CACHED_HEADERS else [],
+        "last_auth_time": datetime.fromtimestamp(LAST_AUTH_TIME).isoformat() if LAST_AUTH_TIME else None
     }
 
 
@@ -543,7 +581,9 @@ async def stock_ticks(req: TickRequest, request: Request):
     parts = secid.split('.')
     stock_code = parts[1] if len(parts) > 1 else secid
     ts = int(time.time() * 1000)
+    # 构造 URL
     url = f"https://push2.eastmoney.com/api/qt/stock/details/get?secid={secid}&ut=bd1d9ddb04089700cf9c27f6f7426281&fields1=f1,f2,f3,f4&fields2=f51,f52,f53,f54,f55&pos=-1000000&num=1000000&cb=jQuery_{ts}&_={ts}"
+
     raw = await fetch_json_with_browser(url, request.state.request_id)
     if not raw or not raw.get("data"): return []
     return standardize_tick(raw["data"], stock_code)
