@@ -123,7 +123,7 @@ public class WatchStockUpdater {
         watchstock.setNewPrice(BigDecimal.valueOf(info.getPrice()));
         watchstock.setHighPrice(BigDecimal.valueOf(info.getHighPrice()));
         watchstock.setLowPrice(BigDecimal.valueOf(info.getLowPrice()));
-//        watchstock.setPreviousClose(BigDecimal.valueOf(info.getPrevClose()));
+        watchstock.setPreviousClose(BigDecimal.valueOf(info.getPrevClose()));
 
         // 计算涨跌
         BigDecimal close = watchstock.getNewPrice();

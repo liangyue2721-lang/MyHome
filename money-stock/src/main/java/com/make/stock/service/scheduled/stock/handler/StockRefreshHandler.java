@@ -112,7 +112,9 @@ public class StockRefreshHandler implements IStockRefreshHandler {
             // 尝试从 K 线服务获取数据（优先策略）
             String market = getMarketFromTask(stockCode);
             if (market != null && !market.isEmpty()) {
-                info = fetchFromKlineData(stockCode, market);
+                info = null;
+                // toDO 存在并发问题以及丢失数据问题，需要重新设计并发控制策略
+//                info = fetchFromKlineData(stockCode, market);
             }
 
             // Fallback: 如果 K 线数据获取失败，使用原有 URL 方式
