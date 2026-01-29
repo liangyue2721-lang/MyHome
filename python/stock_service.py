@@ -161,7 +161,7 @@ async def startup():
     # 启动前预热一次 Headers
     await _refresh_auth_headers_if_needed()
 
-    for i in range(4):
+    for i in range(5):
         context = await BROWSER.new_context(
             locale="zh-CN",
             ignore_https_errors=True,
