@@ -305,7 +305,6 @@ async def shutdown():
 # =========================================================
 # 核心：基于 Page Pool 的安全 fetch
 # =========================================================
-
 async def fetch_json_with_browser(url: str, request_id: str, max_retry: int = 3):
     trace = TraceAdapter(trace_logger, {"request_id": request_id})
     trace.info(f"Fetch start url={url}")
@@ -315,18 +314,26 @@ async def fetch_json_with_browser(url: str, request_id: str, max_retry: int = 3)
 
     async with SEMAPHORE:
         page = await PAGE_POOL.get()
-        page_ok = True  # 标记页面健康状态
+        page_ok = True
 
         try:
             for attempt in range(1, max_retry + 1):
                 try:
+                    # 准备 Headers：如果有缓存的“真”Headers，就用它；否则用默认伪造的
+                    current_headers = CACHED_HEADERS.copy() if CACHED_HEADERS else {
+                        'Accept': '*/*',
+                        'Accept-Language': 'zh-CN,zh;q=0.9',
+                        'Referer': 'https://quote.eastmoney.com/',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                    }
+
                     # =================================================
-                    # 策略 A: JS fetch (带 Referer + 超时控制)
+                    # 策略 A: JS fetch (动态注入 Headers)
                     # =================================================
+                    # 注意：这里我们修改了 evaluate 的参数传递方式，把 [url, headers] 传进去
                     text = await page.evaluate(
-                        """async (url) => {
+                        """async ([url, headers]) => {
                             const controller = new AbortController();
-                            // 8秒超时，防止 fetch 僵死
                             const timer = setTimeout(() => controller.abort(), 8000);
 
                             try {
@@ -334,13 +341,7 @@ async def fetch_json_with_browser(url: str, request_id: str, max_retry: int = 3)
                                     method: 'GET',
                                     credentials: 'include',
                                     signal: controller.signal,
-                                    headers: {
-                                        'Accept': '*/*',
-                                        'Accept-Language': 'zh-CN,zh;q=0.9',
-                                        // 【关键】伪造 Referer，通过反爬校验
-                                        'Referer': 'https://quote.eastmoney.com/',
-                                        'User-Agent': navigator.userAgent
-                                    }
+                                    headers: headers  // 【关键】使用 Python 传入的 Headers
                                 });
                                 if (!r.ok) throw new Error(`HTTP ${r.status}`);
                                 return await r.text();
@@ -348,14 +349,13 @@ async def fetch_json_with_browser(url: str, request_id: str, max_retry: int = 3)
                                 clearTimeout(timer);
                             }
                         }""",
-                        url,
+                        [url, current_headers],  # 传参
                     )
 
                     parsed = parse_json_or_jsonp(text)
                     if parsed:
                         return parsed
 
-                    # 只有当返回空内容时才视为重试理由，否则可能是被封IP
                     if attempt == max_retry:
                         trace.warning(f"Response parsed empty. content[:50]={text[:50]}")
 
@@ -363,28 +363,36 @@ async def fetch_json_with_browser(url: str, request_id: str, max_retry: int = 3)
                     error_msg = str(e)
                     trace.warning(f"[Attempt {attempt}] Error: {error_msg}")
 
-                    # 检查是否是页面崩溃等致命错误
                     if "Target closed" in error_msg or "Session closed" in error_msg:
                         page_ok = False
                         break
 
                     # =================================================
-                    # 策略 B: page.goto 兜底 (解决死活 fetch 不通的情况)
+                    # 触发认证刷新逻辑 (核武器)
                     # =================================================
-                    # 如果是 Failed to fetch，说明网络层被拦截，尝试直接跳转
-                    if "Failed to fetch" in error_msg or attempt == max_retry:
+                    # 如果是 Failed to fetch，或者是 403 禁止访问，说明当前环境/Header 失效
+                    if ("Failed to fetch" in error_msg or "HTTP 403" in error_msg) and attempt < max_retry:
+                        trace.warning("Detected potential auth failure. Launching rescue browser...")
+                        # 使用锁，防止多个并发请求同时弹浏览器
+                        if not AUTH_LOCK.locked():
+                            async with AUTH_LOCK:
+                                await _refresh_auth_headers_if_needed()
+                        else:
+                            # 如果别人正在刷新，我稍微等一下
+                            await asyncio.sleep(2)
+                        # 刷新完后，下一次循环会自动使用新的 CACHED_HEADERS
+
+                    # =================================================
+                    # 策略 B: page.goto 兜底
+                    # =================================================
+                    if ("Failed to fetch" in error_msg or attempt == max_retry) and page_ok:
                         try:
                             trace.info(f"[Attempt {attempt}] Fallback to page.goto")
-                            # goto 实际上是模拟用户在地址栏回车，权限最高，最稳
                             resp = await page.goto(url, wait_until="commit", timeout=10000)
                             if resp and resp.ok:
-                                # innerText 获取纯文本，自动去除 <pre> 标签
                                 text = await page.evaluate("document.body.innerText")
                                 parsed = parse_json_or_jsonp(text)
-                                if parsed:
-                                    # 成功后，最好重置一下页面，防止停留在 API 页影响下次 fetch
-                                    # 但为了性能，这里不做额外跳转，依赖下一轮 fetch 的绝对路径
-                                    return parsed
+                                if parsed: return parsed
                         except Exception as goto_e:
                             trace.error(f"Goto fallback failed: {goto_e}")
 
@@ -393,9 +401,6 @@ async def fetch_json_with_browser(url: str, request_id: str, max_retry: int = 3)
             raise HTTPException(status_code=502, detail="Upstream fetch failed")
 
         finally:
-            # =================================================
-            # 页面回收逻辑 (保留了你的设计)
-            # =================================================
             if page_ok:
                 await PAGE_POOL.put(page)
             else:
@@ -404,31 +409,7 @@ async def fetch_json_with_browser(url: str, request_id: str, max_retry: int = 3)
                     await page.close()
                 except Exception:
                     pass
-
-                # 异步重新创建页面补满池子
                 asyncio.create_task(_recreate_page())
-
-
-async def _recreate_page():
-    """辅助函数：创建一个新页面放回池中"""
-    try:
-        # 确保 BROWSER 全局变量存在
-        if not BROWSER: return
-
-        context = await BROWSER.new_context(
-            locale="zh-CN",
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        )
-        await context.add_init_script("() => Object.defineProperty(navigator,'webdriver',{get:()=>undefined})")
-        new_page = await context.new_page()
-
-        # 可选：预热
-        # await new_page.goto("about:blank")
-
-        await PAGE_POOL.put(new_page)
-        logger.info("Recreated page added to pool.")
-    except Exception as e:
-        logger.error(f"Failed to recreate page: {e}")
 
 
 # =========================================================
