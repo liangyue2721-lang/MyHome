@@ -512,22 +512,53 @@ public class StockRefreshHandler implements IStockRefreshHandler {
             notice.setName(ws.getName());
             notice.setNewPrice(ws.getNewPrice());
 
-            String subject = String.format("股票价格预警：%s(%s)",
+            // 1. 标题优化：增加【】标识和核心信息，方便在收件箱快速扫视
+            String subject = String.format("【价格预警】%s (%s) 已达到预设目标价",
                     ws.getName(), ws.getCode());
 
+            // 2. 构造美化后的 HTML 邮件模板
             String htmlContent = String.format(
-                    "<h3>价格预警触发</h3>" +
-                            "<p>您关注的股票已触发预设价格条件：</p>" +
-                            "<ul>" +
-                            "  <li><strong>代码：</strong>%s</li>" +
-                            "  <li><strong>名称：</strong>%s</li>" +
-                            "  <li><strong>当前价格：</strong>%s</li>" +
-                            "  <li><strong>预警价格：</strong>%s</li>" +
-                            "  <li><strong>触发时间：</strong>%s</li>" +
-                            "</ul>" +
-                            "<h4>通知数据结构：</h4><pre>%s</pre>",
-                    ws.getCode(),
-                    ws.getName(),
+                    "<div style='font-family: \"Microsoft YaHei\", -apple-system, sans-serif; max-width: 600px; margin: 20px auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);'>" +
+                            "  " +
+                            "  <div style='background: linear-gradient(90deg, #e11d48 0%%, #fb7185 100%%); padding: 20px; text-align: center;'>" +
+                            "    <h2 style='margin: 0; color: white; font-size: 20px; letter-spacing: 1px;'>📈 实时价格预警触发</h2>" +
+                            "  </div>" +
+                            "  " +
+                            "  <div style='padding: 30px; background-color: #ffffff;'>" +
+                            "    <p style='margin-top: 0; color: #4b5563; font-size: 15px;'>您好，系统检测到您关注的个股行情已触发预设条件：</p>" +
+                            "    " +
+                            "    " +
+                            "    <table style='width: 100%%; border-collapse: collapse; margin: 25px 0; background-color: #fffafb; border-radius: 8px;'>" +
+                            "      <tr>" +
+                            "        <td style='padding: 12px 15px; color: #6b7280; font-size: 14px; border-bottom: 1px solid #fee2e2;'>股票信息</td>" +
+                            "        <td style='padding: 12px 15px; font-weight: bold; color: #111827; border-bottom: 1px solid #fee2e2;'>%s (%s)</td>" +
+                            "      </tr>" +
+                            "      <tr>" +
+                            "        <td style='padding: 12px 15px; color: #6b7280; font-size: 14px; border-bottom: 1px solid #fee2e2;'>当前价格</td>" +
+                            "        <td style='padding: 12px 15px; font-size: 26px; font-weight: 800; color: #e11d48; border-bottom: 1px solid #fee2e2;'>%s</td>" +
+                            "      </tr>" +
+                            "      <tr>" +
+                            "        <td style='padding: 12px 15px; color: #6b7280; font-size: 14px; border-bottom: 1px solid #fee2e2;'>预警门槛</td>" +
+                            "        <td style='padding: 12px 15px; font-weight: 600; color: #374151; border-bottom: 1px solid #fee2e2;'>%s</td>" +
+                            "      </tr>" +
+                            "      <tr>" +
+                            "        <td style='padding: 12px 15px; color: #6b7280; font-size: 14px;'>触发时间</td>" +
+                            "        <td style='padding: 12px 15px; color: #6b7280; font-size: 14px;'>%s</td>" +
+                            "      </tr>" +
+                            "    </table>" +
+                            "    " +
+                            "    " +
+                            "    <div style='margin-top: 30px; border-top: 1px solid #f3f4f6; padding-top: 20px;'>" +
+                            "      <p style='color: #9ca3af; font-size: 12px; margin-bottom: 10px; font-weight: bold;'>DEBUG INFO / 原始数据回执：</p>" +
+                            "      <pre style='background: #1f2937; color: #34d399; padding: 15px; border-radius: 6px; font-size: 12px; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; line-height: 1.5;'>%s</pre>" +
+                            "    </div>" +
+                            "  </div>" +
+                            "  " +
+                            "  <div style='background-color: #f9fafb; padding: 15px; text-align: center;'>" +
+                            "    <p style='color: #9ca3af; font-size: 12px; margin: 0;'>本邮件由量化预警系统自动发送，请勿回复。</p>" +
+                            "  </div>" +
+                            "</div>",
+                    ws.getName(), ws.getCode(),
                     ws.getNewPrice(),
                     ws.getThresholdPrice(),
                     LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
