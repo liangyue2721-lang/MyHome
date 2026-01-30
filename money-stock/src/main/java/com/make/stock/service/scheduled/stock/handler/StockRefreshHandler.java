@@ -109,15 +109,13 @@ public class StockRefreshHandler implements IStockRefreshHandler {
 
             StockRealtimeInfo info = null;
 
-            // 尝试从 K 线服务获取数据（优先策略）
+            // 尝试根据code和market获取数据（优先策略）
             String market = getMarketFromTask(stockCode);
             if (market != null && !market.isEmpty()) {
-                info = null;
-                // toDO 存在并发问题以及丢失数据问题，需要重新设计并发控制策略
-//                info = fetchFromKlineData(stockCode, market);
+                info = fetchFromData(stockCode, market);
             }
 
-            // Fallback: 如果 K 线数据获取失败，使用原有 URL 方式
+            // Fallback: 如果数据获取失败，使用原有 URL 方式
             if (info == null) {
                 // 3. 校验 API URL
                 String apiUrl = ws.getStockApi();
@@ -199,16 +197,11 @@ public class StockRefreshHandler implements IStockRefreshHandler {
     }
 
     /**
-     * 通过 KlineDataFetcher 获取 5 日 K 线并取最新一条转换为 RealtimeInfo
+     *
      */
-    private StockRealtimeInfo fetchFromKlineData(String stockCode, String market) {
+    private StockRealtimeInfo fetchFromData(String stockCode, String market) {
         try {
-            List<KlineData> klineDataList = KlineDataFetcher.fetchKlineDataFiveDay(stockCode, market);
-            if (CollectionUtils.isNotEmpty(klineDataList)) {
-                // 取最后一条（最新日期）
-                KlineData latest = klineDataList.get(klineDataList.size() - 1);
-                return convertKlineToRealtime(stockCode, latest);
-            }
+            return KlineDataFetcher.fetchStockSnapshot(stockCode, market);
         } catch (Exception e) {
             log.warn("Failed to fetch kline data for code={}, market={}", stockCode, market, e);
         }

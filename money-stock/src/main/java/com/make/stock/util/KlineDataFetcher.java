@@ -349,6 +349,21 @@ public class KlineDataFetcher {
         );
     }
 
+    /**
+     * 获取实时快照 (对应 Python: /stock/snapshot)
+     */
+    public static StockRealtimeInfo fetchStockSnapshot(String secid, String market) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("secid", formatFullSecid(secid, market));
+
+        return callPythonSyncData(
+                "/stock/snapshot",
+                body,
+                new TypeReference<StockRealtimeInfo>() {
+                }
+        );
+    }
+
     public static EtfRealtimeInfo fetchEtfRealtimeInfo(String apiUrl) {
         return callPythonSyncData(
                 "/etf/realtime",
