@@ -3,7 +3,7 @@ setlocal
 chcp 65001 >nul
 
 echo ==========================================
-echo Stock Service - Stop Script (Safe Kill)
+echo Stock Service - Stop Script (Windows)
 echo ==========================================
 
 set PORT=8000
@@ -22,13 +22,13 @@ goto END
 
 :FOUND
 echo [INFO] Found process PID=%PID%
-echo [INFO] Stopping service and child processes...
+echo [INFO] Stopping service...
 
-REM 优雅结束进程树 (/T 杀死子进程，/F 强制)
-taskkill /PID %PID% /F /T
+REM 优雅结束进程
+taskkill /PID %PID% /F
 
 if errorlevel 1 (
-    echo [WARN] Could not kill process %PID% (Verify if it is already gone)
+    echo ERROR: Failed to stop process %PID%
     goto END
 )
 
