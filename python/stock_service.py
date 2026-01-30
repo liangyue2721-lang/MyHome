@@ -2,11 +2,10 @@
 # -*- coding: utf-8 -*-
 
 """
-Stock Data Service v1.8 (Node Stability Fix)
-【修复说明】
-1. 解决部分节点 TypeError: Failed to fetch (跨域/同源策略修复)
-2. 自动化动态 Headers 捕获，无需手动干预
-3. 保持 v1.7 的生命周期和数据处理逻辑不变
+Stock Data Service v1.9 (New Snapshot Interface)
+【更新说明】
+1. 新增 /stock/snapshot 接口，通过 secid 获取个股详情
+2. 保持 v1.8 的稳定性修复和动态 Headers 逻辑
 """
 
 import os
@@ -65,7 +64,7 @@ logging.getLogger("uvicorn.access").disabled = True
 # 2. FastAPI 应用 & 全局状态
 # =========================================================
 
-app = FastAPI(title="Stock Data Service", version="1.8.0")
+app = FastAPI(title="Stock Data Service", version="1.9.0")
 
 PLAYWRIGHT: Optional[Any] = None
 BROWSER: Optional[Browser] = None
@@ -327,6 +326,14 @@ class GenericJsonRequest(BaseModel): url: str
 class TickRequest(BaseModel): secid: str
 
 
+# ============ 新增：Snapshot 请求模型 ============
+class StockSnapshotRequest(BaseModel):
+    secid: str
+
+
+# ===============================================
+
+
 def safe_get(dct, key): return dct.get(key)
 
 
@@ -405,6 +412,46 @@ async def stock_realtime(req: RealtimeRequest, request: Request):
     raw = await fetch_json_with_browser(req.url, request.state.request_id)
     if not raw or not raw.get("data"): raise HTTPException(status_code=404, detail="Not Found")
     return standardize_realtime_data(raw["data"])
+
+
+# ================== 新增：Snapshot 接口 ==================
+@app.post("/stock/snapshot")
+async def stock_snapshot(req: StockSnapshotRequest, request: Request):
+    """
+    根据 secid 获取实时快照数据
+    自动构建 URL，并在失败时(默认)使用浏览器获取
+    """
+    # 1. 构造时间戳
+    ts = int(time.time() * 1000)
+
+    # 2. 构造 Fields (保留原始链接中的完整字段)
+    fields = "f58%2Cf734%2Cf107%2Cf57%2Cf43%2Cf59%2Cf169%2Cf301%2Cf60%2Cf170%2Cf152%2Cf177%2Cf111%2Cf46%2Cf44%2Cf45%2Cf47%2Cf260%2Cf48%2Cf261%2Cf279%2Cf277%2Cf278%2Cf288%2Cf19%2Cf17%2Cf531%2Cf15%2Cf13%2Cf11%2Cf20%2Cf18%2Cf16%2Cf14%2Cf12%2Cf39%2Cf37%2Cf35%2Cf33%2Cf31%2Cf40%2Cf38%2Cf36%2Cf34%2Cf32%2Cf211%2Cf212%2Cf213%2Cf214%2Cf215%2Cf210%2Cf209%2Cf208%2Cf207%2Cf206%2Cf161%2Cf49%2Cf171%2Cf50%2Cf86%2Cf84%2Cf85%2Cf168%2Cf108%2Cf116%2Cf167%2Cf164%2Cf162%2Cf163%2Cf92%2Cf71%2Cf117%2Cf292%2Cf51%2Cf52%2Cf191%2Cf192%2Cf262%2Cf294%2Cf295%2Cf269%2Cf270%2Cf256%2Cf257%2Cf285%2Cf286%2Cf748%2Cf747"
+
+    # 3. 构造完整 URL
+    # 注意：wbp2u 参数中包含了管道符 |，在 URL 中通常转义为 %7C
+    target_url = (
+        f"https://push2.eastmoney.com/api/qt/stock/get"
+        f"?invt=2&fltt=1"
+        f"&cb=jQuery35105931811675311084_{ts}"  # 动态 callback
+        f"&fields={fields}"
+        f"&secid={req.secid}"  # 动态 secid
+        f"&ut=fa5fd1943c7b386f172d6893dbfba10b"
+        f"&wbp2u=%7C0%7C1%7C0%7Cweb"
+        f"&dect=1"
+        f"&_={ts}"  # 动态时间戳
+    )
+
+    # 4. 调用浏览器获取 (满足"访问不通时尝试调用浏览器"的需求，这里直接使用浏览器以保证稳定性)
+    raw = await fetch_json_with_browser(target_url, request.state.request_id)
+
+    if not raw or not raw.get("data"):
+        raise HTTPException(status_code=404, detail="Stock Data Not Found")
+
+    # 5. 返回标准化数据
+    return standardize_realtime_data(raw["data"])
+
+
+# ========================================================
 
 
 @app.post("/etf/realtime")
