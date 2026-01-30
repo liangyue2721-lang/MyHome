@@ -55,3 +55,4 @@ config/application.yml
 /config
 **/venv
 **/python/*json
+**/python/chrome_user_data
