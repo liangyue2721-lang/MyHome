@@ -631,7 +631,7 @@ public class PieChartServiceImpl implements IPieChartService {
         if (!CollectionUtils.isEmpty(lineData) || !CollectionUtils.isEmpty(barData)) {
             redisCache.setCacheMap(cacheKeyPie, result);
             // 设置这个键的过期时间为 24 小时
-            redisCache.setExpireTime(cacheKeyPie, 1, TimeUnit.HOURS);
+            redisCache.setExpireTime(cacheKeyPie, 10, TimeUnit.MINUTES);
         }
         return result;
     }
