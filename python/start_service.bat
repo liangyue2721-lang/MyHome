@@ -1,20 +1,21 @@
 @echo off
 setlocal
+chcp 65001 >nul
 
 echo ==========================================
 echo Stock Service - Windows Stable Startup
 echo ==========================================
 
 REM ------------------------------------------------
-REM Step 1: switch to script directory
+REM Step 1: 切换到脚本所在目录
 REM ------------------------------------------------
 cd /d %~dp0
 if errorlevel 1 goto FAIL
 
 REM ------------------------------------------------
-REM Step 2: check python
+REM Step 2: 检查 Python 环境
 REM ------------------------------------------------
-echo [CHECK] Python
+echo [CHECK] Python Version
 python --version
 if errorlevel 1 (
     echo ERROR: Python not found in PATH
@@ -22,7 +23,7 @@ if errorlevel 1 (
 )
 
 REM ------------------------------------------------
-REM Step 3: ensure venv exists
+REM Step 3: 检查并创建虚拟环境 (venv)
 REM ------------------------------------------------
 if not exist venv\Scripts\activate.bat (
     echo [INFO] venv not found, creating virtual environment...
@@ -34,9 +35,9 @@ if not exist venv\Scripts\activate.bat (
 )
 
 REM ------------------------------------------------
-REM Step 4: activate venv
+REM Step 4: 激活虚拟环境
 REM ------------------------------------------------
-echo [INFO] activate venv
+echo [INFO] Activating venv...
 call venv\Scripts\activate.bat
 if errorlevel 1 (
     echo ERROR: failed to activate venv
@@ -44,9 +45,9 @@ if errorlevel 1 (
 )
 
 REM ------------------------------------------------
-REM Step 5: upgrade pip
+REM Step 5: 升级 pip (静默模式)
 REM ------------------------------------------------
-echo [INFO] upgrade pip
+echo [INFO] Upgrading pip...
 python -m pip install --upgrade pip >nul
 if errorlevel 1 (
     echo ERROR: pip upgrade failed
@@ -54,19 +55,19 @@ if errorlevel 1 (
 )
 
 REM ------------------------------------------------
-REM Step 6: install required packages
+REM Step 6: 安装/更新依赖 (关键：增加了 httpx)
 REM ------------------------------------------------
-echo [INFO] install python dependencies
-pip install fastapi uvicorn playwright >nul
+echo [INFO] Installing dependencies (fastapi, uvicorn, playwright, httpx)...
+pip install fastapi uvicorn playwright httpx >nul
 if errorlevel 1 (
     echo ERROR: dependency installation failed
     goto FAIL
 )
 
 REM ------------------------------------------------
-REM Step 7: install playwright chromium
+REM Step 7: 安装 Playwright 内核
 REM ------------------------------------------------
-echo [INFO] install playwright chromium
+echo [INFO] Checking Playwright Chromium...
 playwright install chromium
 if errorlevel 1 (
     echo ERROR: playwright chromium install failed
@@ -74,19 +75,16 @@ if errorlevel 1 (
 )
 
 REM ------------------------------------------------
-REM Step 8: start service
+REM Step 8: 启动服务
 REM ------------------------------------------------
 echo.
 echo ==========================================
-echo Starting Stock Service...
+echo Starting Stock Service v2.1...
 echo ==========================================
 echo.
 
-python -m uvicorn stock_service:app ^
-  --host 0.0.0.0 ^
-  --port 8000 ^
-  --workers 1 ^
-  --log-level info
+REM 使用 Python 直接运行脚本，以便触发代码中的 __main__ 入口
+python stock_service.py
 
 goto END
 
