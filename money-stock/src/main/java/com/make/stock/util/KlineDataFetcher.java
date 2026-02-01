@@ -20,6 +20,7 @@ import javax.annotation.PostConstruct;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * =========================================================
@@ -75,10 +76,10 @@ public class KlineDataFetcher {
     private int timeoutMillis;
 
     /**
-     * Rate Limiting Control
+     * Rate Limiting Control (Independent per method)
      */
-    private static final Object LOCK = new Object();
-    private static long lastRequestTime = 0;
+    private static final ConcurrentHashMap<String, Object> lockMap = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, Long> lastRequestTimeMap = new ConcurrentHashMap<>();
     private static final long INTERVAL_MS = 60000; // 1 minute
 
     /**
@@ -99,17 +100,20 @@ public class KlineDataFetcher {
     }
 
     /**
-     * Enforces strict rate limiting (1 request per minute).
+     * Enforces strict rate limiting (1 request per minute per key).
      * Blocks the calling thread if necessary.
      */
-    private static void throttle() {
-        synchronized (LOCK) {
+    private static void throttle(String key) {
+        Object lock = lockMap.computeIfAbsent(key, k -> new Object());
+
+        synchronized (lock) {
             long now = System.currentTimeMillis();
+            Long lastRequestTime = lastRequestTimeMap.getOrDefault(key, 0L);
             long diff = now - lastRequestTime;
 
             if (diff < INTERVAL_MS) {
                 long sleepTime = INTERVAL_MS - diff;
-                log.info("Rate limit throttling active. Sleeping for {} ms.", sleepTime);
+                log.info("Rate limit throttling active for key [{}]. Sleeping for {} ms.", key, sleepTime);
                 try {
                     Thread.sleep(sleepTime);
                 } catch (InterruptedException e) {
@@ -117,9 +121,9 @@ public class KlineDataFetcher {
                     throw new RuntimeException("Interrupted during rate limit throttle", e);
                 }
                 // Update time after sleep
-                lastRequestTime = System.currentTimeMillis();
+                lastRequestTimeMap.put(key, System.currentTimeMillis());
             } else {
-                lastRequestTime = now;
+                lastRequestTimeMap.put(key, now);
             }
         }
     }
@@ -135,17 +139,21 @@ public class KlineDataFetcher {
      * - 明确知道 Python 返回的是 Object 或 Array
      * - 并且能直接映射为目标 TypeReference
      *
+     * @param throttleKey 限流key
      * @param path    Python 接口路径
      * @param body    请求体
      * @param typeRef 返回类型
      */
     private static <T> T callPythonSyncData(
+            String throttleKey,
             String path,
             Map<String, Object> body,
             TypeReference<T> typeRef
     ) {
         // Enforce rate limit before making the call
-        throttle();
+        if (throttleKey != null) {
+            throttle(throttleKey);
+        }
 
         String url = pythonServiceUrl + path;
 
@@ -205,7 +213,7 @@ public class KlineDataFetcher {
      */
     public static Object fetchRawJson(String targetUrl) {
         // Enforce rate limit before making the call
-        throttle();
+        throttle("fetchRawJson");
 
         String url = pythonServiceUrl + "/proxy/json";
 
@@ -304,6 +312,7 @@ public class KlineDataFetcher {
 
         // 调用 Python 接口获取区间 K 线
         return callPythonSyncData(
+                "fetchKlineDataRange", // Distinct bucket
                 "/stock/kline/range",
                 body,
                 new TypeReference<List<KlineData>>() {
@@ -346,6 +355,7 @@ public class KlineDataFetcher {
 
         // 调用 Python 美股 K 线接口
         return callPythonSyncData(
+                "fetchUSKlineData", // Distinct bucket
                 "/stock/kline/us",
                 body,
                 new TypeReference<List<KlineData>>() {
@@ -359,6 +369,7 @@ public class KlineDataFetcher {
         body.put("ndays", 5);
 
         return callPythonSyncData(
+                "fetchKlineDataFiveDay", // Distinct bucket
                 "/stock/kline",
                 body,
                 new TypeReference<List<KlineData>>() {
@@ -372,6 +383,7 @@ public class KlineDataFetcher {
         body.put("ndays", 100000);
 
         return callPythonSyncData(
+                "fetchKlineDataAll", // Distinct bucket
                 "/stock/kline",
                 body,
                 new TypeReference<List<KlineData>>() {
@@ -381,6 +393,7 @@ public class KlineDataFetcher {
 
     public static StockRealtimeInfo fetchRealtimeInfo(String apiUrl) {
         return callPythonSyncData(
+                "fetchRealtimeInfo", // Distinct bucket
                 "/stock/realtime",
                 Map.of("url", apiUrl),
                 new TypeReference<StockRealtimeInfo>() {
@@ -396,6 +409,7 @@ public class KlineDataFetcher {
         body.put("secid", formatFullSecid(secid, market));
 
         return callPythonSyncData(
+                "fetchStockSnapshot", // Distinct bucket
                 "/stock/snapshot",
                 body,
                 new TypeReference<StockRealtimeInfo>() {
@@ -405,6 +419,7 @@ public class KlineDataFetcher {
 
     public static EtfRealtimeInfo fetchEtfRealtimeInfo(String apiUrl) {
         return callPythonSyncData(
+                "fetchEtfRealtimeInfo", // Distinct bucket
                 "/etf/realtime",
                 Map.of("url", apiUrl),
                 new TypeReference<EtfRealtimeInfo>() {
@@ -414,6 +429,7 @@ public class KlineDataFetcher {
 
     public static JSONArray fetchStockTicks(String secid, String market) {
         return callPythonSyncData(
+                "fetchStockTicks", // Distinct bucket
                 "/stock/ticks",
                 Map.of("secid", formatFullSecid(secid, market)),
                 new TypeReference<JSONArray>() {
