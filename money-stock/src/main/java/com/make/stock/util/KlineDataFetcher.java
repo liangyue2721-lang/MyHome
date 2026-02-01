@@ -75,6 +75,13 @@ public class KlineDataFetcher {
     private int timeoutMillis;
 
     /**
+     * Rate Limiting Control
+     */
+    private static final Object LOCK = new Object();
+    private static long lastRequestTime = 0;
+    private static final long INTERVAL_MS = 60000; // 1 minute
+
+    /**
      * 初始化 HTTP 客户端
      */
     @PostConstruct
@@ -89,6 +96,32 @@ public class KlineDataFetcher {
 
         log.info("KlineDataFetcher initialized, pythonServiceUrl={}, timeout={}ms",
                 pythonServiceUrl, timeoutMillis);
+    }
+
+    /**
+     * Enforces strict rate limiting (1 request per minute).
+     * Blocks the calling thread if necessary.
+     */
+    private static void throttle() {
+        synchronized (LOCK) {
+            long now = System.currentTimeMillis();
+            long diff = now - lastRequestTime;
+
+            if (diff < INTERVAL_MS) {
+                long sleepTime = INTERVAL_MS - diff;
+                log.info("Rate limit throttling active. Sleeping for {} ms.", sleepTime);
+                try {
+                    Thread.sleep(sleepTime);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("Interrupted during rate limit throttle", e);
+                }
+                // Update time after sleep
+                lastRequestTime = System.currentTimeMillis();
+            } else {
+                lastRequestTime = now;
+            }
+        }
     }
 
     /* =====================================================
@@ -111,6 +144,9 @@ public class KlineDataFetcher {
             Map<String, Object> body,
             TypeReference<T> typeRef
     ) {
+        // Enforce rate limit before making the call
+        throttle();
+
         String url = pythonServiceUrl + path;
 
         HttpHeaders headers = new HttpHeaders();
@@ -168,6 +204,9 @@ public class KlineDataFetcher {
      * ⚠ 不做任何结构假设
      */
     public static Object fetchRawJson(String targetUrl) {
+        // Enforce rate limit before making the call
+        throttle();
+
         String url = pythonServiceUrl + "/proxy/json";
 
         HttpHeaders headers = new HttpHeaders();
