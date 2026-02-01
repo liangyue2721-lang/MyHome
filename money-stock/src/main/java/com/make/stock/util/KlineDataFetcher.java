@@ -80,7 +80,7 @@ public class KlineDataFetcher {
      */
     private static final ConcurrentHashMap<String, Object> lockMap = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, Long> lastRequestTimeMap = new ConcurrentHashMap<>();
-    private static final long INTERVAL_MS = 60000; // 1 minute
+    private static final long INTERVAL_MS = 30000; // 1 minute
 
     /**
      * 初始化 HTTP 客户端
