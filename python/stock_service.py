@@ -174,7 +174,7 @@ class BrowserPool:
                 "--disable-blink-features=AutomationControlled",
                 "--no-sandbox",
                 "--disable-infobars",
-                "--disable-http2",  # 【关键】禁用 HTTP/2 解决 Socket Hang Up
+                # "--disable-http2",  # 【关键】禁用 HTTP/2 解决 Socket Hang Up
                 "--ignore-certificate-errors",
             ]
         )
@@ -183,7 +183,12 @@ class BrowserPool:
             **device,  # 应用移动端指纹
             accept_downloads=False,
             bypass_csp=True,
-            ignore_https_errors=True
+            ignore_https_errors=True,
+            # 【新增】添加 Referer 头部，欺骗服务器我们来自其官网
+            extra_http_headers={
+                "Referer": "https://quote.eastmoney.com/",
+                "Origin": "https://quote.eastmoney.com/"
+            }
         )
 
         # 注入防检测脚本
