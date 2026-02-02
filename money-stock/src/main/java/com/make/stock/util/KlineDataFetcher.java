@@ -17,10 +17,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
 
 /**
  * =========================================================
@@ -78,9 +79,9 @@ public class KlineDataFetcher {
     /**
      * Rate Limiting Control (Independent per method)
      */
-    private static final ConcurrentHashMap<String, Object> lockMap = new ConcurrentHashMap<>();
-    private static final ConcurrentHashMap<String, Long> lastRequestTimeMap = new ConcurrentHashMap<>();
-    private static final long INTERVAL_MS = 2000; // 1 minute
+    private static final ConcurrentHashMap<String, Semaphore> semaphoreMap = new ConcurrentHashMap<>();
+    private static ScheduledExecutorService scheduler;
+    private static final long INTERVAL_MS = 2000;
 
     /**
      * 初始化 HTTP 客户端
@@ -95,36 +96,36 @@ public class KlineDataFetcher {
 
         restTemplate = new RestTemplate(factory);
 
+        // Initialize scheduler
+        scheduler = Executors.newScheduledThreadPool(4);
+
         log.info("KlineDataFetcher initialized, pythonServiceUrl={}, timeout={}ms",
                 pythonServiceUrl, timeoutMillis);
     }
 
+    @PreDestroy
+    public void destroy() {
+        if (scheduler != null) {
+            scheduler.shutdown();
+        }
+    }
+
     /**
-     * Enforces strict rate limiting (1 request per minute per key).
-     * Blocks the calling thread if necessary.
+     * Enforces rate limiting (2 requests per 2 seconds per key).
+     * Uses Semaphore(2) and schedules release after 2 seconds.
      */
     private static void throttle(String key) {
-        Object lock = lockMap.computeIfAbsent(key, k -> new Object());
+        Semaphore semaphore = semaphoreMap.computeIfAbsent(key, k -> new Semaphore(2));
 
-        synchronized (lock) {
-            long now = System.currentTimeMillis();
-            Long lastRequestTime = lastRequestTimeMap.getOrDefault(key, 0L);
-            long diff = now - lastRequestTime;
-
-            if (diff < INTERVAL_MS) {
-                long sleepTime = INTERVAL_MS - diff;
-                log.info("Rate limit throttling active for key [{}]. Sleeping for {} ms.", key, sleepTime);
-                try {
-                    Thread.sleep(sleepTime);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new RuntimeException("Interrupted during rate limit throttle", e);
-                }
-                // Update time after sleep
-                lastRequestTimeMap.put(key, System.currentTimeMillis());
-            } else {
-                lastRequestTimeMap.put(key, now);
-            }
+        try {
+            semaphore.acquire();
+            scheduler.schedule(() -> semaphore.release(), INTERVAL_MS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrupted during rate limit throttle", e);
+        } catch (Exception e) {
+            semaphore.release();
+            throw new RuntimeException("Rate limiting scheduler failed", e);
         }
     }
 
