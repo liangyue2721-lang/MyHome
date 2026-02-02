@@ -136,7 +136,7 @@ public class StockRefreshHandler implements IStockRefreshHandler {
             if (ws.getLowPrice() != null && ws.getThresholdPrice() != null) {
                 BigDecimal currentPrice = ws.getLowPrice();
                 BigDecimal threshold = ws.getThresholdPrice();
-                if (threshold != null && currentPrice.compareTo(threshold) < 0) {
+                if (ws.getNewPrice().compareTo(BigDecimal.ZERO) > 0 && threshold != null && currentPrice.compareTo(threshold) < 0) {
                     sendNotification(task, ws);
                 }
             }
@@ -165,7 +165,7 @@ public class StockRefreshHandler implements IStockRefreshHandler {
             if (ws.getLowPrice() != null && ws.getThresholdPrice() != null) {
                 BigDecimal currentPrice = ws.getLowPrice();
                 BigDecimal threshold = ws.getThresholdPrice();
-                if (threshold != null && currentPrice.compareTo(threshold) < 0) {
+                if (ws.getNewPrice().compareTo(BigDecimal.ZERO) > 0 && threshold != null && currentPrice.compareTo(threshold) < 0) {
                     sendNotification(task, ws);
                 }
             }
