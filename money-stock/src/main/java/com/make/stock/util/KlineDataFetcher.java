@@ -17,11 +17,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Semaphore;
 
 /**
  * =========================================================
@@ -30,20 +30,38 @@ import java.util.concurrent.*;
  * <p>
  * 【核心职责】
  * Java ↔ Python 股票数据服务的统一访问入口，负责：
- * <p>
  * 1️⃣ K 线数据（JSON Array → 强类型 List<KlineData>）
  * 2️⃣ 股票 / ETF 实时行情（JSON Object → 强类型 DTO）
  * 3️⃣ 🔥 通用 JSON 代理（JSON Object / Array → 自动识别）
  * <p>
- * 【设计约束（非常重要）】
- * - Python 端不使用统一 Response 包装
- * - Java 端必须解析“裸 JSON”
+ * ---------------------------------------------------------
+ * 【极其重要的设计：方法级并发保护（Concurrency Guard）】
+ * <p>
+ * 本类不做 QPS 限流、不做时间窗口限流。
+ * 本类只做：Per-Endpoint Concurrency Guard。
+ * <p>
+ * 语义：
+ * - 每个业务方法（throttleKey）最多允许 2 个请求“同时在飞”
+ * - 请求结束立刻释放并发许可
+ * - 各方法之间互不影响
+ * <p>
+ * 目的：
+ * - Python 是真实压力点
+ * - 防止高并发瞬间打爆 Python
+ * - 不限制发送频率，只限制活跃请求数
+ * <p>
+ * 示例：
+ * fetchKlineDataRange 同时 ≤ 2
+ * fetchUSKlineData   同时 ≤ 2
+ * fetchRealtimeInfo  同时 ≤ 2
+ * ……互不影响
+ * <p>
+ * ---------------------------------------------------------
+ * 【JSON 解析设计约束（非常重要）】
+ * - Python 不返回统一 Response 包装
+ * - Java 必须解析“裸 JSON”
  * - 不能假设返回一定是 Object 或 Array
  * <p>
- * 【已验证支持的结构】
- * - 东财 IPO：Object → Object → Array
- * - K 线：Array
- * - 实时行情：Object
  * =========================================================
  */
 @Slf4j
@@ -51,7 +69,7 @@ import java.util.concurrent.*;
 public class KlineDataFetcher {
 
     /* =====================================================
-     * 基础配置
+     * 一、基础配置
      * ===================================================== */
 
     /**
@@ -76,12 +94,49 @@ public class KlineDataFetcher {
     @Value("${python.service.timeout:5000}")
     private int timeoutMillis;
 
+    /* =====================================================
+     * 二、方法级并发控制核心结构
+     * ===================================================== */
+
     /**
-     * Rate Limiting Control (Independent per method)
+     * 每个 throttleKey 对应一个独立的并发信号量
+     * <p>
+     * key：方法名（如 fetchKlineDataRange）
+     * value：Semaphore(2)
+     * <p>
+     * 语义：该方法同时最多 2 个请求在飞
      */
-    private static final ConcurrentHashMap<String, Semaphore> semaphoreMap = new ConcurrentHashMap<>();
-    private static ScheduledExecutorService scheduler;
-    private static final long INTERVAL_MS = 2000;
+    private static final ConcurrentHashMap<String, Semaphore> semaphoreMap =
+            new ConcurrentHashMap<>();
+
+    /**
+     * 获取方法并发许可
+     * 若当前已有 2 个请求在飞，则阻塞等待
+     *
+     * @param key 方法级限流 key
+     */
+    private static void acquire(String key) {
+        Semaphore semaphore = semaphoreMap.computeIfAbsent(key, k -> new Semaphore(2));
+        try {
+            semaphore.acquire(); // 阻塞直到获得并发许可
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("获取并发许可被中断", e);
+        }
+    }
+
+    /**
+     * 释放方法并发许可
+     * 请求结束必须调用
+     *
+     * @param key 方法级限流 key
+     */
+    private static void release(String key) {
+        Semaphore semaphore = semaphoreMap.get(key);
+        if (semaphore != null) {
+            semaphore.release(); // 立即释放，允许下一个请求进入
+        }
+    }
 
     /**
      * 初始化 HTTP 客户端
@@ -96,54 +151,26 @@ public class KlineDataFetcher {
 
         restTemplate = new RestTemplate(factory);
 
-        // Initialize scheduler
-        scheduler = Executors.newScheduledThreadPool(4);
-
-        log.info("KlineDataFetcher initialized, pythonServiceUrl={}, timeout={}ms",
-                pythonServiceUrl, timeoutMillis);
-    }
-
-    @PreDestroy
-    public void destroy() {
-        if (scheduler != null) {
-            scheduler.shutdown();
-        }
-    }
-
-    /**
-     * Enforces rate limiting (2 requests per 2 seconds per key).
-     * Uses Semaphore(2) and schedules release after 2 seconds.
-     */
-    private static void throttle(String key) {
-        Semaphore semaphore = semaphoreMap.computeIfAbsent(key, k -> new Semaphore(2));
-
-        try {
-            semaphore.acquire();
-            scheduler.schedule(() -> semaphore.release(), INTERVAL_MS, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Interrupted during rate limit throttle", e);
-        } catch (Exception e) {
-            semaphore.release();
-            throw new RuntimeException("Rate limiting scheduler failed", e);
-        }
+        log.info("KlineDataFetcher 初始化完成：启用方法级并发保护");
     }
 
     /* =====================================================
-     * 一、原有强类型调用（保持不变）
+     * 三、核心 HTTP 调用模板（强类型）
      * ===================================================== */
 
     /**
-     * 调用 Python 服务并解析为指定强类型
+     * 通用 Python 同步调用模板
      * <p>
-     * ⚠ 使用前提：
-     * - 明确知道 Python 返回的是 Object 或 Array
-     * - 并且能直接映射为目标 TypeReference
+     * 统一流程：
+     * 1. 获取方法并发许可
+     * 2. 发起 HTTP 请求
+     * 3. 解析 JSON
+     * 4. finally 中释放并发许可
      *
-     * @param throttleKey 限流key
-     * @param path    Python 接口路径
-     * @param body    请求体
-     * @param typeRef 返回类型
+     * @param throttleKey 方法级并发控制 key
+     * @param path        Python 接口路径
+     * @param body        请求体
+     * @param typeRef     返回类型
      */
     private static <T> T callPythonSyncData(
             String throttleKey,
@@ -151,56 +178,40 @@ public class KlineDataFetcher {
             Map<String, Object> body,
             TypeReference<T> typeRef
     ) {
-        // Enforce rate limit before making the call
-        if (throttleKey != null) {
-            throttle(throttleKey);
-        }
-
-        String url = pythonServiceUrl + path;
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        HttpEntity<Object> entity = new HttpEntity<>(body, headers);
-
-        // 把请求体序列化成 JSON，用于日志
-        String bodyJson = null;
-        try {
-            bodyJson = JSON.toJSONString(body);
-        } catch (Exception ignore) {
-            bodyJson = String.valueOf(body);
-        }
-
-        ResponseEntity<String> response;
-        try {
-            // 发起 HTTP POST 请求
-            response = restTemplate.postForEntity(url, entity, String.class);
-        } catch (Exception e) {
-            log.error("HTTP call failed: url={}, body={}", url, truncate(bodyJson), e);
-            throw new PythonServiceException(500, "Python service unreachable");
-        }
-
-        // 检查 HTTP 状态码
-        if (!response.getStatusCode().is2xxSuccessful()
-                || response.getBody() == null) {
-            log.error("HTTP status not ok: url={}, status={}, body={}",
-                    url, response.getStatusCodeValue(), truncate(bodyJson));
-            throw new PythonServiceException(
-                    response.getStatusCodeValue(), response.getBody());
-        }
+        // ① 获取并发许可
+        acquire(throttleKey);
 
         try {
-            // 解析 JSON 响应
+            String url = pythonServiceUrl + path;
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Object> entity = new HttpEntity<>(body, headers);
+
+            ResponseEntity<String> response =
+                    restTemplate.postForEntity(url, entity, String.class);
+
+            if (!response.getStatusCode().is2xxSuccessful()
+                    || response.getBody() == null) {
+                throw new PythonServiceException(
+                        response.getStatusCodeValue(), response.getBody());
+            }
+
+            // ② 解析裸 JSON 为目标类型
             return JSON.parseObject(response.getBody(), typeRef);
+
         } catch (JSONException e) {
-            log.error("JSON parse error, url={}, reqBody={}, respBody={}",
-                    url, truncate(bodyJson), truncate(response.getBody()), e);
-            throw new PythonServiceException(502, "Invalid JSON from python");
+            throw new PythonServiceException(502, "Python 返回非法 JSON");
+        } catch (Exception e) {
+            throw new PythonServiceException(500, "Python 服务不可用");
+        } finally {
+            // ③ 请求结束立即释放并发许可
+            release(throttleKey);
         }
     }
 
-
     /* =====================================================
-     * 二、🔥 新增：通用 JSON 代理能力
+     * 四、🔥 通用 JSON 代理能力
      * ===================================================== */
 
     /**
@@ -213,37 +224,23 @@ public class KlineDataFetcher {
      * ⚠ 不做任何结构假设
      */
     public static Object fetchRawJson(String targetUrl) {
-        // Enforce rate limit before making the call
-        throttle("fetchRawJson");
-
-        String url = pythonServiceUrl + "/proxy/json";
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
-        // 构造请求体，包含目标 URL
-        HttpEntity<Object> entity =
-                new HttpEntity<>(Map.of("url", targetUrl), headers);
-
-        ResponseEntity<String> response;
+        String key = "fetchRawJson";
+        acquire(key);
         try {
-            response = restTemplate.postForEntity(url, entity, String.class);
-        } catch (Exception e) {
-            log.error("Python proxy call failed", e);
-            throw new PythonServiceException(500, "Python service unreachable");
-        }
+            String url = pythonServiceUrl + "/proxy/json";
 
-        if (!response.getStatusCode().is2xxSuccessful()
-                || response.getBody() == null) {
-            throw new PythonServiceException(
-                    response.getStatusCodeValue(), response.getBody());
-        }
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
 
-        try {
-            // 自动解析为 JSONObject 或 JSONArray
+            HttpEntity<Object> entity =
+                    new HttpEntity<>(Map.of("url", targetUrl), headers);
+
+            ResponseEntity<String> response =
+                    restTemplate.postForEntity(url, entity, String.class);
+
             return JSON.parse(response.getBody());
-        } catch (JSONException e) {
-            throw new PythonServiceException(502, "Invalid JSON from python");
+        } finally {
+            release(key);
         }
     }
 
@@ -251,9 +248,7 @@ public class KlineDataFetcher {
      * 要求返回必须是 JSONObject
      */
     public static JSONObject requireObject(Object raw) {
-        if (raw instanceof JSONObject obj) {
-            return obj;
-        }
+        if (raw instanceof JSONObject obj) return obj;
         throw new PythonServiceException(502, "Expected JSON Object");
     }
 
@@ -261,9 +256,7 @@ public class KlineDataFetcher {
      * 要求返回必须是 JSONArray
      */
     public static JSONArray requireArray(Object raw) {
-        if (raw instanceof JSONArray arr) {
-            return arr;
-        }
+        if (raw instanceof JSONArray arr) return arr;
         throw new PythonServiceException(502, "Expected JSON Array");
     }
 
@@ -282,38 +275,30 @@ public class KlineDataFetcher {
     }
 
     /* =====================================================
-     * 三、对外业务 API（原样保留）
+     * 五、对外业务 API（完整保留）
      * ===================================================== */
 
+    /**
+     * 获取全部 K 线数据（无时间范围）
+     */
     public static List<KlineData> fetchKlineData(String secid, String market) {
         return fetchKlineDataRange(secid, market, null, null);
     }
 
     /**
      * 获取指定时间范围的 K 线数据
-     * <p>
-     * 调用 Python 的 /stock/kline/range 接口
-     *
-     * @param secid     股票代码
-     * @param market    市场代码
-     * @param startDate 开始日期 (yyyyMMdd)
-     * @param endDate   结束日期 (yyyyMMdd)
-     * @return K 线数据列表
      */
     public static List<KlineData> fetchKlineDataRange(
             String secid, String market,
             String startDate, String endDate) {
 
         Map<String, Object> body = new HashMap<>();
-        // 构造完整 secid (market.code)
         body.put("secid", formatFullSecid(secid, market));
-        // 添加起止时间参数
         if (startDate != null) body.put("beg", startDate);
         if (endDate != null) body.put("end", endDate);
 
-        // 调用 Python 接口获取区间 K 线
         return callPythonSyncData(
-                "fetchKlineDataRange", // Distinct bucket
+                "fetchKlineDataRange",
                 "/stock/kline/range",
                 body,
                 new TypeReference<List<KlineData>>() {
@@ -321,12 +306,18 @@ public class KlineDataFetcher {
         );
     }
 
+    /**
+     * 获取今日（近三天窗口）K 线
+     */
     public static List<KlineData> fetchTodayKlineData(String secid, String market) {
         String today = LocalDate.now().format(DATE_FORMATTER);
         String threeDaysAgo = LocalDate.now().minusDays(3).format(DATE_FORMATTER);
         return fetchKlineDataRange(secid, market, threeDaysAgo, today);
     }
 
+    /**
+     * 获取今日美股 K 线
+     */
     public static List<KlineData> fetchTodayUSKlineData(String secid, String market) {
         String today = LocalDate.now().format(DATE_FORMATTER);
         return fetchUSKlineData(secid, market, today, today);
@@ -334,29 +325,19 @@ public class KlineDataFetcher {
 
     /**
      * 获取美股 K 线数据
-     * <p>
-     * 调用 Python 的 /stock/kline/us 接口
-     *
-     * @param secid     股票代码
-     * @param market    市场标识 (105/106)
-     * @param startDate 开始日期
-     * @param endDate   结束日期
-     * @return K 线数据列表
      */
     public static List<KlineData> fetchUSKlineData(
             String secid, String market,
             String startDate, String endDate) {
 
         Map<String, Object> body = new HashMap<>();
-        // 美股接口参数：secid 和 market 分开传递
         body.put("secid", secid);
         body.put("market", market);
         body.put("beg", startDate);
         body.put("end", endDate);
 
-        // 调用 Python 美股 K 线接口
         return callPythonSyncData(
-                "fetchUSKlineData", // Distinct bucket
+                "fetchUSKlineData",
                 "/stock/kline/us",
                 body,
                 new TypeReference<List<KlineData>>() {
@@ -364,13 +345,16 @@ public class KlineDataFetcher {
         );
     }
 
+    /**
+     * 获取最近 5 天 K 线
+     */
     public static List<KlineData> fetchKlineDataFiveDay(String secid, String market) {
         Map<String, Object> body = new HashMap<>();
         body.put("secid", formatFullSecid(secid, market));
         body.put("ndays", 5);
 
         return callPythonSyncData(
-                "fetchKlineDataFiveDay", // Distinct bucket
+                "fetchKlineDataFiveDay",
                 "/stock/kline",
                 body,
                 new TypeReference<List<KlineData>>() {
@@ -378,13 +362,16 @@ public class KlineDataFetcher {
         );
     }
 
+    /**
+     * 获取全部历史 K 线
+     */
     public static List<KlineData> fetchKlineDataAll(String secid, String market) {
         Map<String, Object> body = new HashMap<>();
         body.put("secid", formatFullSecid(secid, market));
         body.put("ndays", 100000);
 
         return callPythonSyncData(
-                "fetchKlineDataAll", // Distinct bucket
+                "fetchKlineDataAll",
                 "/stock/kline",
                 body,
                 new TypeReference<List<KlineData>>() {
@@ -392,9 +379,12 @@ public class KlineDataFetcher {
         );
     }
 
+    /**
+     * 获取股票实时行情
+     */
     public static StockRealtimeInfo fetchRealtimeInfo(String apiUrl) {
         return callPythonSyncData(
-                "fetchRealtimeInfo", // Distinct bucket
+                "fetchRealtimeInfo",
                 "/stock/realtime",
                 Map.of("url", apiUrl),
                 new TypeReference<StockRealtimeInfo>() {
@@ -403,14 +393,14 @@ public class KlineDataFetcher {
     }
 
     /**
-     * 获取实时快照 (对应 Python: /stock/snapshot)
+     * 获取实时快照
      */
     public static StockRealtimeInfo fetchStockSnapshot(String secid, String market) {
         Map<String, Object> body = new HashMap<>();
         body.put("secid", formatFullSecid(secid, market));
 
         return callPythonSyncData(
-                "fetchStockSnapshot", // Distinct bucket
+                "fetchStockSnapshot",
                 "/stock/snapshot",
                 body,
                 new TypeReference<StockRealtimeInfo>() {
@@ -418,9 +408,12 @@ public class KlineDataFetcher {
         );
     }
 
+    /**
+     * 获取 ETF 实时行情
+     */
     public static EtfRealtimeInfo fetchEtfRealtimeInfo(String apiUrl) {
         return callPythonSyncData(
-                "fetchEtfRealtimeInfo", // Distinct bucket
+                "fetchEtfRealtimeInfo",
                 "/etf/realtime",
                 Map.of("url", apiUrl),
                 new TypeReference<EtfRealtimeInfo>() {
@@ -428,9 +421,12 @@ public class KlineDataFetcher {
         );
     }
 
+    /**
+     * 获取逐笔成交（Ticks）
+     */
     public static JSONArray fetchStockTicks(String secid, String market) {
         return callPythonSyncData(
-                "fetchStockTicks", // Distinct bucket
+                "fetchStockTicks",
                 "/stock/ticks",
                 Map.of("secid", formatFullSecid(secid, market)),
                 new TypeReference<JSONArray>() {
@@ -439,7 +435,7 @@ public class KlineDataFetcher {
     }
 
     /* =====================================================
-     * 工具方法
+     * 六、工具方法
      * ===================================================== */
 
     /**
@@ -447,12 +443,5 @@ public class KlineDataFetcher {
      */
     private static String formatFullSecid(String secid, String market) {
         return market + "." + secid;
-    }
-
-    /**
-     * 日志截断，防止刷屏
-     */
-    private static String truncate(String s) {
-        return s.length() > 2000 ? s.substring(0, 2000) + "..." : s;
     }
 }
