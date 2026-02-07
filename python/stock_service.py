@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Stock Data Service v9.5 (Final Fixes + Mappings)
+Stock Data Service v10.0 (Playwright Evaluate Fix)
 """
 
 import os
@@ -24,7 +24,7 @@ from pydantic import BaseModel
 from playwright.async_api import async_playwright, Page, BrowserContext
 
 # =========================================================
-# 1. 核心配置
+# 1. Core Config
 # =========================================================
 
 HEADLESS = True
@@ -34,7 +34,7 @@ BROWSER_TTL = 3600
 FULL_FIELDS = "f58,f734,f107,f57,f43,f59,f169,f301,f60,f170,f152,f177,f111,f46,f44,f45,f47,f260,f48,f261,f279,f277,f278,f288,f19,f17,f531,f15,f13,f11,f20,f18,f16,f14,f12,f39,f37,f35,f33,f31,f40,f38,f36,f34,f32,f211,f212,f213,f214,f215,f210,f209,f208,f207,f206,f161,f49,f171,f50,f86,f84,f85,f168,f108,f116,f167,f164,f162,f163,f92,f71,f117,f292,f51,f52,f191,f192,f262,f294,f295,f269,f270,f256,f257,f285,f286,f748,f747"
 
 # =========================================================
-# 2. 日志系统
+# 2. Logging
 # =========================================================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -57,7 +57,7 @@ logging.getLogger("uvicorn.access").disabled = True
 
 
 # =========================================================
-# 3. 混合动力工作单元 (TabWorker)
+# 3. Browser Worker (Hybrid Fetcher)
 # =========================================================
 
 class TabWorker:
@@ -71,12 +71,14 @@ class TabWorker:
         try:
             if not self.page:
                 self.page = await self.context.new_page()
+                # Block heavy resources
                 await self.page.route("**/*.{png,jpg,jpeg,gif,svg,css,woff,woff2,mp4,webm}",
                                       lambda route: route.abort())
 
-            logger.info(f"[Worker-{self.index}] Browser refreshing session (Optimized)...")
+            logger.info(f"[Worker-{self.index}] Refreshing session...")
 
             try:
+                # Navigate to a real Eastmoney page to establish context/cookies
                 await self.page.goto(
                     "https://quote.eastmoney.com/center/gridlist.html",
                     wait_until="domcontentloaded",
@@ -86,54 +88,68 @@ class TabWorker:
                 logger.warning(f"[Worker-{self.index}] Goto Warning (continuing): {goto_err}")
 
             await asyncio.sleep(1)
-            cookies = await self.context.cookies()
             self.req_count = 0
-            logger.info(f"[Worker-{self.index}] Session Renewed. Cookies count: {len(cookies)}")
+            logger.info(f"[Worker-{self.index}] Session Ready.")
 
         except Exception as e:
             logger.error(f"[Worker-{self.index}] Init Session Failed: {e}", exc_info=True)
 
     async def fetch(self, url: str, rid: str) -> str:
         self.req_count += 1
-        if self.req_count > PAGE_TTL:
+        if self.req_count > PAGE_TTL or not self.page:
             await self.init_session()
 
-        if not self.page:
-            await self.init_session()
+        # Use page.evaluate to fetch inside the browser context
+        # This bypasses TLS fingerprinting issues and uses the browser's full network stack
+        js_code = """
+        async (url) => {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-        headers = POOL.extra_headers.copy()
-        headers.update({
-            "Referer": "https://quote.eastmoney.com/",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Dest": "empty",
-            "Sec-Fetch-Site": "same-site"
-        })
+            try {
+                const response = await fetch(url, {
+                    signal: controller.signal,
+                    headers: {
+                        'Accept': '*/*'
+                    }
+                });
+                if (!response.ok) {
+                    throw new Error("HTTP " + response.status);
+                }
+                return await response.text();
+            } catch (e) {
+                throw e.message;
+            } finally {
+                clearTimeout(timeoutId);
+            }
+        }
+        """
 
         for attempt in range(2):
             try:
-                resp = await self.context.request.get(url, headers=headers)
+                if not self.page: await self.init_session()
 
-                if resp.status == 200:
-                    return await resp.text()
-
-                if resp.status in (403, 412):
-                    logger.warning(f"[{rid}] Blocked (Status {resp.status}), refreshing session...")
-                    await self.init_session()
-                    continue
-
-                logger.warning(f"[{rid}] HTTP Status {resp.status} for {url}")
-                return ""
+                # Execute fetch in browser
+                content = await self.page.evaluate(js_code, url)
+                return content
             except Exception as e:
-                if attempt == 0:
-                    logger.warning(f"[{rid}] Fetch Error (Retrying): {e}")
+                err_msg = str(e)
+                if "Target closed" in err_msg or "context" in err_msg:
+                    logger.warning(f"[{rid}] Context lost, recreating session...")
+                    self.page = None
                     await self.init_session()
                     continue
-                logger.error(f"[{rid}] Final Fetch Error: {e}", exc_info=True)
-                raise e
+
+                logger.warning(f"[{rid}] Fetch Error (Attempt {attempt+1}): {err_msg}")
+                if attempt == 1:
+                    logger.error(f"[{rid}] Final Failure: {err_msg}")
+                    return "" # Return empty on failure to avoid crash
+                await asyncio.sleep(0.5)
+        return ""
 
 
 # =========================================================
-# 4. 浏览器池
+# 4. Browser Pool
 # =========================================================
 
 class BrowserPool:
@@ -144,28 +160,29 @@ class BrowserPool:
         self.workers: List[TabWorker] = []
         self.queue = asyncio.Queue()
         self.start_time = 0
-        self.extra_headers = {}
-        self.headers_file = os.path.join(BASE_DIR, "headers.json")
 
     async def start(self):
         self.start_time = time.time()
-        self.extra_headers = {
-            "User-Agent": "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36"}
-        if os.path.exists(self.headers_file):
-            try:
-                with open(self.headers_file, "r") as f:
-                    self.extra_headers.update(json.load(f))
-            except Exception as e:
-                logger.error(f"Load headers failed: {e}")
-
         self.pw = await async_playwright().start()
-        self.browser = await self.pw.chromium.launch(headless=HEADLESS,
-                                                     args=["--disable-blink-features=AutomationControlled",
-                                                           "--no-sandbox",
-                                                           "--disable-http2"])
 
+        # Launch options for stability and stealth
+        self.browser = await self.pw.chromium.launch(
+            headless=HEADLESS,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+                "--disable-http2", # Force HTTP/1.1 for stability
+                "--disable-features=IsolateOrigins,site-per-process",
+            ]
+        )
+
+        # Emulate a real mobile device
         device = self.pw.devices["Pixel 7"]
-        self.context = await self.browser.new_context(**device)
+        self.context = await self.browser.new_context(
+            **device,
+            accept_downloads=False,
+            ignore_https_errors=True
+        )
 
         for i in range(POOL_SIZE):
             w = TabWorker(i, self.context)
@@ -188,28 +205,34 @@ class BrowserPool:
 
 
 # =========================================================
-# 5. 数据解析与标准输出
+# 5. Data Standardization
 # =========================================================
 
 def clean_jsonp(text: str):
     if not text: return None
     text = text.strip().lstrip('\ufeff')
     try:
+        # Match JSONP wrapper
         match = re.search(r'^[^(]*?\((.*)\)[^)]*?$', text, re.DOTALL)
         if match: return json.loads(match.group(1))
+        # Try raw JSON
         return json.loads(text)
     except:
         return None
 
+def _div100(v):
+    """Safely divide by 100 if value exists"""
+    try:
+        if v in (None, "-", ""): return None
+        return float(v) / 100.0
+    except:
+        return None
 
 def standardize_realtime(data: Dict) -> Dict:
     d = data.get("data", {}) if data.get("data") else data
+    if not d: return {}
 
-    def _div100(v): return float(v) / 100 if v not in (None, "-", "") else None
-
-    # f50/f52: Volume Ratio (LiangBi). f50 is LiangBi in snapshot.
-    # f191/f20: Commission Ratio (WeiBi). f191 is WeiBi in snapshot.
-
+    # Map Eastmoney fields to StockRealtimeInfo
     return {
         "stockCode": d.get("f57"),
         "companyName": d.get("f58"),
@@ -220,8 +243,11 @@ def standardize_realtime(data: Dict) -> Dict:
         "lowPrice": _div100(d.get("f45")),
         "volume": d.get("f47"),
         "turnover": d.get("f48"),
+        # f170: Change Percent (e.g. 125 -> 1.25)
         "changePercent": _div100(d.get("f170")),
+        # f50/f52: Volume Ratio (e.g. 85 -> 0.85)
         "volumeRatio": _div100(d.get("f50") or d.get("f52")),
+        # f191/f20: Commission Ratio (e.g. 5944 -> 59.44)
         "commissionRatio": _div100(d.get("f191") or d.get("f20")),
         "mainFundsInflow": d.get("f152"),
     }
@@ -236,6 +262,7 @@ def standardize_kline(data: Dict) -> List:
         p = line.split(",")
         if len(p) >= 6:
             try:
+                # Basic fields
                 item = {
                     "trade_date": p[0],
                     "stock_code": stock_code,
@@ -245,13 +272,14 @@ def standardize_kline(data: Dict) -> List:
                     "low": float(p[4]),
                     "volume": int(p[5]),
                 }
+                # Extended fields
                 if len(p) >= 11:
                     close_val = float(p[2])
-                    change_val = float(p[9])
+                    change_val = float(p[9]) # Change amount
                     item.update({
                         "amount": float(p[6]),
                         "change": change_val,
-                        "change_percent": float(p[8]),
+                        "change_percent": float(p[8]), # Usually pre-formatted percentage
                         "turnover_ratio": float(p[10]),
                         "pre_close": close_val - change_val
                     })
@@ -265,7 +293,9 @@ def fix_url_params(url: str, fields: str = "") -> str:
     parsed = urllib.parse.urlparse(url)
     qs = dict(urllib.parse.parse_qsl(parsed.query))
     if fields and "fields" not in qs: qs["fields"] = fields
+    # Default token
     if "ut" not in qs: qs["ut"] = "fa5fd1943c7b386f172d6893dbfba10b"
+    # Cache buster / JSONP callback
     if "cb" not in qs:
         ts = int(time.time() * 1000)
         qs["cb"] = f"jQuery3510{random.randint(10 ** 15, 10 ** 16)}_{ts}"
@@ -275,15 +305,15 @@ def fix_url_params(url: str, fields: str = "") -> str:
 
 def normalize_secid(code: str) -> str:
     if "." in code: return code
+    # Heuristic: 6/5 -> SH (1), others -> SZ (0)
     return f"1.{code}" if code.startswith(("6", "5")) else f"0.{code}"
 
 
 # =========================================================
-# 6. FastAPI 路由与日志中间件
+# 6. FastAPI App
 # =========================================================
 
 POOL = BrowserPool()
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -291,58 +321,31 @@ async def lifespan(app: FastAPI):
     yield
     await POOL.stop()
 
-
 app = FastAPI(lifespan=lifespan)
 
-
+# Request Models
 class BaseReq(BaseModel): secid: str
-
-
 class UrlReq(BaseModel): url: str
-
-
 class KlineReq(BaseModel): secid: str; ndays: Optional[int] = 0
-
-
 class RangeReq(BaseModel): secid: str; beg: str; end: str
-
-
 class USReq(BaseModel): secid: str; market: str
-
-
 class TickReq(BaseModel): secid: str
-
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     rid = uuid.uuid4().hex[:6]
     request.state.rid = rid
     start_time = time.time()
-    body_log = ""
-    try:
-        body_bytes = await request.body()
-        async def receive():
-            return {"type": "http.request", "body": body_bytes}
-        request._receive = receive
-        if body_bytes:
-            body_log = body_bytes.decode('utf-8')[:200].replace('\n', '')
-    except:
-        body_log = "[Body Read Err]"
-
-    logger.info(f"[{rid}] IN  {request.method} {request.url.path} {body_log}")
 
     try:
         response = await call_next(request)
         cost = (time.time() - start_time) * 1000
-        logger.info(f"[{rid}] OUT {response.status_code} ({cost:.0f}ms)")
+        logger.info(f"[{rid}] {request.method} {request.url.path} -> {response.status_code} ({cost:.0f}ms)")
         return response
-
     except Exception as e:
         cost = (time.time() - start_time) * 1000
-        err_msg = traceback.format_exc()
-        logger.error(f"[{rid}] !!! ERROR ({cost:.0f}ms): {e}\n{err_msg}")
-        return Response(content=json.dumps({"error": str(e), "rid": rid}), status_code=500,
-                        media_type="application/json")
+        logger.error(f"[{rid}] ERROR {request.url.path}: {e}")
+        return Response(content=json.dumps({"error": str(e)}), status_code=500, media_type="application/json")
 
 
 @app.post("/stock/snapshot")
