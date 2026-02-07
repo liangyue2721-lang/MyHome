@@ -175,8 +175,25 @@ class BrowserPool:
         context_options["user_agent"] = "Mozilla/5.0 (Linux; Android) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 CrKey/1.54.248666"
         context_options["is_mobile"] = False  # Matches sec-ch-ua-mobile: ?0
 
+        # Inject real fingerprint headers
+        extra_headers = {
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "Accept-Language": "zh-CN,zh;q=0.9",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+            "Upgrade-Insecure-Requests": "1",
+            "sec-ch-ua": '"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Android"',
+        }
+
         self.context = await self.browser.new_context(
             **context_options,
+            extra_http_headers=extra_headers,
             accept_downloads=False,
             bypass_csp=True,
             ignore_https_errors=True
