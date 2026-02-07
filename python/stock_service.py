@@ -37,9 +37,6 @@ POOL_SIZE = 4
 PAGE_TTL = 200
 BROWSER_TTL = 3600
 
-# 拦截不必要的资源以加速 page.goto
-BLOCK_TYPES = ["image", "media", "font", "stylesheet", "other"]
-
 # 完整字段列表
 FULL_FIELDS = "f58,f734,f107,f57,f43,f59,f169,f301,f60,f170,f152,f177,f111,f46,f44,f45,f47,f260,f48,f261,f279,f277,f278,f288,f19,f17,f531,f15,f13,f11,f20,f18,f16,f14,f12,f39,f37,f35,f33,f31,f40,f38,f36,f34,f32,f211,f212,f213,f214,f215,f210,f209,f208,f207,f206,f161,f49,f171,f50,f86,f84,f85,f168,f108,f116,f167,f164,f162,f163,f92,f71,f117,f292,f51,f52,f191,f192,f262,f294,f295,f269,f270,f256,f257,f285,f286,f748,f747"
 
@@ -68,6 +65,7 @@ logging.getLogger("uvicorn.access").disabled = True
 # 3. 标签页工作单元 (Worker)
 # =========================================================
 
+
 class TabWorker:
     def __init__(self, index: int, context: BrowserContext):
         self.index = index
@@ -76,7 +74,6 @@ class TabWorker:
         self.req_count = 0
 
     async def init_page(self):
-        """初始化页面"""
         try:
             if self.page:
                 try:
@@ -86,12 +83,6 @@ class TabWorker:
 
             logger.info(f"[Worker-{self.index}] Opening Tab...")
             self.page = await self.context.new_page()
-
-            # 强力拦截，只允许 Document 和 Script
-            await self.page.route("**/*", lambda route: route.abort()
-            if route.request.resource_type in BLOCK_TYPES
-            else route.continue_())
-
             self.req_count = 0
             logger.info(f"[Worker-{self.index}] Ready.")
         except Exception as e:
@@ -100,8 +91,8 @@ class TabWorker:
 
     async def fetch(self, url: str, rid: str) -> str:
         """
-        使用 page.goto 直接导航
-        这是模拟真实用户在地址栏输入 URL 的行为，能生成最真实的 Headers
+        统一使用 page.goto 导航模式
+        绝对不要再使用 page.evaluate(fetch)
         """
         if not self.page:
             raise Exception("Page not ready")
@@ -111,39 +102,37 @@ class TabWorker:
             logger.info(f"[Worker-{self.index}] TTL reached, refreshing...")
             await self.init_page()
 
-        try:
-            # 1. 导航到数据接口 URL
-            # wait_until="commit" 表示只要服务器开始发送数据即可，不需要等待加载完
-            response = await self.page.goto(url, wait_until="commit", timeout=10000)
-
-            # 2. 检查状态码
-            if response and response.status != 200:
-                logger.error(f"[{rid}] Status {response.status} | URL: {url}")
-
-            # 3. 获取页面内容 (因为返回的是 JSON/Text，浏览器会把它放在 pre 或 body 中)
-            # 加上 try-except 防止页面结构差异
+        for attempt in range(2):
             try:
-                # 尝试获取 body 文本，这是最直接的方式
+                response = await self.page.goto(
+                    url,
+                    wait_until="domcontentloaded",
+                    timeout=10000
+                )
+
+                if response and response.status != 200:
+                    logger.error(f"[{rid}] Status {response.status} | URL: {url}")
+
+                # 直接从 body 取 JSON / JSONP
                 content = await self.page.inner_text("body")
-            except:
-                # 备用方案
-                content = await self.page.content()
 
-            # 调试日志
-            preview = content[:100].replace("\n", "").replace("\r", "")
-            logger.info(f"[{rid}] EM_RAW: {preview}")
+                preview = content[:120].replace("\n", "").replace("\r", "")
+                logger.info(f"[{rid}] EM_RAW: {preview}")
 
-            if not content:
-                logger.warning(f"[{rid}] Empty Data URL: {url}")
+                if not content:
+                    logger.warning(f"[{rid}] Empty Data URL: {url}")
 
-            return content
+                return content
 
-        except Exception as e:
-            logger.error(f"[{rid}] Goto Err: {e}")
-            raise e
+            except Exception as e:
+                if attempt == 0:
+                    logger.warning(f"[{rid}] Goto Err: {e}. Retrying...")
+                    await asyncio.sleep(0.5)
+                    continue
+                logger.error(f"[{rid}] Goto Err: {e}")
+                raise e
 
 
-# =========================================================
 # 4. 浏览器管理器
 # =========================================================
 
@@ -174,7 +163,6 @@ class BrowserPool:
                 "--disable-blink-features=AutomationControlled",
                 "--no-sandbox",
                 "--disable-infobars",
-                # "--disable-http2",  # 【关键】禁用 HTTP/2 解决 Socket Hang Up
                 "--ignore-certificate-errors",
             ]
         )
@@ -183,12 +171,7 @@ class BrowserPool:
             **device,  # 应用移动端指纹
             accept_downloads=False,
             bypass_csp=True,
-            ignore_https_errors=True,
-            # 【新增】添加 Referer 头部，欺骗服务器我们来自其官网
-            extra_http_headers={
-                "Referer": "https://quote.eastmoney.com/",
-                "Origin": "https://quote.eastmoney.com/"
-            }
+            ignore_https_errors=True
         )
 
         # 注入防检测脚本
@@ -241,8 +224,9 @@ class BrowserPool:
         finally:
             await self.queue.put(worker)
 
+        # =========================================================
 
-# =========================================================
+
 # 5. FastAPI 服务层
 # =========================================================
 
@@ -301,7 +285,7 @@ def fix_url_params(url: str) -> str:
     if "/api/qt/stock/get" in parsed.path:
         if "fields" not in qs or len(qs["fields"]) < 20: qs["fields"] = FULL_FIELDS
 
-    # 补全关键参数
+        # 补全关键参数
     if "ut" not in qs: qs["ut"] = "fa5fd1943c7b386f172d6893dbfba10b"
     if "dect" not in qs: qs["dect"] = "1"
     if "wbp2u" not in qs: qs["wbp2u"] = "|0|0|0|web"
