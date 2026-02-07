@@ -104,6 +104,10 @@ class TabWorker:
 
         for attempt in range(2):
             try:
+                # 显式重置 headers，确保每次导航都带上完整指纹
+                if hasattr(POOL, 'extra_headers'):
+                    await self.page.set_extra_http_headers(POOL.extra_headers)
+
                 response = await self.page.goto(
                     url,
                     wait_until="domcontentloaded",
@@ -176,7 +180,7 @@ class BrowserPool:
         context_options["is_mobile"] = False  # Matches sec-ch-ua-mobile: ?0
 
         # Inject real fingerprint headers
-        extra_headers = {
+        self.extra_headers = {
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
             "Accept-Language": "zh-CN,zh;q=0.9",
             "Cache-Control": "no-cache",
@@ -193,7 +197,7 @@ class BrowserPool:
 
         self.context = await self.browser.new_context(
             **context_options,
-            extra_http_headers=extra_headers,
+            extra_http_headers=self.extra_headers,
             accept_downloads=False,
             bypass_csp=True,
             ignore_https_errors=True
