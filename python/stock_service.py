@@ -149,10 +149,48 @@ class BrowserPool:
         self.queue = asyncio.Queue()
         self.running = False
         self.start_time = 0
+        self.extra_headers = {}
+        self.last_headers_refresh = 0
+        self.headers_file = os.path.join(BASE_DIR, "headers.json")
+
+    def load_headers_from_file(self):
+        """加载 headers.json，若文件不存在则使用默认值"""
+        try:
+            if os.path.exists(self.headers_file):
+                with open(self.headers_file, "r", encoding="utf-8") as f:
+                    self.extra_headers = json.load(f)
+                logger.info("Loaded headers from headers.json")
+            else:
+                logger.warning("headers.json not found, using default fallback headers.")
+                # Default fallback
+                self.extra_headers = {
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+                    "Accept-Language": "zh-CN,zh;q=0.9",
+                    "Cache-Control": "no-cache",
+                    "Pragma": "no-cache",
+                    "Sec-Fetch-Dest": "document",
+                    "Sec-Fetch-Mode": "navigate",
+                    "Sec-Fetch-Site": "none",
+                    "Sec-Fetch-User": "?1",
+                    "Upgrade-Insecure-Requests": "1",
+                    "sec-ch-ua": '"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"',
+                    "sec-ch-ua-mobile": "?0",
+                    "sec-ch-ua-platform": '"Android"',
+                    "User-Agent": "Mozilla/5.0 (Linux; Android) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 CrKey/1.54.248666"
+                }
+            self.last_headers_refresh = time.time()
+        except Exception as e:
+            logger.error(f"Failed to load headers: {e}")
+
+    async def check_refresh_headers(self):
+        """每2分钟检查一次 header 更新"""
+        if time.time() - self.last_headers_refresh > 120:
+            self.load_headers_from_file()
 
     async def start(self):
         self.running = True
         self.start_time = time.time()
+        self.load_headers_from_file()
         logger.info(">>> Pool Starting...")
 
         self.pw = await async_playwright().start()
@@ -172,28 +210,13 @@ class BrowserPool:
             ]
         )
 
-        # Override user_agent and is_mobile to match the provided successful request
-        # User-Agent: Mozilla/5.0 (Linux; Android) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 CrKey/1.54.248666
-        # sec-ch-ua-mobile: ?0
+        # Override user_agent and is_mobile
         context_options = device.copy()
-        context_options["user_agent"] = "Mozilla/5.0 (Linux; Android) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 CrKey/1.54.248666"
-        context_options["is_mobile"] = False  # Matches sec-ch-ua-mobile: ?0
 
-        # Inject real fingerprint headers
-        self.extra_headers = {
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-            "Accept-Language": "zh-CN,zh;q=0.9",
-            "Cache-Control": "no-cache",
-            "Pragma": "no-cache",
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
-            "Sec-Fetch-User": "?1",
-            "Upgrade-Insecure-Requests": "1",
-            "sec-ch-ua": '"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"',
-            "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": '"Android"',
-        }
+        # Priority: headers.json > Default
+        ua = self.extra_headers.get("User-Agent") or "Mozilla/5.0 (Linux; Android) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 CrKey/1.54.248666"
+        context_options["user_agent"] = ua
+        context_options["is_mobile"] = False
 
         self.context = await self.browser.new_context(
             **context_options,
@@ -252,6 +275,9 @@ class BrowserPool:
         while not self.queue.empty(): self.queue.get_nowait()
 
     async def dispatch(self, url: str, rid: Optional[str] = None) -> str:
+        # Check if headers need refresh
+        await self.check_refresh_headers()
+
         if not self.browser or not self.browser.is_connected():
             await self.restart()
 
