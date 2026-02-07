@@ -164,11 +164,19 @@ class BrowserPool:
                 "--no-sandbox",
                 "--disable-infobars",
                 "--ignore-certificate-errors",
+                "--disable-http2",
             ]
         )
 
+        # Override user_agent and is_mobile to match the provided successful request
+        # User-Agent: Mozilla/5.0 (Linux; Android) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 CrKey/1.54.248666
+        # sec-ch-ua-mobile: ?0
+        context_options = device.copy()
+        context_options["user_agent"] = "Mozilla/5.0 (Linux; Android) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 CrKey/1.54.248666"
+        context_options["is_mobile"] = False  # Matches sec-ch-ua-mobile: ?0
+
         self.context = await self.browser.new_context(
-            **device,  # 应用移动端指纹
+            **context_options,
             accept_downloads=False,
             bypass_csp=True,
             ignore_https_errors=True
