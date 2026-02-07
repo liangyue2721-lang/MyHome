@@ -204,7 +204,27 @@ class BrowserPool:
         )
 
         # 注入防检测脚本
-        await self.context.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        await self.context.add_init_script("""
+            // 1. Mask WebDriver
+            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+
+            // 2. Mock Platform (Match Android/Linux)
+            Object.defineProperty(navigator, 'platform', {get: () => 'Linux armv8l'});
+
+            // 3. Mock Languages
+            Object.defineProperty(navigator, 'languages', {get: () => ['zh-CN', 'zh', 'en-US', 'en']});
+
+            // 4. Mock Hardware Concurrency (Common mobile value)
+            Object.defineProperty(navigator, 'hardwareConcurrency', {get: () => 8});
+
+            // 5. Mock Touch (Since we are emulating Android, even if is_mobile=False for headers, JS might expect touch points)
+            // But if sec-ch-ua-mobile is ?0, maybe maxTouchPoints should be 0?
+            // Chromecast usually doesn't have touch. Let's stick to 0 for ?0.
+            Object.defineProperty(navigator, 'maxTouchPoints', {get: () => 0});
+
+            // 6. Mock Plugins (Empty for Chrome)
+            Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+        """)
 
         for i in range(POOL_SIZE):
             w = TabWorker(i, self.context)
