@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Stock Data Service v10.0 (Playwright Evaluate Fix)
+Stock Data Service v10.1 (Hybrid Fetch: Direct for Kline, Browser for Snapshot)
 """
 
 import os
@@ -94,13 +94,12 @@ class TabWorker:
         except Exception as e:
             logger.error(f"[Worker-{self.index}] Init Session Failed: {e}", exc_info=True)
 
-    async def fetch(self, url: str, rid: str) -> str:
+    async def fetch_browser(self, url: str, rid: str) -> str:
+        """Fetch using page.evaluate (Browser Context) - Bypasses socket hang up on push2"""
         self.req_count += 1
         if self.req_count > PAGE_TTL or not self.page:
             await self.init_session()
 
-        # Use page.evaluate to fetch inside the browser context
-        # This bypasses TLS fingerprinting issues and uses the browser's full network stack
         js_code = """
         async (url) => {
             const controller = new AbortController();
@@ -109,13 +108,9 @@ class TabWorker:
             try {
                 const response = await fetch(url, {
                     signal: controller.signal,
-                    headers: {
-                        'Accept': '*/*'
-                    }
+                    headers: { 'Accept': '*/*' }
                 });
-                if (!response.ok) {
-                    throw new Error("HTTP " + response.status);
-                }
+                if (!response.ok) throw new Error("HTTP " + response.status);
                 return await response.text();
             } catch (e) {
                 throw e.message;
@@ -128,8 +123,6 @@ class TabWorker:
         for attempt in range(2):
             try:
                 if not self.page: await self.init_session()
-
-                # Execute fetch in browser
                 content = await self.page.evaluate(js_code, url)
                 return content
             except Exception as e:
@@ -140,12 +133,24 @@ class TabWorker:
                     await self.init_session()
                     continue
 
-                logger.warning(f"[{rid}] Fetch Error (Attempt {attempt+1}): {err_msg}")
+                logger.warning(f"[{rid}] Browser Fetch Error (Attempt {attempt+1}): {err_msg}")
                 if attempt == 1:
                     logger.error(f"[{rid}] Final Failure: {err_msg}")
-                    return "" # Return empty on failure to avoid crash
+                    return ""
                 await asyncio.sleep(0.5)
         return ""
+
+    async def fetch_direct(self, url: str, rid: str) -> str:
+        """Fetch using Playwright APIRequestContext - Faster/Standard for push2his"""
+        try:
+            resp = await self.context.request.get(url, timeout=10000)
+            if resp.status == 200:
+                return await resp.text()
+            logger.warning(f"[{rid}] Direct Fetch Status {resp.status} for {url}")
+            return ""
+        except Exception as e:
+            logger.error(f"[{rid}] Direct Fetch Error: {e}")
+            return ""
 
 
 # =========================================================
@@ -198,8 +203,15 @@ class BrowserPool:
 
     async def dispatch(self, url: str, rid: Optional[str] = None) -> str:
         worker = await self.queue.get()
+        rid = rid or "SYS"
         try:
-            return await worker.fetch(url, rid or "SYS")
+            # Hybrid Strategy:
+            # push2his (Kline) -> Direct Fetch (Faster, proven stable)
+            # push2 (Realtime) -> Browser Fetch (Bypasses socket hang up)
+            if "push2his.eastmoney.com" in url:
+                return await worker.fetch_direct(url, rid)
+            else:
+                return await worker.fetch_browser(url, rid)
         finally:
             await self.queue.put(worker)
 
@@ -250,12 +262,16 @@ def standardize_realtime(data: Dict) -> Dict:
         # f191/f20: Commission Ratio (e.g. 5944 -> 59.44)
         "commissionRatio": _div100(d.get("f191") or d.get("f20")),
         "mainFundsInflow": d.get("f152"),
+        "turnoverRate": _div100(d.get("f168")),
+        "peRatio": _div100(d.get("f162")),
+        "pbRatio": _div100(d.get("f167")),
     }
 
 
 def standardize_kline(data: Dict) -> List:
-    klines = data.get("data", {}).get("klines", [])
-    stock_code = data.get("data", {}).get("code", "")
+    # Use .get with default dict to prevent crash if 'data' key exists but value is None
+    klines = (data.get("data") or {}).get("klines", [])
+    stock_code = (data.get("data") or {}).get("code", "")
     res = []
 
     for line in klines:
