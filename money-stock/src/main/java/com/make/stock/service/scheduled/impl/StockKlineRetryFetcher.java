@@ -25,7 +25,7 @@ public class StockKlineRetryFetcher {
      * <p>设置为30次，意味着在最坏情况下会尝试30次获取数据</p>
      */
     private static final int MAX_RETRIES = 30;
-    
+
     /**
      * 重试间隔时间（毫秒）
      * <p>设置为3分钟，生产环境中可以通过配置文件进行调整</p>
@@ -51,7 +51,7 @@ public class StockKlineRetryFetcher {
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
                 // 调用KlineDataFetcher获取K线数据
-                klineData = KlineDataFetcher.fetchKlineData(stockCode, market);
+                klineData = KlineDataFetcher.fetchKlineDataAll(stockCode, market);
                 // 如果成功获取到非空数据，则直接返回
                 if (klineData != null && !klineData.isEmpty()) {
                     return klineData;
