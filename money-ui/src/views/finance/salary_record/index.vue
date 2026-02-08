@@ -188,13 +188,13 @@
       <el-form ref="form" :model="form" :rules="rules" label-width="110px" class="custom-form">
         <h4 class="form-header">基础信息</h4>
         <el-row>
-          <el-col :span="12">
-            <el-form-item label="选择用户" prop="userId">
-              <el-select v-model="form.userId" placeholder="请选择用户" filterable style="width: 100%">
-                <el-option v-for="user in users" :key="user.userId" :label="user.nickName" :value="user.userId"/>
-              </el-select>
-            </el-form-item>
-          </el-col>
+<!--          <el-col :span="12">-->
+<!--            <el-form-item label="选择用户" prop="userId">-->
+<!--              <el-select v-model="form.userId" placeholder="请选择用户" filterable style="width: 100%">-->
+<!--                <el-option v-for="user in users" :key="user.userId" :label="user.nickName" :value="user.userId"/>-->
+<!--              </el-select>-->
+<!--            </el-form-item>-->
+<!--          </el-col>-->
           <el-col :span="12">
             <el-form-item label="工资代发单位" prop="salaryPayOrg">
               <el-input v-model="form.salaryPayOrg" placeholder="请输入单位名称"/>

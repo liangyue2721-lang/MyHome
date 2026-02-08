@@ -3,6 +3,7 @@ package com.make.finance.controller;
 import java.util.List;
 import javax.servlet.http.HttpServletResponse;
 
+import com.make.common.utils.SecurityUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -42,6 +43,7 @@ public class SalaryRecordController extends BaseController {
     @GetMapping("/list")
     public TableDataInfo list(SalaryRecord salaryRecord) {
         startPage();
+        salaryRecord.setUserId(SecurityUtils.getUserId());
         List<SalaryRecord> list = salaryRecordService.selectSalaryRecordList(salaryRecord);
         return getDataTable(list);
     }
@@ -53,6 +55,7 @@ public class SalaryRecordController extends BaseController {
     @Log(title = "员工工资明细", businessType = BusinessType.EXPORT)
     @PostMapping("/export")
     public void export(HttpServletResponse response, SalaryRecord salaryRecord) {
+        salaryRecord.setUserId(SecurityUtils.getUserId());
         List<SalaryRecord> list = salaryRecordService.selectSalaryRecordList(salaryRecord);
         ExcelUtil<SalaryRecord> util = new ExcelUtil<SalaryRecord>(SalaryRecord.class);
         util.exportExcel(response, list, "员工工资明细数据");
@@ -74,6 +77,7 @@ public class SalaryRecordController extends BaseController {
     @Log(title = "员工工资明细", businessType = BusinessType.INSERT)
     @PostMapping
     public AjaxResult add(@RequestBody SalaryRecord salaryRecord) {
+        salaryRecord.setUserId(SecurityUtils.getUserId());
         return toAjax(salaryRecordService.insertSalaryRecord(salaryRecord));
     }
 
@@ -84,6 +88,7 @@ public class SalaryRecordController extends BaseController {
     @Log(title = "员工工资明细", businessType = BusinessType.UPDATE)
     @PutMapping
     public AjaxResult edit(@RequestBody SalaryRecord salaryRecord) {
+        salaryRecord.setUserId(SecurityUtils.getUserId());
         return toAjax(salaryRecordService.updateSalaryRecord(salaryRecord));
     }
 
