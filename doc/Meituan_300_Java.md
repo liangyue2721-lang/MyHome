@@ -2,92 +2,271 @@
 
 ## 数组 & 双指针
 
-### 数组 & 双指针 经典题目 1（LeetCode 1）
+### 数组 & 双指针 经典题目 1（LeetCode 1. 两数之和）
 
-**思路（中文）**：哈希表/双指针/排序综合技巧
+**题目描述**：给定一个整数数组 `nums` 和一个整数目标值 `target`，请你在该数组中找出和为目标值 `target` 的那两个整数，并返回它们的数组下标。
+
+**思路（中文）**：使用哈希表（Map）来存储已经遍历过的数字及其下标。在遍历数组时，对于每个元素 `nums[i]`，计算目标值与当前值的差 `target - nums[i]`，检查该差值是否存在于哈希表中。如果存在，则说明找到了两个数，直接返回它们的下标；否则，将当前值及其下标存入哈希表。这种方法的时间复杂度为 O(N)。
 
 ``` java
 class Solution {
+    /**
+     * 计算两数之和
+     *
+     * @param nums   整数数组
+     * @param target 目标值
+     * @return 两个整数的数组下标
+     */
     public int[] twoSum(int[] nums, int target) {
-        Map<Integer,Integer> map = new HashMap<>();
-        for(int i=0;i<nums.length;i++){
-            int d = target - nums[i];
-            if(map.containsKey(d)) return new int[]{map.get(d), i};
+        // 创建哈希表，用于存储数值和对应的下标
+        Map<Integer, Integer> map = new HashMap<>();
+        // 遍历数组
+        for (int i = 0; i < nums.length; i++) {
+            // 计算目标值与当前值的差
+            int complement = target - nums[i];
+            // 检查哈希表中是否存在该差值
+            if (map.containsKey(complement)) {
+                // 如果存在，返回差值的下标和当前值的下标
+                return new int[]{map.get(complement), i};
+            }
+            // 将当前值和下标存入哈希表
             map.put(nums[i], i);
         }
+        // 如果没有找到，返回空数组
         return new int[]{};
     }
 }
 ```
 
-### 数组 & 双指针 经典题目 2（LeetCode 2）
+### 数组 & 双指针 经典题目 2（LeetCode 2. 两数相加）
 
-**思路（中文）**：哈希表/双指针/排序综合技巧
+**题目描述**：给你两个非空的链表，表示两个非负的整数。它们每位数字都是按照逆序的方式存储的，并且每个节点只能存储一位数字。请你将两个数相加，并以相同形式返回一个表示和的链表。
+
+**思路（中文）**：模拟人工加法的过程。同时遍历两个链表，逐位计算它们的和，并维护一个进位值（carry）。如果链表长度不同，则短的链表后面补 0。最后如果还有进位，需要新建一个节点存储进位值。
 
 ``` java
+/**
+ * Definition for singly-linked list.
+ * public class ListNode {
+ *     int val;
+ *     ListNode next;
+ *     ListNode() {}
+ *     ListNode(int val) { this.val = val; }
+ *     ListNode(int val, ListNode next) { this.val = val; this.next = next; }
+ * }
+ */
 class Solution {
-    public int[] twoSum(int[] nums, int target) {
-        Map<Integer,Integer> map = new HashMap<>();
-        for(int i=0;i<nums.length;i++){
-            int d = target - nums[i];
-            if(map.containsKey(d)) return new int[]{map.get(d), i};
-            map.put(nums[i], i);
+    /**
+     * 计算两个链表表示的整数之和
+     *
+     * @param l1 第一个链表
+     * @param l2 第二个链表
+     * @return 结果链表
+     */
+    public ListNode addTwoNumbers(ListNode l1, ListNode l2) {
+        // 创建一个哑节点，作为结果链表的头节点的前驱
+        ListNode dummy = new ListNode(0);
+        // curr 指针用于构建结果链表
+        ListNode curr = dummy;
+        // carry 用于存储进位
+        int carry = 0;
+
+        // 当 l1 或 l2 不为空，或者还有进位时，继续循环
+        while (l1 != null || l2 != null || carry != 0) {
+            // 获取 l1 当前节点的值，如果为空则为 0
+            int x = (l1 != null) ? l1.val : 0;
+            // 获取 l2 当前节点的值，如果为空则为 0
+            int y = (l2 != null) ? l2.val : 0;
+
+            // 计算当前位的和（包含进位）
+            int sum = x + y + carry;
+            // 更新进位
+            carry = sum / 10;
+            // 创建新节点存储当前位的值（sum % 10）
+            curr.next = new ListNode(sum % 10);
+            // 移动 curr 指针
+            curr = curr.next;
+
+            // 移动 l1 和 l2 指针
+            if (l1 != null) l1 = l1.next;
+            if (l2 != null) l2 = l2.next;
         }
-        return new int[]{};
+
+        // 返回哑节点的下一个节点，即结果链表的头节点
+        return dummy.next;
     }
 }
 ```
 
-### 数组 & 双指针 经典题目 3（LeetCode 3）
+### 数组 & 双指针 经典题目 3（LeetCode 3. 无重复字符的最长子串）
 
-**思路（中文）**：哈希表/双指针/排序综合技巧
+**题目描述**：给定一个字符串，请你找出其中不含有重复字符的 **最长子串** 的长度。
+
+**思路（中文）**：滑动窗口 + 哈希表。使用两个指针 `left` 和 `i` 定义一个窗口。遍历字符串，用哈希表记录字符最近一次出现的位置。如果遇到重复字符，更新 `left` 指针跳过重复字符的位置（注意取 max，防止 left 回退）。每次迭代更新最大长度。
 
 ``` java
 class Solution {
-    public int[] twoSum(int[] nums, int target) {
-        Map<Integer,Integer> map = new HashMap<>();
-        for(int i=0;i<nums.length;i++){
-            int d = target - nums[i];
-            if(map.containsKey(d)) return new int[]{map.get(d), i};
-            map.put(nums[i], i);
+    /**
+     * 计算无重复字符的最长子串长度
+     *
+     * @param s 输入字符串
+     * @return 最长子串的长度
+     */
+    public int lengthOfLongestSubstring(String s) {
+        if (s == null || s.length() == 0) return 0;
+        // 哈希表记录字符及其最新的索引位置
+        Map<Character, Integer> map = new HashMap<>();
+        // max 记录最长子串长度
+        int max = 0;
+        // left 为滑动窗口的左边界
+        int left = 0;
+
+        // i 为滑动窗口的右边界
+        for (int i = 0; i < s.length(); i++) {
+            // 如果字符已经在窗口中存在
+            if (map.containsKey(s.charAt(i))) {
+                // 更新左边界，跳过重复字符（注意防止回退）
+                left = Math.max(left, map.get(s.charAt(i)) + 1);
+            }
+            // 更新字符的最新位置
+            map.put(s.charAt(i), i);
+            // 计算当前窗口长度并更新最大值
+            max = Math.max(max, i - left + 1);
         }
-        return new int[]{};
+        return max;
     }
 }
 ```
 
-### 数组 & 双指针 经典题目 4（LeetCode 4）
+### 数组 & 双指针 经典题目 4（LeetCode 4. 寻找两个正序数组的中位数）
 
-**思路（中文）**：哈希表/双指针/排序综合技巧
+**题目描述**：给定两个大小分别为 `m` 和 `n` 的正序（从小到大）数组 `nums1` 和 `nums2`。请你找出并返回这两个正序数组的 **中位数** 。算法的时间复杂度应该为 `O(log (m+n))`。
+
+**思路（中文）**：使用二分查找。为了满足时间复杂度，我们需要在较短的数组上进行二分查找，找到一个分割点 `i`，使得 `nums1` 的左边和 `nums2` 的左边元素个数之和等于总长度的一半（或一半加一）。我们需要保证 `max(left_part) <= min(right_part)`。
 
 ``` java
 class Solution {
-    public int[] twoSum(int[] nums, int target) {
-        Map<Integer,Integer> map = new HashMap<>();
-        for(int i=0;i<nums.length;i++){
-            int d = target - nums[i];
-            if(map.containsKey(d)) return new int[]{map.get(d), i};
-            map.put(nums[i], i);
+    /**
+     * 寻找两个正序数组的中位数
+     *
+     * @param nums1 数组1
+     * @param nums2 数组2
+     * @return 中位数
+     */
+    public double findMedianSortedArrays(int[] nums1, int[] nums2) {
+        // 保证 nums1 是较短的数组，确保时间复杂度为 O(log(min(m, n)))
+        if (nums1.length > nums2.length) {
+            return findMedianSortedArrays(nums2, nums1);
         }
-        return new int[]{};
+
+        int m = nums1.length;
+        int n = nums2.length;
+        // 分割线左边的所有元素需要满足个数为 (m + n + 1) / 2
+        int totalLeft = (m + n + 1) / 2;
+
+        // 在 nums1 的区间 [0, m] 里查找恰当的分割线
+        // 使得 nums1[i-1] <= nums2[j] && nums2[j-1] <= nums1[i]
+        int left = 0;
+        int right = m;
+
+        while (left < right) {
+            // i 是 nums1 的分割点（右半部分的起始索引）
+            int i = left + (right - left + 1) / 2;
+            // j 是 nums2 的分割点
+            int j = totalLeft - i;
+
+            // 如果 nums1 左边的元素 nums1[i-1] 大于 nums2 右边的元素 nums2[j]
+            // 说明 i 太大了，需要左移
+            if (nums1[i - 1] > nums2[j]) {
+                right = i - 1;
+            } else {
+                // 否则说明 i 可能太小，或者正好，尝试右移
+                left = i;
+            }
+        }
+
+        // 循环结束时，left == right，即为找到的分割点 i
+        int i = left;
+        int j = totalLeft - i;
+
+        // 处理边界情况
+        int nums1LeftMax = (i == 0) ? Integer.MIN_VALUE : nums1[i - 1];
+        int nums1RightMin = (i == m) ? Integer.MAX_VALUE : nums1[i];
+        int nums2LeftMax = (j == 0) ? Integer.MIN_VALUE : nums2[j - 1];
+        int nums2RightMin = (j == n) ? Integer.MAX_VALUE : nums2[j];
+
+        // 左半部分的最大值（中位数的候选）
+        int maxLeft = Math.max(nums1LeftMax, nums2LeftMax);
+
+        // 如果是奇数个元素，中位数就是左半部分的最大值
+        if ((m + n) % 2 == 1) {
+            return (double) maxLeft;
+        }
+
+        // 如果是偶数个元素，中位数是左半部分最大值和右半部分最小值的平均值
+        int minRight = Math.min(nums1RightMin, nums2RightMin);
+        return (maxLeft + minRight) / 2.0;
     }
 }
 ```
 
-### 数组 & 双指针 经典题目 5（LeetCode 5）
+### 数组 & 双指针 经典题目 5（LeetCode 5. 最长回文子串）
 
-**思路（中文）**：哈希表/双指针/排序综合技巧
+**题目描述**：给你一个字符串 `s`，找到 `s` 中最长的回文子串。
+
+**思路（中文）**：中心扩散法。遍历字符串，以每个字符（或两个字符之间）为中心，向两边扩散，直到左右字符不相等。记录最大的回文串长度和起始位置。
 
 ``` java
 class Solution {
-    public int[] twoSum(int[] nums, int target) {
-        Map<Integer,Integer> map = new HashMap<>();
-        for(int i=0;i<nums.length;i++){
-            int d = target - nums[i];
-            if(map.containsKey(d)) return new int[]{map.get(d), i};
-            map.put(nums[i], i);
+    /**
+     * 寻找最长回文子串
+     *
+     * @param s 输入字符串
+     * @return 最长回文子串
+     */
+    public String longestPalindrome(String s) {
+        if (s == null || s.length() < 1) return "";
+        // start 和 end 用于记录最长回文子串的起始和结束位置
+        int start = 0, end = 0;
+
+        // 遍历字符串，以每个位置为中心尝试扩散
+        for (int i = 0; i < s.length(); i++) {
+            // 情况1：以当前字符为中心（奇数长度）
+            int len1 = expandAroundCenter(s, i, i);
+            // 情况2：以当前字符和下一个字符的间隙为中心（偶数长度）
+            int len2 = expandAroundCenter(s, i, i + 1);
+
+            // 取两者的最大长度
+            int len = Math.max(len1, len2);
+
+            // 如果找到更长的回文串，更新 start 和 end
+            if (len > end - start) {
+                // 根据长度计算新的起始位置
+                start = i - (len - 1) / 2;
+                end = i + len / 2;
+            }
         }
-        return new int[]{};
+        // 返回最长回文子串
+        return s.substring(start, end + 1);
+    }
+
+    /**
+     * 从中心向两边扩散，寻找回文串长度
+     *
+     * @param s     字符串
+     * @param left  左指针
+     * @param right 右指针
+     * @return 回文串长度
+     */
+    private int expandAroundCenter(String s, int left, int right) {
+        int L = left, R = right;
+        // 当左右指针在范围内且字符相等时，继续扩散
+        while (L >= 0 && R < s.length() && s.charAt(L) == s.charAt(R)) {
+            L--;
+            R++;
+        }
+        // 返回回文串长度：(R - 1) - (L + 1) + 1 = R - L - 1
+        return R - L - 1;
     }
 }
 ```
