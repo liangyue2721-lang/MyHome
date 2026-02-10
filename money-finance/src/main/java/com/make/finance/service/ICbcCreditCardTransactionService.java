@@ -58,4 +58,12 @@ public interface ICbcCreditCardTransactionService {
      * @return 结果
      */
     public int deleteCbcCreditCardTransactionById(Long id);
+
+    /**
+     * 批量新增建行信用卡交易记录
+     *
+     * @param cbcCreditCardTransactions 建行信用卡交易记录列表
+     * @return 插入成功的记录数
+     */
+    public int batchInsertCbcCreditCardTransaction(List<CbcCreditCardTransaction> cbcCreditCardTransactions);
 }

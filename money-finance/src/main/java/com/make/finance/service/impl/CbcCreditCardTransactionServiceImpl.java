@@ -1,8 +1,10 @@
 package com.make.finance.service.impl;
 
+import java.util.Date;
 import java.util.List;
 
 import com.make.common.utils.DateUtils;
+import com.make.common.utils.SecurityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import com.make.finance.mapper.CbcCreditCardTransactionMapper;
@@ -86,5 +88,28 @@ public class CbcCreditCardTransactionServiceImpl implements ICbcCreditCardTransa
     @Override
     public int deleteCbcCreditCardTransactionById(Long id) {
         return cbcCreditCardTransactionMapper.deleteCbcCreditCardTransactionById(id);
+    }
+
+    /**
+     * 批量新增建行信用卡交易记录
+     *
+     * @param cbcCreditCardTransactions 建行信用卡交易记录列表
+     * @return 插入成功的记录数
+     */
+    @Override
+    public int batchInsertCbcCreditCardTransaction(List<CbcCreditCardTransaction> cbcCreditCardTransactions) {
+        if (cbcCreditCardTransactions == null || cbcCreditCardTransactions.isEmpty()) {
+            return 0;
+        }
+
+        // 为每条记录设置创建时间
+        Date now = DateUtils.getNowDate();
+        cbcCreditCardTransactions.forEach(transaction -> {
+            transaction.setCreateTime(now);
+            transaction.setUpdateTime(now);
+            transaction.setUserId(SecurityUtils.getUserId());
+        });
+
+        return cbcCreditCardTransactionMapper.batchInsertCbcCreditCardTransaction(cbcCreditCardTransactions);
     }
 }

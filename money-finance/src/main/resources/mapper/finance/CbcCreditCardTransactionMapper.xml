@@ -110,4 +110,26 @@
             #{id}
         </foreach>
     </delete>
+
+    <!-- 批量插入建行信用卡交易记录 -->
+    <insert id="batchInsertCbcCreditCardTransaction" parameterType="java.util.List">
+        insert into cbc_credit_card_transaction
+        (trade_date, post_date, card_last4, description, trans_amount, settle_amount, 
+         create_time, update_time, remark, user_id)
+        values
+        <foreach collection="list" item="item" separator=",">
+            (
+            #{item.tradeDate},
+            #{item.postDate},
+            #{item.cardLast4},
+            #{item.description},
+            #{item.transAmount},
+            #{item.settleAmount},
+            #{item.createTime},
+            #{item.updateTime},
+            #{item.remark},
+            #{item.userId}
+            )
+        </foreach>
+    </insert>
 </mapper>
