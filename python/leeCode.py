@@ -35,7 +35,8 @@ def safe_find_element(driver, selectors):
             element = WebDriverWait(driver, 1).until(
                 EC.presence_of_element_located((by_type, selector))
             )
-            return element
+            if element.is_displayed():
+                return element
         except:
             continue
     return None
@@ -43,75 +44,77 @@ def safe_find_element(driver, selectors):
 
 def beautify_html_to_md(html):
     """
-    HTML 转 Markdown 清洗函数 (优化版)
-    特点：保留示例换行，不使用代码块包裹示例
+    HTML 转 Markdown 清洗函数 (V6.0 深度净化版)
+    核心修复：去除冗余的 ** 符号，修复空行
     """
     if not html: return ""
 
-    # 1. 移除不必要的空白字符，但保留换行（关键！防止示例变成一行）
-    # 仅将连续的空格/Tab压缩为一个空格，但不处理 \n
+    # 1. 压缩空白字符 (保留换行)
     html = re.sub(r'[ \t]+', ' ', html)
 
-    # 2. 处理图片
+    # 2. 图片转 MD
     html = re.sub(r'<img[^>]*src="([^"]*)"[^>]*>', r'\n\n![image](\1)\n\n', html)
 
-    # 3. 处理示例区域 <pre>
-    # 【修改点】：不再用 ``` 包裹，直接保留内容，前后加换行
+    # 3. 示例区域处理 (去除 <pre>)
     html = re.sub(r'<pre[^>]*>([\s\S]*?)</pre>', r'\n\1\n', html)
 
-    # 4. 处理行内代码 <code> -> `
+    # 4. 行内代码处理 <code> -> `
     html = re.sub(r'<code[^>]*>(.*?)</code>', r'`\1`', html)
 
-    # 5. 处理加粗 <strong>/<b> -> **
+    # 5. 加粗处理 (strong/b -> **)
     html = re.sub(r'<(?:strong|b)[^>]*>(.*?)</(?:strong|b)>', r'**\1**', html)
 
-    # 6. 处理列表
+    # --- 🚨 新增：深度清洗冗余的 ** 符号 ---
+    # 5.1 去除空的加粗：**** 或 ** **
+    html = re.sub(r'\*\*\s*\*\*', '', html)
+    # 5.2 修复加粗内的空格：** text ** -> **text**
+    html = re.sub(r'\*\*\s+(.*?)\s+\*\*', r' **\1** ', html)
+    # 5.3 (可选) 如果不需要给示例标题加粗，可以在这里去掉
+    # html = html.replace('**示例', '示例')
+
+    # 6. 列表处理
     html = re.sub(r'<li[^>]*>', r'\n- ', html)
     html = re.sub(r'</li>', '', html)
     html = re.sub(r'</?ul[^>]*>', r'\n', html)
     html = re.sub(r'</?ol[^>]*>', r'\n', html)
 
-    # 7. 处理段落和换行
+    # 7. 段落和换行
     html = re.sub(r'<p[^>]*>', r'\n\n', html)
     html = re.sub(r'</p>', '', html)
-    html = re.sub(r'<br\s*/?>', r'\n', html)  # 将 <br> 转为显式换行
+    html = re.sub(r'<br\s*/?>', r'\n', html)
     html = re.sub(r'<div>', r'\n', html)
     html = re.sub(r'</div>', r'', html)
+    html = re.sub(r'<[^>]+>', '', html)  # 清理剩余标签
 
-    # 8. 清理剩余标签
-    html = re.sub(r'<[^>]+>', '', html)
-
-    # 9. 实体还原
+    # 8. 实体字符还原
     html = html.replace('&nbsp;', ' ').replace('&lt;', '<').replace('&gt;', '>').replace('&quot;', '"').replace('&amp;',
                                                                                                                 '&')
 
-    # 10. 格式整理：确保每行开头不要有奇怪的缩进，且控制换行数量
+    # 9. 最终格式化
     lines = [line.strip() for line in html.split('\n')]
     html = '\n'.join(lines)
-    html = re.sub(r'\n{3,}', '\n\n', html)  # 最多允许两个连续换行
+    html = re.sub(r'\n{3,}', '\n\n', html)  # 最多允许连续2个换行
+
+    # 10. 最后的清理：去除孤立的 **
+    html = html.replace('****', '')
 
     return html.strip()
 
 
 def get_difficulty_color(difficulty):
-    """ 生成 HTML 颜色标签 """
+    color = "gray"
     if "简单" in difficulty or "Easy" in difficulty:
-        return f'<span style="color: green; font-weight: bold;">{difficulty}</span>'
-    if "中等" in difficulty or "Medium" in difficulty:
-        return f'<span style="color: orange; font-weight: bold;">{difficulty}</span>'
-    if "困难" in difficulty or "Hard" in difficulty:
-        return f'<span style="color: red; font-weight: bold;">{difficulty}</span>'
-    return f'<span style="color: gray;">{difficulty}</span>'
+        color = "green"
+    elif "中等" in difficulty or "Medium" in difficulty:
+        color = "orange"
+    elif "困难" in difficulty or "Hard" in difficulty:
+        color = "red"
+    return f'<span style="color: {color}; font-weight: bold;">{difficulty}</span>'
 
 
 def get_difficulty_by_location(driver):
-    """
-    【坐标筛选法】修复难度误判
-    通过 Y 轴坐标筛选，取页面最顶部的难度标签
-    """
     candidates = ["简单", "中等", "困难", "Easy", "Medium", "Hard"]
-    best_diff = "未知"
-    min_y = 99999
+    best_diff, min_y = "未知", 99999
 
     for text in candidates:
         xpath = f"//div[text()='{text}'] | //span[text()='{text}']"
@@ -120,10 +123,7 @@ def get_difficulty_by_location(driver):
             try:
                 if not elem.is_displayed(): continue
                 y = elem.location['y']
-                # 筛选条件：必须在页面顶部区域 (y < 400)
-                if y < 400 and y < min_y:
-                    min_y = y
-                    best_diff = text
+                if y < 400 and y < min_y: min_y, best_diff = y, text
             except:
                 continue
     return best_diff
@@ -131,118 +131,101 @@ def get_difficulty_by_location(driver):
 
 def get_page_content(driver):
     print("⏳ 正在读取页面数据...")
+    title_element = safe_find_element(driver, [(By.CSS_SELECTOR, 'div[data-cy="question-title"]'),
+                                               (By.CSS_SELECTOR, '.text-title-large')])
 
-    # 1. 获取标题
-    title_selectors = [
-        (By.CSS_SELECTOR, 'div[data-cy="question-title"]'),
-        (By.CSS_SELECTOR, '.text-title-large'),
-        (By.XPATH, '//div[contains(@class, "text-title-large")]'),
-        (By.ID, 'question-title'),
-    ]
-    title_element = safe_find_element(driver, title_selectors)
     if not title_element:
-        print("❌ 未找到标题，跳过")
+        print("❌ 未找到标题，跳过...")
         return None, None, None, None
+
     title = title_element.text.strip()
     print(f"👉 发现题目: {title}")
 
-    # 2. 获取难度 (坐标法)
     difficulty = get_difficulty_by_location(driver)
     print(f"📊 题目难度: {difficulty}")
 
-    # 3. 获取描述
-    desc_selectors = [
-        (By.CSS_SELECTOR, 'div[data-track-load="description_content"]'),
-        (By.CLASS_NAME, 'content__u3I1'),
-    ]
-    desc_element = safe_find_element(driver, desc_selectors)
-    if desc_element:
-        raw_html = desc_element.get_attribute('innerHTML')
-        description = beautify_html_to_md(raw_html)
-    else:
-        description = "未获取到描述"
+    desc_element = safe_find_element(driver, [(By.CSS_SELECTOR, 'div[data-track-load="description_content"]'),
+                                              (By.CLASS_NAME, 'content__u3I1')])
 
-    # 4. 获取代码
+    if desc_element:
+        description = beautify_html_to_md(desc_element.get_attribute('innerHTML'))
+    else:
+        description = "暂无描述"
+
     try:
         code_lines = driver.find_elements(By.CSS_SELECTOR, '.view-lines .view-line')
         code_text = "\n".join([line.text.replace('\u00a0', ' ') for line in code_lines]) if code_lines else "// 未检测到代码"
     except:
         code_text = "// 代码获取出错"
 
+    if not title or not description or len(description) < 5:
+        print("❌ 数据为空，跳过")
+        return None, None, None, None
+
     return title, difficulty, description, code_text
 
 
-def get_category_header(difficulty):
-    if "简单" in difficulty: return "## 难度等级：简单"
-    if "中等" in difficulty: return "## 难度等级：中等"
-    if "困难" in difficulty: return "## 难度等级：困难"
-    return "## 难度等级：未知"
+def ensure_file_structure():
+    default_content = "# LeetCode 题库\n\n## 难度等级：简单\n\n## 难度等级：中等\n\n## 难度等级：困难\n"
+    if not os.path.exists(MD_FILE_PATH):
+        with open(MD_FILE_PATH, 'w', encoding='utf-8') as f:
+            f.write(default_content)
+    else:
+        with open(MD_FILE_PATH, 'r', encoding='utf-8') as f:
+            content = f.read()
+        needs_write = False
+        for level in ["## 难度等级：简单", "## 难度等级：中等", "## 难度等级：困难"]:
+            if level not in content:
+                content += f"\n\n{level}\n"
+                needs_write = True
+        if needs_write:
+            with open(MD_FILE_PATH, 'w', encoding='utf-8') as f: f.write(content)
 
 
 def update_markdown(title, difficulty, description, code):
-    if not os.path.exists(MD_FILE_PATH):
-        with open(MD_FILE_PATH, 'w', encoding='utf-8') as f:
-            f.write("# LeetCode 题库\n")
-
+    ensure_file_structure()
     with open(MD_FILE_PATH, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    # 确保分类标题存在
-    target_header = get_category_header(difficulty)
-    if target_header not in content:
-        order = ["## 难度等级：简单", "## 难度等级：中等", "## 难度等级：困难", "## 难度等级：未知"]
-        try:
-            idx = order.index(target_header)
-        except:
-            idx = 3
-        insert_pos = len(content)
-        for i in range(idx - 1, -1, -1):
-            if order[i] in content:
-                match = re.search(re.escape(order[i]), content)
-                start_search = match.end()
-                next_sect = re.search(r'\n## 难度等级：', content[start_search:])
-                insert_pos = start_search + next_sect.start() if next_sect else len(content)
-                break
-        content = content[:insert_pos] + f"\n\n{target_header}\n" + content[insert_pos:]
+    # 1. 确定归属分类
+    target_header = "## 难度等级：未知"
+    if "简单" in difficulty:
+        target_header = "## 难度等级：简单"
+    elif "中等" in difficulty:
+        target_header = "## 难度等级：中等"
+    elif "困难" in difficulty:
+        target_header = "## 难度等级：困难"
 
-    # 生成描述块 (带颜色难度，但示例无代码块)
+    if target_header not in content: content += f"\n\n{target_header}\n"
+
+    # 2. 锁定操作范围 (Scope)
+    start_scope = content.find(target_header)
+    next_header_match = re.search(r'\n## ', content[start_scope + len(target_header):])
+    end_scope = (start_scope + len(target_header) + next_header_match.start()) if next_header_match else len(content)
+    category_content = content[start_scope:end_scope]
+
+    # 3. 构造内容
     diff_colored = get_difficulty_color(difficulty)
-    styled_description = f"> {diff_colored}\n\n{description}"
+    styled_desc = f"> {diff_colored}\n\n{description}"
+    new_prob_block = f"\n\n### {title}\n\n#### 📝 问题描述\n\n{styled_desc}\n\n#### 💻 问题解答 (Java)\n\n```Java\n{code}\n```\n"
 
-    # 匹配与更新
-    title_parts = title.split('.', 1)
-    prob_id = title_parts[0].strip() if len(title_parts) > 1 else title
-    match_header = re.search(f"### {re.escape(prob_id)}\\..*", content)
+    # 4. 更新或新增
+    prob_id = title.split('.', 1)[0].strip()
+    match_prob = re.search(f"### {re.escape(prob_id)}\\.", category_content)
 
-    if match_header:
-        print(f"✅ 更新: {title}")
-        start = match_header.end()
-        next_h = re.search(r'\n### ', content[start:])
-        end = (start + next_h.start()) if next_h else len(content)
-        section = content[start:end]
-
-        if "#### 📝 问题描述" in section:
-            section = re.sub(r'(#### 📝 问题描述\s*)([\s\S]*?)(?=\s*#### 💻)', f'\\1\n{styled_description}\n\n', section)
-        if "// TODO: 待补充代码" in section:
-            section = section.replace("// TODO: 待补充代码", code)
-
-        new_content = content[:start] + section + content[end:]
+    if match_prob:
+        print(f"✅ 更新题目: {title}")
+        prob_start = match_prob.start()
+        next_prob = re.search(r'\n### ', category_content[match_prob.end():])
+        prob_end = (match_prob.end() + next_prob.start()) if next_prob else len(category_content)
+        updated_category = category_content[:prob_start] + new_prob_block.strip() + category_content[prob_end:]
     else:
-        print(f"🆕 新增: {title} -> {difficulty}")
-        new_section = f"\n### {title}\n\n" \
-                      f"#### 📝 问题描述\n\n" \
-                      f"{styled_description}\n\n" \
-                      f"#### 💻 问题解答 (Java)\n\n" \
-                      f"```Java\n{code}\n```\n"
+        print(f"🆕 新增题目: {title}")
+        updated_category = category_content + new_prob_block
 
-        h_pos = content.find(target_header)
-        start_search = h_pos + len(target_header)
-        next_sect = re.search(r'\n## 难度等级：', content[start_search:])
-        insert_pos = start_search + next_sect.start() if next_sect else len(content)
-        new_content = content[:insert_pos] + new_section + content[insert_pos:]
-
+    final_content = content[:start_scope] + updated_category + content[end_scope:]
     with open(MD_FILE_PATH, 'w', encoding='utf-8') as f:
-        f.write(new_content)
+        f.write(final_content)
     return True
 
 
@@ -260,8 +243,7 @@ def main():
         while True:
             time.sleep(3)
             result = get_page_content(driver)
-            if result[0]:
-                update_markdown(*result)
+            if result[0] is not None: update_markdown(*result)
             if not AUTO_NEXT: break
             trigger_next_shortcut(driver)
             time.sleep(2)
