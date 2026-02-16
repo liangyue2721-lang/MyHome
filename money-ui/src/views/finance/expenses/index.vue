@@ -78,12 +78,7 @@
       <el-table-column label="出资方归属" align="center" prop="payerType"/>
       <el-table-column label="分类" align="center" prop="category"/>
       <el-table-column label="备注：记录具体经手人或特殊说明" align="center" prop="remark"/>
-      <el-table-column label="${comment}" align="center" prop="createdAt" width="180">
-        <template slot-scope="scope">
-          <span>{{ parseTime(scope.row.createdAt, '{y}-{m}-{d}') }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="${comment}" align="center" prop="updatedAt" width="180">
+      <el-table-column label="更新时间" align="center" prop="updatedAt" width="180">
         <template slot-scope="scope">
           <span>{{ parseTime(scope.row.updatedAt, '{y}-{m}-{d}') }}</span>
         </template>
