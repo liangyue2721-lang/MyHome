@@ -9,8 +9,8 @@
           @keyup.enter.native="handleQuery"
         />
       </el-form-item>
-      <el-form-item label="出资人" prop="userId">
-        <el-select v-model="queryParams.userId" placeholder="请选择出资人" clearable filterable @change="handleQuery">
+      <el-form-item label="出资人" prop="payer">
+        <el-select v-model="queryParams.payer" placeholder="请选择出资人" clearable filterable @change="handleQuery">
           <el-option
             v-for="item in userOptions"
             :key="item.id"
@@ -105,23 +105,23 @@
       </el-table-column>
       <el-table-column label="所属阶段" align="center" prop="stage">
         <template slot-scope="scope">
-            <span v-if="scope.row.stage == '0'">订婚</span>
-            <span v-else-if="scope.row.stage == '1'">婚礼</span>
-            <span v-else-if="scope.row.stage == '2'">婚后</span>
-            <span v-else>{{ scope.row.stage }}</span>
+          <span v-if="scope.row.stage == '0'">订婚</span>
+          <span v-else-if="scope.row.stage == '1'">婚礼</span>
+          <span v-else-if="scope.row.stage == '2'">婚后</span>
+          <span v-else>{{ scope.row.stage }}</span>
         </template>
       </el-table-column>
       <el-table-column label="出资人" align="center">
         <template slot-scope="scope">
-          <el-tag size="mini" type="info">{{ getUserName(scope.row.userId) }}</el-tag>
+          <el-tag size="mini" type="info">{{ getUserName(scope.row.payer) }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column label="出资方归属" align="center" prop="payerType">
         <template slot-scope="scope">
-            <span v-if="scope.row.payerType == '0'">小家</span>
-            <span v-else-if="scope.row.payerType == '1'">男方父母</span>
-            <span v-else-if="scope.row.payerType == '2'">女方父母</span>
-            <span v-else>{{ scope.row.payerType }}</span>
+          <span v-if="scope.row.payerType == '0'">小家</span>
+          <span v-else-if="scope.row.payerType == '1'">男方父母</span>
+          <span v-else-if="scope.row.payerType == '2'">女方父母</span>
+          <span v-else>{{ scope.row.payerType }}</span>
         </template>
       </el-table-column>
       <el-table-column label="分类" align="center" prop="category"/>
@@ -171,18 +171,18 @@
           </el-date-picker>
         </el-form-item>
         <el-form-item label="所属阶段" prop="stage">
-             <el-select v-model="form.stage" placeholder="请选择所属阶段">
-                <el-option label="订婚" value="0"></el-option>
-                <el-option label="婚礼" value="1"></el-option>
-                <el-option label="婚后" value="2"></el-option>
-             </el-select>
+          <el-select v-model="form.stage" placeholder="请选择所属阶段">
+            <el-option label="订婚" value="0"></el-option>
+            <el-option label="婚礼" value="1"></el-option>
+            <el-option label="婚后" value="2"></el-option>
+          </el-select>
         </el-form-item>
         <el-form-item label="出资方归属" prop="payerType">
-            <el-select v-model="form.payerType" placeholder="请选择出资方归属">
-                <el-option label="小家" value="0"></el-option>
-                <el-option label="男方父母" value="1"></el-option>
-                <el-option label="女方父母" value="2"></el-option>
-             </el-select>
+          <el-select v-model="form.payerType" placeholder="请选择出资方归属">
+            <el-option label="小家" value="0"></el-option>
+            <el-option label="男方父母" value="1"></el-option>
+            <el-option label="女方父母" value="2"></el-option>
+          </el-select>
         </el-form-item>
         <el-form-item label="分类" prop="category">
           <el-input v-model="form.category" placeholder="请输入分类"/>
@@ -190,8 +190,8 @@
         <el-form-item label="备注" prop="remark">
           <el-input v-model="form.remark" placeholder="请输入备注"/>
         </el-form-item>
-         <el-form-item label="关联用户" prop="userId">
-          <el-select v-model="form.userId" placeholder="请选择关联用户" filterable>
+        <el-form-item label="出资方" prop="payer">
+          <el-select v-model="form.payer" placeholder="出资方" filterable>
             <el-option
               v-for="item in userOptions"
               :key="item.id"
@@ -210,7 +210,14 @@
 </template>
 
 <script>
-import {listExpenses, getExpenses, delExpenses, addExpenses, updateExpenses, getExpensesStats} from "@/api/finance/expenses"
+import {
+  listExpenses,
+  getExpenses,
+  delExpenses,
+  addExpenses,
+  updateExpenses,
+  getExpensesStats
+} from "@/api/finance/expenses"
 import {listUser} from "@/api/stock/dropdown_component";
 import * as echarts from 'echarts';
 import 'echarts-liquidfill';
@@ -309,7 +316,7 @@ export default {
 
         this.userOptions = rawUsers.map(u => ({
           id: u.userId,
-          name: u.userName || u.nickName || `用户${u.userId}`
+          name: u.nickName || u.userName || `用户${u.userId}`
         }));
 
         if (this.userOptions.length) {
@@ -323,7 +330,7 @@ export default {
             // I will set it only if it was null? Or just not set it to allow seeing all.
             // Let's stick to the behavior: auto-select "me" if found.
             if (!this.queryParams.userId) {
-                this.queryParams.userId = matchedUser.id;
+              this.queryParams.userId = matchedUser.id;
             }
           }
         }
@@ -359,27 +366,27 @@ export default {
       // Initial empty state or loading state
       this.pieChartInstance.setOption({
         title: {
-             text: '暂无数据',
-             left: 'center',
-             top: 'center',
-             textStyle: { color: '#909399' }
+          text: '暂无数据',
+          left: 'center',
+          top: 'center',
+          textStyle: {color: '#909399'}
         },
         series: []
       });
 
       this.liquidChartInstance.setOption({
-         title: {
-             text: '¥0.00',
-             left: 'center',
-             top: 'center',
-             textStyle: { fontSize: 24, color: '#C23531' }
-         },
-         series: [{
-             type: 'liquidFill',
-             data: [0.5],
-             radius: '80%',
-             label: { show: false } // Hide label inside, use title
-         }]
+        title: {
+          text: '¥0.00',
+          left: 'center',
+          top: 'center',
+          textStyle: {fontSize: 24, color: '#C23531'}
+        },
+        series: [{
+          type: 'liquidFill',
+          data: [0.5],
+          radius: '80%',
+          label: {show: false} // Hide label inside, use title
+        }]
       });
     },
     resizeCharts() {
@@ -387,119 +394,119 @@ export default {
       if (this.liquidChartInstance) this.liquidChartInstance.resize();
     },
     updateCharts(data) {
-        const payerTypeMap = {
-            '0': '小家',
-            '1': '男方父母',
-            '2': '女方父母'
-        };
+      const payerTypeMap = {
+        '0': '小家',
+        '1': '男方父母',
+        '2': '女方父母'
+      };
 
-        // Calculate total amount
-        let totalAmount = 0;
-        const pieData = [];
+      // Calculate total amount
+      let totalAmount = 0;
+      const pieData = [];
 
-        data.forEach(item => {
-            const amount = parseFloat(item.totalAmount);
-            totalAmount += amount;
-            pieData.push({
-                value: amount,
-                name: payerTypeMap[item.payerType] || item.payerType
-            });
+      data.forEach(item => {
+        const amount = parseFloat(item.totalAmount);
+        totalAmount += amount;
+        pieData.push({
+          value: amount,
+          name: payerTypeMap[item.payerType] || item.payerType
         });
+      });
 
-        // Update Pie Chart
-        if (pieData.length > 0) {
-            this.pieChartInstance.setOption({
-                title: { show: false }, // Hide "No Data"
-                tooltip: {
-                    trigger: 'item',
-                    formatter: '{b}: {c} ({d}%)'
-                },
-                legend: {
-                    orient: 'vertical',
-                    left: 'left'
-                },
-                series: [
-                    {
-                        name: '出资方',
-                        type: 'pie',
-                        radius: ['40%', '70%'], // Donut chart looks better
-                        avoidLabelOverlap: false,
-                        itemStyle: {
-                            borderRadius: 10,
-                            borderColor: '#fff',
-                            borderWidth: 2
-                        },
-                        label: {
-                            show: false,
-                            position: 'center'
-                        },
-                        emphasis: {
-                            label: {
-                                show: true,
-                                fontSize: '20',
-                                fontWeight: 'bold'
-                            }
-                        },
-                        labelLine: {
-                            show: false
-                        },
-                        data: pieData
-                    }
-                ]
-            });
-        } else {
-             this.pieChartInstance.setOption({
-                title: {
-                     text: '暂无数据',
-                     left: 'center',
-                     top: 'center',
-                     textStyle: { color: '#909399' }
-                },
-                series: []
-              }, true); // Merge = true, but clearing series requires care.
-              // Actually setOption with empty series clears it if not merge?
-              // Let's explicitly clear series.
-              this.pieChartInstance.clear();
-              this.pieChartInstance.setOption({
-                  title: {
-                     text: '暂无数据',
-                     left: 'center',
-                     top: 'center',
-                     textStyle: { color: '#909399' }
-                  }
-              });
-        }
-
-        // Update Liquid Fill Chart (Spherical) for Total Amount
-        const formattedTotal = totalAmount.toLocaleString('zh-CN', { style: 'currency', currency: 'CNY' });
-
-        this.liquidChartInstance.setOption({
-            title: {
-                show: false
-            },
-            series: [{
-                type: 'liquidFill',
-                data: [0.6, 0.5, 0.4], // Water level
-                radius: '80%',
-                backgroundStyle: {
-                    borderWidth: 2,
-                    borderColor: '#156ACF',
-                    color: '#E3F7FF'
-                },
-                outline: {
-                    show: false
-                },
+      // Update Pie Chart
+      if (pieData.length > 0) {
+        this.pieChartInstance.setOption({
+          title: {show: false}, // Hide "No Data"
+          tooltip: {
+            trigger: 'item',
+            formatter: '{b}: {c} ({d}%)'
+          },
+          legend: {
+            orient: 'vertical',
+            left: 'left'
+          },
+          series: [
+            {
+              name: '出资方',
+              type: 'pie',
+              radius: ['40%', '70%'], // Donut chart looks better
+              avoidLabelOverlap: false,
+              itemStyle: {
+                borderRadius: 10,
+                borderColor: '#fff',
+                borderWidth: 2
+              },
+              label: {
+                show: false,
+                position: 'center'
+              },
+              emphasis: {
                 label: {
-                    show: true,
-                    formatter: function() {
-                        return formattedTotal;
-                    },
-                    fontSize: 28,
-                    color: '#C23531',
-                    insideColor: '#fff'
+                  show: true,
+                  fontSize: '20',
+                  fontWeight: 'bold'
                 }
-            }]
+              },
+              labelLine: {
+                show: false
+              },
+              data: pieData
+            }
+          ]
         });
+      } else {
+        this.pieChartInstance.setOption({
+          title: {
+            text: '暂无数据',
+            left: 'center',
+            top: 'center',
+            textStyle: {color: '#909399'}
+          },
+          series: []
+        }, true); // Merge = true, but clearing series requires care.
+        // Actually setOption with empty series clears it if not merge?
+        // Let's explicitly clear series.
+        this.pieChartInstance.clear();
+        this.pieChartInstance.setOption({
+          title: {
+            text: '暂无数据',
+            left: 'center',
+            top: 'center',
+            textStyle: {color: '#909399'}
+          }
+        });
+      }
+
+      // Update Liquid Fill Chart (Spherical) for Total Amount
+      const formattedTotal = totalAmount.toLocaleString('zh-CN', {style: 'currency', currency: 'CNY'});
+
+      this.liquidChartInstance.setOption({
+        title: {
+          show: false
+        },
+        series: [{
+          type: 'liquidFill',
+          data: [0.6, 0.5, 0.4], // Water level
+          radius: '80%',
+          backgroundStyle: {
+            borderWidth: 2,
+            borderColor: '#156ACF',
+            color: '#E3F7FF'
+          },
+          outline: {
+            show: false
+          },
+          label: {
+            show: true,
+            formatter: function () {
+              return formattedTotal;
+            },
+            fontSize: 28,
+            color: '#C23531',
+            insideColor: '#fff'
+          }
+        }]
+      });
     },
     // 取消按钮
     cancel() {
@@ -602,6 +609,7 @@ export default {
   display: table;
   content: "";
 }
+
 .clearfix:after {
   clear: both
 }

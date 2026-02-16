@@ -11,6 +11,7 @@
         <result property="expenseDate" column="expense_date"/>
         <result property="stage" column="stage"/>
         <result property="payerType" column="payer_type"/>
+        <result property="payer" column="payer"/>
         <result property="category" column="category"/>
         <result property="remark" column="remark"/>
         <result property="userId" column="user_id"/>
@@ -25,6 +26,7 @@
                expense_date,
                stage,
                payer_type,
+               payer,
                category,
                remark,
                user_id,
@@ -74,6 +76,7 @@
             <if test="expenseDate != null">expense_date,</if>
             <if test="stage != null and stage != ''">stage,</if>
             <if test="payerType != null and payerType != ''">payer_type,</if>
+            <if test="payer != null and payer != ''">payer,</if>
             <if test="category != null and category != ''">category,</if>
             <if test="remark != null">remark,</if>
             <if test="userId != null">user_id,</if>
@@ -86,6 +89,7 @@
             <if test="expenseDate != null">#{expenseDate},</if>
             <if test="stage != null and stage != ''">#{stage},</if>
             <if test="payerType != null and payerType != ''">#{payerType},</if>
+            <if test="payer != null and payer != ''">#{payer},</if>
             <if test="category != null and category != ''">#{category},</if>
             <if test="remark != null">#{remark},</if>
             <if test="userId != null">#{userId},</if>
@@ -102,6 +106,7 @@
             <if test="expenseDate != null">expense_date = #{expenseDate},</if>
             <if test="stage != null and stage != ''">stage = #{stage},</if>
             <if test="payerType != null and payerType != ''">payer_type = #{payerType},</if>
+            <if test="payer != null and payer != ''">payer = #{payer},</if>
             <if test="category != null and category != ''">category = #{category},</if>
             <if test="remark != null">remark = #{remark},</if>
             <if test="userId != null">user_id = #{userId},</if>

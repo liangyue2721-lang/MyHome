@@ -62,6 +62,12 @@ public class WeddingExpenses extends BaseEntity {
     private String category;
 
     /**
+     * 出资人
+     */
+    @Excel(name = "出资方人")
+    private Long payer;
+
+    /**
      * 关联用户
      */
     private Long userId;
@@ -136,6 +142,14 @@ public class WeddingExpenses extends BaseEntity {
 
     public void setUserId(Long userId) {
         this.userId = userId;
+    }
+
+    public Long getPayer() {
+        return payer;
+    }
+
+    public void setPayer(Long payer) {
+        this.payer = payer;
     }
 
     public Long getUserId() {
