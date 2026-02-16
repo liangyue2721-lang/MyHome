@@ -4,16 +4,35 @@
       <el-form-item label="项目名称" prop="itemName">
         <el-input
           v-model="queryParams.itemName"
-          placeholder="请输入项目名称：如 订婚宴、三金、婚庆尾款"
+          placeholder="请输入项目名称"
           clearable
           @keyup.enter.native="handleQuery"
         />
+      </el-form-item>
+      <el-form-item label="出资人" prop="userId">
+        <el-select v-model="queryParams.userId" placeholder="请选择出资人" clearable filterable @change="handleQuery">
+          <el-option
+            v-for="item in userOptions"
+            :key="item.id"
+            :label="item.name"
+            :value="item.id"
+          />
+        </el-select>
       </el-form-item>
       <el-form-item>
         <el-button type="primary" icon="el-icon-search" size="mini" @click="handleQuery">搜索</el-button>
         <el-button icon="el-icon-refresh" size="mini" @click="resetQuery">重置</el-button>
       </el-form-item>
     </el-form>
+
+    <el-row :gutter="20" style="margin-bottom: 20px;">
+      <el-col :span="12">
+        <div ref="pieChart" style="height: 300px; width: 100%;"></div>
+      </el-col>
+      <el-col :span="12">
+        <div ref="liquidChart" style="height: 300px; width: 100%;"></div>
+      </el-col>
+    </el-row>
 
     <el-row :gutter="10" class="mb8">
       <el-col :span="1.5">
@@ -65,7 +84,7 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table v-loading="loading" :data="expensesList" @selection-change="handleSelectionChange">
+    <el-table v-loading="loading" :data="expensesList" @selection-change="handleSelectionChange" stripe border>
       <el-table-column type="selection" width="55" align="center"/>
       <el-table-column label="项目名称" align="center" prop="itemName"/>
       <el-table-column label="金额" align="center" prop="amount"/>
@@ -74,10 +93,29 @@
           <span>{{ parseTime(scope.row.expenseDate, '{y}-{m}-{d}') }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="所属阶段" align="center" prop="stage"/>
-      <el-table-column label="出资方归属" align="center" prop="payerType"/>
+      <el-table-column label="所属阶段" align="center" prop="stage">
+        <template slot-scope="scope">
+            <span v-if="scope.row.stage == '0'">订婚</span>
+            <span v-else-if="scope.row.stage == '1'">婚礼</span>
+            <span v-else-if="scope.row.stage == '2'">婚后</span>
+            <span v-else>{{ scope.row.stage }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="出资人" align="center">
+        <template slot-scope="scope">
+          <el-tag size="mini" type="info">{{ getUserName(scope.row.userId) }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="出资方归属" align="center" prop="payerType">
+        <template slot-scope="scope">
+            <span v-if="scope.row.payerType == '0'">小家</span>
+            <span v-else-if="scope.row.payerType == '1'">男方父母</span>
+            <span v-else-if="scope.row.payerType == '2'">女方父母</span>
+            <span v-else>{{ scope.row.payerType }}</span>
+        </template>
+      </el-table-column>
       <el-table-column label="分类" align="center" prop="category"/>
-      <el-table-column label="备注：记录具体经手人或特殊说明" align="center" prop="remark"/>
+      <el-table-column label="备注" align="center" prop="remark"/>
       <el-table-column label="更新时间" align="center" prop="updatedAt" width="180">
         <template slot-scope="scope">
           <span>{{ parseTime(scope.row.updatedAt, '{y}-{m}-{d}') }}</span>
@@ -122,11 +160,35 @@
                           placeholder="请选择消费日期">
           </el-date-picker>
         </el-form-item>
+        <el-form-item label="所属阶段" prop="stage">
+             <el-select v-model="form.stage" placeholder="请选择所属阶段">
+                <el-option label="订婚" value="0"></el-option>
+                <el-option label="婚礼" value="1"></el-option>
+                <el-option label="婚后" value="2"></el-option>
+             </el-select>
+        </el-form-item>
+        <el-form-item label="出资方归属" prop="payerType">
+            <el-select v-model="form.payerType" placeholder="请选择出资方归属">
+                <el-option label="小家" value="0"></el-option>
+                <el-option label="男方父母" value="1"></el-option>
+                <el-option label="女方父母" value="2"></el-option>
+             </el-select>
+        </el-form-item>
         <el-form-item label="分类" prop="category">
           <el-input v-model="form.category" placeholder="请输入分类"/>
         </el-form-item>
-        <el-form-item label="备注：记录具体经手人或特殊说明" prop="remark">
-          <el-input v-model="form.remark" placeholder="请输入备注：记录具体经手人或特殊说明"/>
+        <el-form-item label="备注" prop="remark">
+          <el-input v-model="form.remark" placeholder="请输入备注"/>
+        </el-form-item>
+         <el-form-item label="关联用户" prop="userId">
+          <el-select v-model="form.userId" placeholder="请选择关联用户" filterable>
+            <el-option
+              v-for="item in userOptions"
+              :key="item.id"
+              :label="item.name"
+              :value="item.id"
+            />
+          </el-select>
         </el-form-item>
       </el-form>
       <div slot="footer" class="dialog-footer">
@@ -138,8 +200,11 @@
 </template>
 
 <script>
-import {listExpenses, getExpenses, delExpenses, addExpenses, updateExpenses} from "@/api/finance/expenses"
-import {listUser} from "@/api/stock/dropdown_component";  // 获取用户列表API
+import {listExpenses, getExpenses, delExpenses, addExpenses, updateExpenses, getExpensesStats} from "@/api/finance/expenses"
+import {listUser} from "@/api/stock/dropdown_component";
+import * as echarts from 'echarts';
+import 'echarts-liquidfill';
+
 export default {
   name: "Expenses",
   data() {
@@ -172,90 +237,94 @@ export default {
         stage: null,
         payerType: null,
         category: null,
+        userId: null
       },
       // 表单参数
       form: {},
       // 表单校验
       rules: {
         itemName: [
-          {required: true, message: "项目名称：如 订婚宴、三金、婚庆尾款不能为空", trigger: "blur"}
+          {required: true, message: "项目名称不能为空", trigger: "blur"}
         ],
         amount: [
-          {required: true, message: "金额：精确到分不能为空", trigger: "blur"}
+          {required: true, message: "金额不能为空", trigger: "blur"}
         ],
         expenseDate: [
           {required: true, message: "消费日期不能为空", trigger: "blur"}
         ],
         stage: [
-          {required: true, message: "所属阶段：0=订婚, 1=婚礼, 2=婚后不能为空", trigger: "blur"}
+          {required: true, message: "所属阶段不能为空", trigger: "blur"}
         ],
         payerType: [
-          {required: true, message: "出资方归属：0=小家, 1=男方父母, 2=女方父母不能为空", trigger: "change"}
+          {required: true, message: "出资方归属不能为空", trigger: "change"}
         ],
         category: [
-          {required: true, message: "分类：餐饮、珠宝、婚庆、交通、红包 (建议前端做成下拉选)不能为空", trigger: "blur"}
+          {required: true, message: "分类不能为空", trigger: "blur"}
         ],
         userId: [
           {required: true, message: "关联用户不能为空", trigger: "blur"}
         ],
-      }
+      },
+      userOptions: [],
+      pieChartInstance: null,
+      liquidChartInstance: null
     }
   },
   async created() {
-    // 获取用户列表并设置 userId
     await this.initUserList();
-    // 加载数据
     this.getList();
+  },
+  mounted() {
+    this.initCharts();
+    window.addEventListener('resize', this.resizeCharts);
+  },
+  beforeDestroy() {
+    window.removeEventListener('resize', this.resizeCharts);
+    if (this.pieChartInstance) this.pieChartInstance.dispose();
+    if (this.liquidChartInstance) this.liquidChartInstance.dispose();
   },
   methods: {
     /**
      * 初始化用户列表数据
-     * @returns {Promise<void>} 异步操作完成Promise
      */
     async initUserList() {
       try {
-        // 调用后端接口获取用户列表，传入分页参数
-        const response = await listUser({pageSize: this.pageSize});
-        // 兼容接口返回格式，优先取 response.data，再取 response 本身
+        const response = await listUser({pageSize: 1000});
         const payload = response.data || response;
-        // 根据返回数据格式判断用户列表位置，支持两种结构
         const rawUsers = Array.isArray(payload.rows)
           ? payload.rows
           : Array.isArray(payload)
             ? payload
             : [];
 
-        // 格式化用户列表，只保留用户ID和名称字段
-        const userList = rawUsers.map(u => ({
+        this.userOptions = rawUsers.map(u => ({
           id: u.userId,
-          // 优先使用昵称，没昵称用用户名，最后用默认“用户+ID”
           name: u.userName || u.nickName || `用户${u.userId}`
         }));
 
-        console.log('用户列表加载完成，列表数据:', userList);
-
-        if (userList.length) {
-          // 从 cookie 中获取保存的用户名，假设使用 vue-cookies 插件
+        if (this.userOptions.length) {
           const savedUsername = this.$cookies.get('username');
-          console.log('从cookie获取的用户名:', savedUsername);
-
-          // 查找与 cookie 中用户名匹配的用户
-          const matchedUser = userList.find(u => u.name === savedUsername);
+          const matchedUser = this.userOptions.find(u => u.name === savedUsername);
           if (matchedUser) {
-            this.queryParams.userId = matchedUser.id; // 匹配成功，选中对应用户
-            this.form.userId = matchedUser.id; // 匹配成功，选中对应用户
-            console.log('选中cookie中的用户:', matchedUser);
+            // Note: We do NOT auto-select for queryParams here to allow viewing all data by default,
+            // or we could if that's the desired behavior. The original code did.
+            // But usually filters are optional. Let's keep it optional for list view.
+            // However, the original code did: this.queryParams.userId = matchedUser.id;
+            // I will set it only if it was null? Or just not set it to allow seeing all.
+            // Let's stick to the behavior: auto-select "me" if found.
+            if (!this.queryParams.userId) {
+                this.queryParams.userId = matchedUser.id;
+            }
           }
-        } else {
-          this.queryParams.userId = null; // 没有用户列表，清空选中状态
-          this.$message.info('暂无用户数据');
-          console.log('用户列表为空');
         }
       } catch (err) {
         console.error('用户列表加载失败:', err);
-        this.$message.error('用户列表加载失败，请稍后重试');
-      } finally {
       }
+    },
+    getUserName(userId) {
+      if (!userId) return '-';
+      const user = this.userOptions.find(u => u.id === userId);
+      return user ? user.name : `用户${userId}`;
     },
     /** 查询婚礼订婚支出流水列表 */
     getList() {
@@ -264,7 +333,100 @@ export default {
         this.expensesList = response.rows
         this.total = response.total
         this.loading = false
+        this.getStats();
       })
+    },
+    getStats() {
+      getExpensesStats(this.queryParams).then(response => {
+        const data = response.data || [];
+        this.updateCharts(data);
+      });
+    },
+    initCharts() {
+      this.pieChartInstance = echarts.init(this.$refs.pieChart);
+      this.liquidChartInstance = echarts.init(this.$refs.liquidChart);
+    },
+    resizeCharts() {
+      if (this.pieChartInstance) this.pieChartInstance.resize();
+      if (this.liquidChartInstance) this.liquidChartInstance.resize();
+    },
+    updateCharts(data) {
+        const payerTypeMap = {
+            '0': '小家',
+            '1': '男方父母',
+            '2': '女方父母'
+        };
+
+        // Calculate total amount
+        let totalAmount = 0;
+        const pieData = [];
+
+        data.forEach(item => {
+            const amount = parseFloat(item.totalAmount);
+            totalAmount += amount;
+            pieData.push({
+                value: amount,
+                name: payerTypeMap[item.payerType] || item.payerType
+            });
+        });
+
+        // Update Pie Chart
+        this.pieChartInstance.setOption({
+            title: {
+                text: '出资方归属比例',
+                left: 'center'
+            },
+            tooltip: {
+                trigger: 'item',
+                formatter: '{b}: {c} ({d}%)'
+            },
+            legend: {
+                orient: 'vertical',
+                left: 'left'
+            },
+            series: [
+                {
+                    name: '出资方',
+                    type: 'pie',
+                    radius: '50%',
+                    data: pieData,
+                    emphasis: {
+                        itemStyle: {
+                            shadowBlur: 10,
+                            shadowOffsetX: 0,
+                            shadowColor: 'rgba(0, 0, 0, 0.5)'
+                        }
+                    }
+                }
+            ]
+        });
+
+        // Update Liquid Fill Chart (Spherical) for Total Amount
+        // Since liquid fill usually takes 0-1 value, we'll just use it as a visual container for the number.
+        // Or we can pretend it's full.
+        // To make it look "active", we can set data to [0.5, 0.4] or something, but display the text as Total Amount.
+
+        // Format money
+        const formattedTotal = totalAmount.toLocaleString('zh-CN', { style: 'currency', currency: 'CNY' });
+
+        this.liquidChartInstance.setOption({
+            title: {
+                text: '总金额',
+                left: 'center'
+            },
+            series: [{
+                type: 'liquidFill',
+                data: [0.6, 0.5, 0.4], // Water level
+                radius: '80%',
+                label: {
+                    formatter: function() {
+                        return formattedTotal;
+                    },
+                    fontSize: 28,
+                    color: '#C23531'
+                }
+            }]
+        });
     },
     // 取消按钮
     cancel() {

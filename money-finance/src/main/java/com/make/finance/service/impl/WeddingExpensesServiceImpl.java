@@ -1,6 +1,7 @@
 package com.make.finance.service.impl;
 
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -19,6 +20,17 @@ public class WeddingExpensesServiceImpl implements IWeddingExpensesService {
 
     @Autowired
     private WeddingExpensesMapper weddingExpensesMapper;
+
+    /**
+     * 查询婚礼订婚支出流水统计
+     *
+     * @param weddingExpenses 婚礼订婚支出流水
+     * @return 婚礼订婚支出流水统计
+     */
+    @Override
+    public List<Map<String, Object>> selectWeddingExpensesStats(WeddingExpenses weddingExpenses) {
+        return weddingExpensesMapper.selectWeddingExpensesStats(weddingExpenses);
+    }
 
     /**
      * 查询婚礼订婚支出流水

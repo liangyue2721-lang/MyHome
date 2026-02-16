@@ -9,6 +9,15 @@ export function listExpenses(query) {
   })
 }
 
+// 查询婚礼订婚支出流水统计
+export function getExpensesStats(query) {
+  return request({
+    url: '/finance/expenses/stats',
+    method: 'get',
+    params: query
+  })
+}
+
 // 查询婚礼订婚支出流水详细
 export function getExpenses(id) {
   return request({

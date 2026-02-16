@@ -1,6 +1,7 @@
 package com.make.finance.service;
 
 import java.util.List;
+import java.util.Map;
 
 import com.make.finance.domain.WeddingExpenses;
 
@@ -11,6 +12,14 @@ import com.make.finance.domain.WeddingExpenses;
  * @date 2026-02-16
  */
 public interface IWeddingExpensesService {
+
+    /**
+     * 查询婚礼订婚支出流水统计
+     *
+     * @param weddingExpenses 婚礼订婚支出流水
+     * @return 婚礼订婚支出流水统计
+     */
+    public List<Map<String, Object>> selectWeddingExpensesStats(WeddingExpenses weddingExpenses);
 
     /**
      * 查询婚礼订婚支出流水

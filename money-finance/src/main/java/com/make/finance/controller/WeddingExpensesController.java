@@ -48,6 +48,15 @@ public class WeddingExpensesController extends BaseController {
     }
 
     /**
+     * 查询婚礼订婚支出流水统计
+     */
+    @PreAuthorize("@ss.hasPermi('finance:expenses:list')")
+    @GetMapping("/stats")
+    public AjaxResult stats(WeddingExpenses weddingExpenses) {
+        return AjaxResult.success(weddingExpensesService.selectWeddingExpensesStats(weddingExpenses));
+    }
+
+    /**
      * 导出婚礼订婚支出流水列表
      */
     @PreAuthorize("@ss.hasPermi('finance:expenses:export')")

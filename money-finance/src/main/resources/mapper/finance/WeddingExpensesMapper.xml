@@ -42,7 +42,23 @@
             <if test="stage != null  and stage != ''">and stage = #{stage}</if>
             <if test="payerType != null  and payerType != ''">and payer_type = #{payerType}</if>
             <if test="category != null  and category != ''">and category = #{category}</if>
+            <if test="userId != null ">and user_id = #{userId}</if>
         </where>
+    </select>
+
+    <select id="selectWeddingExpensesStats" parameterType="WeddingExpenses" resultType="java.util.Map">
+        select payer_type as payerType, sum(amount) as totalAmount
+        from wedding_expenses
+        <where>
+            <if test="itemName != null  and itemName != ''">and item_name like concat('%', #{itemName}, '%')</if>
+            <if test="amount != null ">and amount = #{amount}</if>
+            <if test="expenseDate != null ">and expense_date = #{expenseDate}</if>
+            <if test="stage != null  and stage != ''">and stage = #{stage}</if>
+            <if test="payerType != null  and payerType != ''">and payer_type = #{payerType}</if>
+            <if test="category != null  and category != ''">and category = #{category}</if>
+            <if test="userId != null ">and user_id = #{userId}</if>
+        </where>
+        group by payer_type
     </select>
 
     <select id="selectWeddingExpensesById" parameterType="String" resultMap="WeddingExpensesResult">
