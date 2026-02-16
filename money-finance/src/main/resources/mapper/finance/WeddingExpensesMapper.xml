@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.finance.mapper.WeddingExpensesMapper">
+
+    <resultMap type="WeddingExpenses" id="WeddingExpensesResult">
+        <result property="id" column="id"/>
+        <result property="itemName" column="item_name"/>
+        <result property="amount" column="amount"/>
+        <result property="expenseDate" column="expense_date"/>
+        <result property="stage" column="stage"/>
+        <result property="payerType" column="payer_type"/>
+        <result property="category" column="category"/>
+        <result property="remark" column="remark"/>
+        <result property="userId" column="user_id"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="selectWeddingExpensesVo">
+        select id,
+               item_name,
+               amount,
+               expense_date,
+               stage,
+               payer_type,
+               category,
+               remark,
+               user_id,
+               created_at,
+               updated_at
+        from wedding_expenses
+    </sql>
+
+    <select id="selectWeddingExpensesList" parameterType="WeddingExpenses" resultMap="WeddingExpensesResult">
+        <include refid="selectWeddingExpensesVo"/>
+        <where>
+            <if test="itemName != null  and itemName != ''">and item_name like concat('%', #{itemName}, '%')</if>
+            <if test="amount != null ">and amount = #{amount}</if>
+            <if test="expenseDate != null ">and expense_date = #{expenseDate}</if>
+            <if test="stage != null  and stage != ''">and stage = #{stage}</if>
+            <if test="payerType != null  and payerType != ''">and payer_type = #{payerType}</if>
+            <if test="category != null  and category != ''">and category = #{category}</if>
+        </where>
+    </select>
+
+    <select id="selectWeddingExpensesById" parameterType="String" resultMap="WeddingExpensesResult">
+        <include refid="selectWeddingExpensesVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertWeddingExpenses" parameterType="WeddingExpenses" useGeneratedKeys="true" keyProperty="id">
+        insert into wedding_expenses
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="itemName != null and itemName != ''">item_name,</if>
+            <if test="amount != null">amount,</if>
+            <if test="expenseDate != null">expense_date,</if>
+            <if test="stage != null and stage != ''">stage,</if>
+            <if test="payerType != null and payerType != ''">payer_type,</if>
+            <if test="category != null and category != ''">category,</if>
+            <if test="remark != null">remark,</if>
+            <if test="userId != null">user_id,</if>
+            <if test="createdAt != null">created_at,</if>
+            <if test="updatedAt != null">updated_at,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="itemName != null and itemName != ''">#{itemName},</if>
+            <if test="amount != null">#{amount},</if>
+            <if test="expenseDate != null">#{expenseDate},</if>
+            <if test="stage != null and stage != ''">#{stage},</if>
+            <if test="payerType != null and payerType != ''">#{payerType},</if>
+            <if test="category != null and category != ''">#{category},</if>
+            <if test="remark != null">#{remark},</if>
+            <if test="userId != null">#{userId},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+            <if test="updatedAt != null">#{updatedAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateWeddingExpenses" parameterType="WeddingExpenses">
+        update wedding_expenses
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="itemName != null and itemName != ''">item_name = #{itemName},</if>
+            <if test="amount != null">amount = #{amount},</if>
+            <if test="expenseDate != null">expense_date = #{expenseDate},</if>
+            <if test="stage != null and stage != ''">stage = #{stage},</if>
+            <if test="payerType != null and payerType != ''">payer_type = #{payerType},</if>
+            <if test="category != null and category != ''">category = #{category},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="userId != null">user_id = #{userId},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteWeddingExpensesById" parameterType="String">
+        delete
+        from wedding_expenses
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteWeddingExpensesByIds" parameterType="String">
+        delete from wedding_expenses where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>
