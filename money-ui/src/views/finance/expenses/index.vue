@@ -27,10 +27,20 @@
 
     <el-row :gutter="20" style="margin-bottom: 20px;">
       <el-col :span="12">
-        <div ref="pieChart" style="height: 300px; width: 100%;"></div>
+        <el-card shadow="hover">
+          <div slot="header" class="clearfix">
+            <span style="font-weight: bold; font-size: 16px;">出资方归属比例</span>
+          </div>
+          <div ref="pieChart" style="height: 350px; width: 100%;"></div>
+        </el-card>
       </el-col>
       <el-col :span="12">
-        <div ref="liquidChart" style="height: 300px; width: 100%;"></div>
+        <el-card shadow="hover">
+          <div slot="header" class="clearfix">
+            <span style="font-weight: bold; font-size: 16px;">总金额概览</span>
+          </div>
+          <div ref="liquidChart" style="height: 350px; width: 100%;"></div>
+        </el-card>
       </el-col>
     </el-row>
 
@@ -345,6 +355,32 @@ export default {
     initCharts() {
       this.pieChartInstance = echarts.init(this.$refs.pieChart);
       this.liquidChartInstance = echarts.init(this.$refs.liquidChart);
+
+      // Initial empty state or loading state
+      this.pieChartInstance.setOption({
+        title: {
+             text: '暂无数据',
+             left: 'center',
+             top: 'center',
+             textStyle: { color: '#909399' }
+        },
+        series: []
+      });
+
+      this.liquidChartInstance.setOption({
+         title: {
+             text: '¥0.00',
+             left: 'center',
+             top: 'center',
+             textStyle: { fontSize: 24, color: '#C23531' }
+         },
+         series: [{
+             type: 'liquidFill',
+             data: [0.5],
+             radius: '80%',
+             label: { show: false } // Hide label inside, use title
+         }]
+      });
     },
     resizeCharts() {
       if (this.pieChartInstance) this.pieChartInstance.resize();
@@ -371,59 +407,96 @@ export default {
         });
 
         // Update Pie Chart
-        this.pieChartInstance.setOption({
-            title: {
-                text: '出资方归属比例',
-                left: 'center'
-            },
-            tooltip: {
-                trigger: 'item',
-                formatter: '{b}: {c} ({d}%)'
-            },
-            legend: {
-                orient: 'vertical',
-                left: 'left'
-            },
-            series: [
-                {
-                    name: '出资方',
-                    type: 'pie',
-                    radius: '50%',
-                    data: pieData,
-                    emphasis: {
+        if (pieData.length > 0) {
+            this.pieChartInstance.setOption({
+                title: { show: false }, // Hide "No Data"
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{b}: {c} ({d}%)'
+                },
+                legend: {
+                    orient: 'vertical',
+                    left: 'left'
+                },
+                series: [
+                    {
+                        name: '出资方',
+                        type: 'pie',
+                        radius: ['40%', '70%'], // Donut chart looks better
+                        avoidLabelOverlap: false,
                         itemStyle: {
-                            shadowBlur: 10,
-                            shadowOffsetX: 0,
-                            shadowColor: 'rgba(0, 0, 0, 0.5)'
-                        }
+                            borderRadius: 10,
+                            borderColor: '#fff',
+                            borderWidth: 2
+                        },
+                        label: {
+                            show: false,
+                            position: 'center'
+                        },
+                        emphasis: {
+                            label: {
+                                show: true,
+                                fontSize: '20',
+                                fontWeight: 'bold'
+                            }
+                        },
+                        labelLine: {
+                            show: false
+                        },
+                        data: pieData
                     }
-                }
-            ]
-        });
+                ]
+            });
+        } else {
+             this.pieChartInstance.setOption({
+                title: {
+                     text: '暂无数据',
+                     left: 'center',
+                     top: 'center',
+                     textStyle: { color: '#909399' }
+                },
+                series: []
+              }, true); // Merge = true, but clearing series requires care.
+              // Actually setOption with empty series clears it if not merge?
+              // Let's explicitly clear series.
+              this.pieChartInstance.clear();
+              this.pieChartInstance.setOption({
+                  title: {
+                     text: '暂无数据',
+                     left: 'center',
+                     top: 'center',
+                     textStyle: { color: '#909399' }
+                  }
+              });
+        }
 
         // Update Liquid Fill Chart (Spherical) for Total Amount
-        // Since liquid fill usually takes 0-1 value, we'll just use it as a visual container for the number.
-        // Or we can pretend it's full.
-        // To make it look "active", we can set data to [0.5, 0.4] or something, but display the text as Total Amount.
-
-        // Format money
         const formattedTotal = totalAmount.toLocaleString('zh-CN', { style: 'currency', currency: 'CNY' });
 
         this.liquidChartInstance.setOption({
             title: {
-                text: '总金额',
-                left: 'center'
+                show: false
             },
             series: [{
                 type: 'liquidFill',
                 data: [0.6, 0.5, 0.4], // Water level
                 radius: '80%',
+                backgroundStyle: {
+                    borderWidth: 2,
+                    borderColor: '#156ACF',
+                    color: '#E3F7FF'
+                },
+                outline: {
+                    show: false
+                },
                 label: {
+                    show: true,
                     formatter: function() {
                         return formattedTotal;
                     },
                     fontSize: 28,
-                    color: '#C23531'
+                    color: '#C23531',
+                    insideColor: '#fff'
                 }
             }]
         });
@@ -522,3 +595,14 @@ export default {
   }
 }
 </script>
+
+<style scoped>
+.clearfix:before,
+.clearfix:after {
+  display: table;
+  content: "";
+}
+.clearfix:after {
+  clear: both
+}
+</style>
