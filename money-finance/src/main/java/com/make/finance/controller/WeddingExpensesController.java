@@ -43,6 +43,7 @@ public class WeddingExpensesController extends BaseController {
     @GetMapping("/list")
     public TableDataInfo list(WeddingExpenses weddingExpenses) {
         startPage();
+        weddingExpenses.setUserId(SecurityUtils.getUserId());
         List<WeddingExpenses> list = weddingExpensesService.selectWeddingExpensesList(weddingExpenses);
         return getDataTable(list);
     }
@@ -53,7 +54,6 @@ public class WeddingExpensesController extends BaseController {
     @PreAuthorize("@ss.hasPermi('finance:expenses:list')")
     @GetMapping("/stats")
     public AjaxResult stats(WeddingExpenses weddingExpenses) {
-        weddingExpenses.setUserId(SecurityUtils.getUserId());
         return AjaxResult.success(weddingExpensesService.selectWeddingExpensesStats(weddingExpenses));
     }
 
