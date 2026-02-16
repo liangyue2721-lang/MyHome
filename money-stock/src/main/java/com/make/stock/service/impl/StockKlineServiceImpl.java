@@ -198,13 +198,11 @@ public class StockKlineServiceImpl implements IStockKlineService {
         Map<String, List<StockKline>> currentGrouped = currentData.stream().collect(Collectors.groupingBy(StockKline::getStockCode));
         Map<String, List<StockKline>> prevGrouped = prevData.stream().collect(Collectors.groupingBy(StockKline::getStockCode));
 
-        List<RankingWrapper> wrappers = new ArrayList<>();
-
-        for (String stockCode : currentGrouped.keySet()) {
+        List<RankingWrapper> wrappers = currentGrouped.keySet().parallelStream().map(stockCode -> {
             List<StockKline> currKlines = currentGrouped.get(stockCode);
             List<StockKline> prevKlines = prevGrouped.getOrDefault(stockCode, Collections.emptyList());
 
-            if (currKlines.isEmpty()) continue;
+            if (currKlines.isEmpty()) return null;
 
             BigDecimal currentVal = null;
             BigDecimal prevVal = null;
@@ -226,7 +224,7 @@ public class StockKlineServiceImpl implements IStockKlineService {
                     .map(StockKline::getClose).orElse(BigDecimal.ZERO);
 
             if (isYearlyType) {
-                 if (prevKlines.isEmpty()) continue;
+                 if (prevKlines.isEmpty()) return null;
 
                  BigDecimal prevMaxHigh = prevKlines.stream()
                          .map(StockKline::getHigh)
@@ -285,7 +283,7 @@ public class StockKlineServiceImpl implements IStockKlineService {
                     }
                 }
 
-                if (thisWeekKlines.isEmpty() || lastWeekKlines.isEmpty()) continue;
+                if (thisWeekKlines.isEmpty() || lastWeekKlines.isEmpty()) return null;
 
                 BigDecimal thisWeekClose = thisWeekKlines.stream().max(Comparator.comparing(StockKline::getTradeDate)).map(StockKline::getClose).orElse(BigDecimal.ZERO);
                 BigDecimal lastWeekClose = lastWeekKlines.stream().max(Comparator.comparing(StockKline::getTradeDate)).map(StockKline::getClose).orElse(BigDecimal.ZERO);
@@ -324,9 +322,10 @@ public class StockKlineServiceImpl implements IStockKlineService {
                 stat.setStockName(stockNames.getOrDefault(stockCode, stockCode));
                 stat.setCurrentValue(currentVal);
                 stat.setPrevValue(prevVal);
-                wrappers.add(new RankingWrapper(stat, sortValue));
+                return new RankingWrapper(stat, sortValue);
             }
-        }
+            return null;
+        }).filter(Objects::nonNull).collect(Collectors.toList());
 
         boolean isAsc = "WEEKLY_LOSS".equals(type)
                      || "HIGH_VS_LATEST_LOW".equals(type)
