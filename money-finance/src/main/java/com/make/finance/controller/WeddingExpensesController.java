@@ -53,6 +53,7 @@ public class WeddingExpensesController extends BaseController {
     @PreAuthorize("@ss.hasPermi('finance:expenses:list')")
     @GetMapping("/stats")
     public AjaxResult stats(WeddingExpenses weddingExpenses) {
+        weddingExpenses.setUserId(SecurityUtils.getUserId());
         return AjaxResult.success(weddingExpensesService.selectWeddingExpensesStats(weddingExpenses));
     }
 
