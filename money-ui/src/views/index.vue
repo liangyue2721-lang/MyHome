@@ -1,10 +1,8 @@
 <template>
   <div class="app-container home">
-    <!-- Wealth Stage Bar (Horizontal Visualization) -->
     <el-row class="wealth-stage-row" v-if="wealthStage.current">
       <el-col :span="24">
         <el-card shadow="never" class="wealth-stage-card">
-          <!-- Summary Header -->
           <div class="stage-summary-header">
             <div class="current-assets">
               <span class="label">当前年度资产</span>
@@ -32,11 +30,10 @@
             </div>
           </div>
 
-          <!-- Horizontal Stages -->
           <div class="stages-container">
             <div
-              v-for="(stage, index) in allStages"
-              :key="index"
+              v-for="(stage) in visibleStages"
+              :key="stage.name"
               class="stage-item"
               :class="{
                 'is-completed': wealthStage.totalAssets >= stage.max,
@@ -49,12 +46,9 @@
                 class="stage-dot"
                 :style="wealthStage.totalAssets >= stage.min && wealthStage.totalAssets < stage.max ? { borderColor: stage.customColor, backgroundColor: stage.customColor } : {}"
               >
-                <!-- Completed: Show Icon (Inherits Green from CSS) -->
                 <span v-if="wealthStage.totalAssets >= stage.max" style="font-size: 18px;">{{ stage.icon }}</span>
-                <!-- Current: Show Icon (White on Custom Background) -->
                 <span v-else-if="wealthStage.totalAssets >= stage.min && wealthStage.totalAssets < stage.max"
                       style="font-size: 18px; color: #fff;">{{ stage.icon }}</span>
-                <!-- Future: Show Icon (Gray) -->
                 <span v-else style="font-size: 18px; filter: grayscale(100%); opacity: 0.5;">{{ stage.icon }}</span>
               </div>
               <div class="stage-content">
@@ -70,7 +64,6 @@
       </el-col>
     </el-row>
 
-    <!-- Original Charts -->
     <el-row :gutter="20">
       <el-col :span="24">
         <el-card class="chart-card" shadow="hover">
@@ -107,47 +100,35 @@
 
 <script>
 import * as echarts from 'echarts';
-// 1. 仅引入页面实际渲染需要的接口
 import {
-  getMonthlyIncomeBarChart,           // 对应 id="monthlyIncomeExpenseBarChart"
-  getProfitLineData,                  // 对应 id="profitLineChart"
-  renderLoanRepaymentComparisonChart  // 对应 id="generateMonthlyLoanRepaymentBarChart"
+  getMonthlyIncomeBarChart,
+  getProfitLineData,
+  renderLoanRepaymentComparisonChart
 } from "@/api/finance/pieChart";
-import {getAnnualSummary} from "@/api/finance/annual_deposit_summary"; // 对应 财富阶段
+import {getAnnualSummary} from "@/api/finance/annual_deposit_summary";
 import Cookies from 'js-cookie';
 
+// === 核心修改：细化后的财富阶梯 (19个阶段) ===
 const WEALTH_STAGES = [
-  {name: '负债阶段', min: -Infinity, max: 0, desc: '随时可能被风雨（风险）摧毁', icon: '⛺', customColor: '#F56C6C'},
-  {name: '生存艰难', min: 0, max: 27000, desc: '仅能满足遮风避雨的最低需求', icon: '🛖', customColor: '#67C23A'},
-  {name: '贫穷阶段', min: 27000, max: 60000, desc: '有了固定的形状，但设施简陋', icon: '🏠', customColor: '#909399'},
-  {name: '低收入阶段', min: 60000, max: 150000, desc: '标准化生活，依靠集体设施', icon: '🏢', customColor: '#E6A23C'},
-  {name: '中下产阶段', min: 150000, max: 300000, desc: '有了私人空间（安全缓冲）', icon: '🏘️', customColor: '#409EFF'},
-  {name: '中产阶段', min: 300000, max: 500000, desc: '典型的中产标志，独立且舒适', icon: '🏡', customColor: '#67C23A'},
-  {
-    name: '中上产阶段',
-    min: 500000,
-    max: 1000000,
-    desc: '资产属性大于居住属性，象征投资',
-    icon: '🏬',
-    customColor: '#1890FF'
-  },
-  {name: '富人阶段', min: 1000000, max: 8000000, desc: '奢侈、享受、财务自由的象征', icon: '🏰', customColor: '#722ED1'},
-  {
-    name: '富豪阶段',
-    min: 8000000,
-    max: 20000000,
-    desc: '家族基业，防御性强，代代相传',
-    icon: '🏯',
-    customColor: '#C71585'
-  },
-  {
-    name: '大富豪阶段',
-    min: 20000000,
-    max: Infinity,
-    desc: '拥有并规划一座城市，制定规则',
-    icon: '🏙️',
-    customColor: '#FFD700'
-  }
+  {name: '负债阶段', min: -Infinity, max: 0, desc: '需优先处理债务黑洞', icon: '⛺', customColor: '#F56C6C'},
+  {name: '生存艰难', min: 0, max: 30000, desc: '解决温饱是首要任务', icon: '🛖', customColor: '#E6A23C'}, // 橙色
+  {name: '起步基石', min: 30000, max: 50000, desc: '积累原始资本的开始', icon: '🧱', customColor: '#E6A23C'}, // 橙色
+  {name: '半程冲刺', min: 50000, max: 60000, desc: '距离下一大关仅一步之遥', icon: '🏃', customColor: '#67C23A'}, // 绿色-转折点
+  {name: '温饱无忧', min: 60000, max: 100000, desc: '生活开始有了基本保障', icon: '🏠', customColor: '#67C23A'},
+  {name: '第一桶金', min: 100000, max: 150000, desc: '六位数存款，信心倍增', icon: '💰', customColor: '#67C23A'},
+  {name: '小康入门', min: 150000, max: 200000, desc: '抗风险能力显著提升', icon: '🚲', customColor: '#409EFF'}, // 蓝色-成长期
+  {name: '稳健筑基', min: 200000, max: 300000, desc: '拥有约一辆车的等值资产', icon: '🚗', customColor: '#409EFF'},
+  {name: '中产起步', min: 300000, max: 400000, desc: '典型的城市中产门槛', icon: '🏘️', customColor: '#409EFF'},
+  {name: '中产进阶', min: 400000, max: 500000, desc: '生活质量有质的飞跃', icon: '🚤', customColor: '#409EFF'},
+  {name: '资深中产', min: 500000, max: 800000, desc: '半个百万富翁，房产首付', icon: '🏡', customColor: '#1890FF'}, // 深蓝
+  {name: '百万冲刺', min: 800000, max: 1000000, desc: '蓄力冲击七位数大关', icon: '🚀', customColor: '#1890FF'},
+  {name: '百万富翁', min: 1000000, max: 2000000, desc: '资产达到A7，进入富人圈', icon: '💎', customColor: '#722ED1'}, // 紫色-财富期
+  {name: '房产自由', min: 2000000, max: 3000000, desc: '非一线城市房产自由', icon: '🔑', customColor: '#722ED1'},
+  {name: '初级财自', min: 3000000, max: 5000000, desc: 'Lean FIRE，被动收入', icon: '🌴', customColor: '#722ED1'},
+  {name: '高净值圈', min: 5000000, max: 8000000, desc: '银行私行客户门槛', icon: '🏦', customColor: '#C71585'}, // 紫红
+  {name: '千万预备', min: 8000000, max: 10000000, desc: '向A8资产发起最后冲击', icon: '🏰', customColor: '#C71585'},
+  {name: 'A8俱乐部', min: 10000000, max: 20000000, desc: '千万富翁，阶级跨越', icon: '👑', customColor: '#FFD700'}, // 金色
+  {name: '顶级富豪', min: 20000000, max: Infinity, desc: '用资本制定规则', icon: '🏙️', customColor: '#FFD700'}
 ];
 
 export default {
@@ -168,7 +149,7 @@ export default {
       },
       allStages: WEALTH_STAGES,
 
-      // 仅保留页面存在的3个图表实例
+      // 图表实例
       charts: {
         monthlyIncomeExpense: null,
         generateMonthlyLoanRepayment: null,
@@ -176,11 +157,37 @@ export default {
       },
     };
   },
-  mounted() {
-    // 1. 获取财富阶段数据
-    this.fetchWealthStage();
+  computed: {
+    // === 核心逻辑：智能聚焦窗口 ===
+    // 只显示 [当前阶段前1个] ~ [当前阶段后5个]，避免页面过于拥挤
+    visibleStages() {
+      // 1. 如果尚未获取到当前阶段，默认显示前6个
+      if (!this.wealthStage.current) return this.allStages.slice(0, 6);
 
-    // 2. 初始化用户并加载图表
+      const all = this.allStages;
+      const currentIndex = all.findIndex(s => s.name === this.wealthStage.current.name);
+
+      // 异常情况兜底
+      if (currentIndex === -1) return all.slice(0, 6);
+
+      // 2. 计算显示窗口
+      // 总是尝试显示前一个阶段作为回顾（index - 1）
+      let start = Math.max(0, currentIndex - 1);
+      // 总共显示 6-7 个节点
+      let end = start + 7;
+
+      // 3. 边界处理：如果接近尾部，向左调整窗口
+      if (end > all.length) {
+        end = all.length;
+        // 保证窗口大小不变，除非总长度不够
+        start = Math.max(0, end - 7);
+      }
+
+      return all.slice(start, end);
+    }
+  },
+  mounted() {
+    this.fetchWealthStage();
     this.initUserList().then(() => {
       this.$nextTick(() => {
         this.loadAllCharts();
@@ -214,7 +221,9 @@ export default {
           const totalAssets = Number(payload.totalDeposit) || 0;
           this.wealthStage.totalAssets = totalAssets;
 
+          // 查找当前阶段
           let stageIndex = WEALTH_STAGES.findIndex(s => totalAssets >= s.min && totalAssets < s.max);
+          // 处理边界：如果超出最大值或小于最小值
           if (stageIndex === -1) {
             if (totalAssets >= WEALTH_STAGES[WEALTH_STAGES.length - 1].min) {
               stageIndex = WEALTH_STAGES.length - 1;
@@ -225,12 +234,14 @@ export default {
 
           this.wealthStage.current = WEALTH_STAGES[stageIndex];
 
+          // 计算下一阶段距离
           if (stageIndex < WEALTH_STAGES.length - 1) {
             this.wealthStage.next = WEALTH_STAGES[stageIndex + 1];
             const currentMin = this.wealthStage.current.min === -Infinity ? 0 : this.wealthStage.current.min;
             const currentMax = this.wealthStage.current.max;
             const range = currentMax - currentMin;
             this.wealthStage.gap = currentMax - totalAssets;
+            // 计算进度百分比
             this.wealthStage.progress = range > 0
               ? Math.min(100, Math.max(0, ((totalAssets - currentMin) / range) * 100))
               : 100;
@@ -249,7 +260,7 @@ export default {
     formatMoney(val) {
       if (val === -Infinity) return '< 0';
       if (val === Infinity) return '> 2000w';
-      if (val >= 10000) return (val / 10000).toFixed(0) + '万';
+      if (val >= 10000) return (val / 10000).toFixed(0) + '万'; // 简化显示为“3万”
       return val;
     },
 
@@ -269,17 +280,12 @@ export default {
       return this.charts[key];
     },
 
-    // 仅加载页面上存在的 3 个图表
     loadAllCharts() {
-      // 1. 月度收支对比 (Mixed Chart)
       this.loadMixedChart('monthlyIncomeExpense', 'monthlyIncomeExpenseBarChart', getMonthlyIncomeBarChart, '每月收支', '元', ['收入', '支出', '结余']);
-      // 2. 近一年还贷对比 (Mixed Chart)
       this.loadMixedChart('generateMonthlyLoanRepayment', 'generateMonthlyLoanRepaymentBarChart', renderLoanRepaymentComparisonChart, '还贷本息', '元', ['贷款偿还']);
-      // 3. 利润趋势分析 (Line Chart)
       this.loadLineChart('profitLine', 'profitLineChart', getProfitLineData);
     },
 
-    // 混合图表加载器（柱状 + 折线），用于收支和还贷
     loadMixedChart(key, domId, apiFn, title, unit, legendData = []) {
       apiFn({userId: this.selectedUserId}).then(data => {
         const chart = this.initChart(key, domId);
@@ -369,7 +375,6 @@ export default {
       }).catch(e => console.error(e));
     },
 
-    // 折线图加载器，用于利润分析
     loadLineChart(key, domId, apiFn) {
       apiFn({userId: this.selectedUserId}).then(response => {
         const chart = this.initChart(key, domId);
@@ -378,19 +383,15 @@ export default {
         let lineData = [];
         let barData = [];
 
-        // 判断返回格式：如果是 Map/Object，则拆分数据
         if (response && typeof response === 'object' && !Array.isArray(response)) {
           lineData = response.line || [];
           barData = response.bar || [];
         } else if (Array.isArray(response)) {
-          // 兼容旧接口，全量当作 lineData
           lineData = response;
         }
 
         const xDataLine = lineData.map(item => item.recordDate);
         const yDataLine = lineData.map(item => item.profit);
-
-        // 柱状图X轴只显示年份
         const xDataBar = barData.map(item => new Date(item.recordDate).getFullYear());
         const yDataBar = barData.map(item => item.profit);
 
@@ -568,6 +569,12 @@ export default {
       justify-content: space-between;
       position: relative;
       padding: 0 10px;
+      /* 增加滚动适配，防止小屏幕挤在一起 */
+      overflow-x: auto;
+
+      &::-webkit-scrollbar {
+        display: none;
+      }
 
       // Connecting line behind dots
       &::before {
@@ -589,9 +596,10 @@ export default {
         align-items: center;
         flex: 1;
         text-align: center;
+        min-width: 80px; /* 防止压缩太小 */
 
         .stage-bar {
-          display: none; // Handled by container ::before
+          display: none;
         }
 
         .stage-dot {
@@ -662,45 +670,6 @@ export default {
     }
   }
 
-  /* Status Card Styles */
-  .status-card {
-    .card-header {
-      font-size: 16px;
-      font-weight: bold;
-      color: #333;
-      padding-bottom: 10px;
-      border-bottom: 1px solid #EBEEF5;
-    }
-
-    .card-body {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100px;
-
-      .count-text {
-        font-size: 32px;
-        font-weight: bold;
-
-        &.pending {
-          color: #E6A23C;
-        }
-
-        &.completed {
-          color: #67C23A;
-        }
-
-        &.executing {
-          color: #409EFF;
-        }
-      }
-
-      &.chart-container {
-        padding-top: 10px;
-      }
-    }
-  }
-
   .chart-card {
     transition: transform 0.3s ease, box-shadow 0.3s ease;
 
@@ -740,11 +709,6 @@ export default {
     transition: filter 0.3s ease;
   }
 
-  .chart-box-small {
-    width: 100%;
-    height: 260px;
-  }
-
   @media (max-width: 768px) {
     .header-content {
       flex-direction: column;
@@ -756,8 +720,9 @@ export default {
     .chart-box {
       height: 300px;
     }
-    .chart-box-small {
-      height: 220px;
+    .stages-container {
+      /* 移动端增加一些padding防止切边 */
+      padding: 0 15px !important;
     }
   }
 }
