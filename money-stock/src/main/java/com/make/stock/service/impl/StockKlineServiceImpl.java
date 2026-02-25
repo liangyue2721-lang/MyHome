@@ -285,17 +285,23 @@ public class StockKlineServiceImpl implements IStockKlineService {
                     }
                 }
 
-                if (thisWeekKlines.isEmpty() || lastWeekKlines.isEmpty()) continue;
+                if (lastWeekKlines.isEmpty()) continue;
 
-                BigDecimal thisWeekClose = thisWeekKlines.stream().max(Comparator.comparing(StockKline::getTradeDate)).map(StockKline::getClose).orElse(BigDecimal.ZERO);
                 BigDecimal lastWeekClose = lastWeekKlines.stream().max(Comparator.comparing(StockKline::getTradeDate)).map(StockKline::getClose).orElse(BigDecimal.ZERO);
+
+                if (lastWeekClose.compareTo(BigDecimal.ZERO) == 0) continue;
+
+                BigDecimal thisWeekClose;
+                if (thisWeekKlines.isEmpty()) {
+                    thisWeekClose = lastWeekClose;
+                } else {
+                    thisWeekClose = thisWeekKlines.stream().max(Comparator.comparing(StockKline::getTradeDate)).map(StockKline::getClose).orElse(BigDecimal.ZERO);
+                }
 
                 currentVal = thisWeekClose;
                 prevVal = lastWeekClose;
 
-                if (prevVal.compareTo(BigDecimal.ZERO) != 0) {
-                    sortValue = currentVal.subtract(prevVal).divide(prevVal, 4, RoundingMode.HALF_UP);
-                }
+                sortValue = currentVal.subtract(prevVal).divide(prevVal, 4, RoundingMode.HALF_UP);
 
             } else {
                 switch (type) {
