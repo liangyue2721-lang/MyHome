@@ -285,21 +285,41 @@ public class StockKlineServiceImpl implements IStockKlineService {
                     }
                 }
 
-                if (lastWeekKlines.isEmpty()) continue;
+                if (lastWeekKlines.isEmpty() && thisWeekKlines.isEmpty()) continue;
 
-                BigDecimal lastWeekClose = lastWeekKlines.stream().max(Comparator.comparing(StockKline::getTradeDate)).map(StockKline::getClose).orElse(BigDecimal.ZERO);
-
-                if (lastWeekClose.compareTo(BigDecimal.ZERO) == 0) continue;
-
-                BigDecimal thisWeekClose;
-                if (thisWeekKlines.isEmpty()) {
-                    thisWeekClose = lastWeekClose;
+                // Determine previous week's closing price (baseline)
+                if (!lastWeekKlines.isEmpty()) {
+                    prevVal = lastWeekKlines.stream()
+                            .max(Comparator.comparing(StockKline::getTradeDate))
+                            .map(StockKline::getClose)
+                            .orElse(BigDecimal.ZERO);
                 } else {
-                    thisWeekClose = thisWeekKlines.stream().max(Comparator.comparing(StockKline::getTradeDate)).map(StockKline::getClose).orElse(BigDecimal.ZERO);
+                    // Fallback: If no data for last week, use the preClose of the first day of this week
+                    StockKline firstDayOfThisWeek = thisWeekKlines.stream()
+                            .min(Comparator.comparing(StockKline::getTradeDate))
+                            .orElse(null);
+                    if (firstDayOfThisWeek != null && firstDayOfThisWeek.getPreClose() != null) {
+                        prevVal = firstDayOfThisWeek.getPreClose();
+                    } else if (firstDayOfThisWeek != null) {
+                        // Fallback to open price if preClose is missing (e.g. new listing)
+                        prevVal = firstDayOfThisWeek.getOpen();
+                    } else {
+                        prevVal = BigDecimal.ZERO;
+                    }
                 }
 
-                currentVal = thisWeekClose;
-                prevVal = lastWeekClose;
+                if (prevVal == null || prevVal.compareTo(BigDecimal.ZERO) == 0) continue;
+
+                // Determine current week's latest price
+                if (!thisWeekKlines.isEmpty()) {
+                    currentVal = thisWeekKlines.stream()
+                            .max(Comparator.comparing(StockKline::getTradeDate))
+                            .map(StockKline::getClose)
+                            .orElse(BigDecimal.ZERO);
+                } else {
+                    // Fallback: If no data for this week (e.g. Monday morning), assume no change
+                    currentVal = prevVal;
+                }
 
                 sortValue = currentVal.subtract(prevVal).divide(prevVal, 4, RoundingMode.HALF_UP);
 

@@ -116,4 +116,35 @@ public class StockKlineServiceImplTest {
         assertEquals("B", result.get(0).getStockCode());
         assertEquals(BigDecimal.ZERO, result.get(0).getPrevValue().subtract(result.get(0).getCurrentValue()));
     }
+
+    @Test
+    void testSelectStockRanking_WeeklyGain_MissingLastWeek_HaveThisWeek() {
+        LocalDate today = LocalDate.now();
+        LocalDate thisMonday = today.with(java.time.DayOfWeek.MONDAY);
+
+        List<StockKline> klines = new ArrayList<>();
+
+        // Stock C: No data for last week (e.g. New Listing).
+        // Has data for This Week.
+        // PreClose: 90 (Simulated Last Friday Close)
+        // Close: 110
+        // Gain: (110 - 90) / 90 = 22.22%
+        StockKline k4 = new StockKline();
+        k4.setStockCode("C");
+        k4.setTradeDate(Date.valueOf(thisMonday));
+        k4.setPreClose(new BigDecimal("90"));
+        k4.setClose(new BigDecimal("110"));
+        klines.add(k4);
+
+        when(stockKlineMapper.selectStockKlineByRange(any(), any())).thenReturn(klines);
+        when(stockKlineMapper.selectStockNames()).thenReturn(Collections.emptyList());
+
+        List<StockRankingStat> result = stockKlineService.selectStockRanking("WEEKLY_GAIN");
+
+        // Expect C to be included
+        assertEquals(1, result.size());
+        assertEquals("C", result.get(0).getStockCode());
+        assertEquals(new BigDecimal("90"), result.get(0).getPrevValue());
+        assertEquals(new BigDecimal("110"), result.get(0).getCurrentValue());
+    }
 }
