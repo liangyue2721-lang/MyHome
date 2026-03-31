@@ -10,47 +10,29 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * IP地址解析工具类
+ * IP地址解析工具类（主备双驱动）
  * <p>
- * 用于通过公网IP地址查询其归属地信息（省份、城市）。
- * 对于内网IP或无法查询的情况，返回预定义默认值。
+ * 优先使用 ip-api.com（中文数据），失败时自动降级到 ipquery.io。
  * </p>
- *
- * <p>依赖服务：
- * 使用中国电信（pconline）的 whois 服务接口：
- * {@code http://whois.pconline.com.cn/ipJson.jsp?ip=<ip>&json=true}</p>
- *
- * @author 12
- * @version 1.1
- * @since 2025-10-09
  */
 public class AddressUtils {
 
-    /**
-     * 日志记录器
-     */
     private static final Logger log = LoggerFactory.getLogger(AddressUtils.class);
 
-    /**
-     * IP地址查询接口
-     */
-    private static final String IP_URL = "http://whois.pconline.com.cn/ipJson.jsp";
+    // 主服务：ip-api.com (中文，免费版不支持HTTPS)
+    private static final String PRIMARY_URL = "http://ip-api.com/json/";
 
-    /**
-     * 未知地址常量
-     */
+    // 备用服务：ipquery.io (支持HTTPS)
+    private static final String SECONDARY_URL = "https://api.ipquery.io/";
+
     private static final String UNKNOWN = "XX XX";
-
-    /**
-     * 默认返回地址常量
-     */
     private static final String DEFAULT = "DEFAULT ADDRESS";
 
     /**
-     * 根据IP地址获取真实地理位置
+     * 根据IP地址获取真实地理位置（主备自动切换）
      *
      * @param ip 需要查询的IP地址
-     * @return IP地址对应的地理位置（省份 + 城市），若无法获取则返回默认地址或“内网IP”
+     * @return 地理位置字符串（省份 城市）
      */
     public static String getRealAddressByIP(String ip) {
         // 1. 内网地址直接返回
@@ -64,25 +46,48 @@ public class AddressUtils {
             return DEFAULT;
         }
 
-        try {
-            // 3. 构建请求参数并发送HTTP请求
-            String params = "ip=" + ip + "&json=true";
-            String response = HttpUtils.sendGet(IP_URL, params, Constants.GBK);
+        // 3. 尝试主服务
+        String location = tryPrimaryService(ip);
+        if (!UNKNOWN.equals(location)) {
+            return location;
+        }
 
-            // 4. 检查响应内容
+        // 4. 主服务失败，尝试备用服务
+        location = trySecondaryService(ip);
+        if (!UNKNOWN.equals(location)) {
+            return location;
+        }
+
+        // 5. 所有服务均失败
+        log.error("所有IP地理位置查询服务均失败，IP：{}", ip);
+        return UNKNOWN;
+    }
+
+    /**
+     * 调用主服务 ip-api.com
+     */
+    private static String tryPrimaryService(String ip) {
+        try {
+            String url = PRIMARY_URL + ip + "?lang=zh-CN";
+            String response = HttpUtils.sendGet(url, null, Constants.UTF8); // 确保HttpUtils支持UTF-8
+
             if (StringUtils.isEmpty(response)) {
-                log.warn("地理位置查询接口无响应或返回空数据，IP：{}", ip);
+                log.warn("主服务响应为空，IP：{}", ip);
                 return UNKNOWN;
             }
 
-            // 5. 解析JSON结果
             JSONObject json = JSON.parseObject(response);
-            String region = json.getString("pro");   // 省份
-            String city = json.getString("city");    // 城市
+            // 检查接口返回状态
+            if (!"success".equals(json.getString("status"))) {
+                log.warn("主服务返回失败状态，IP：{}，响应：{}", ip, response);
+                return UNKNOWN;
+            }
 
-            // 6. 拼接返回结果
+            String region = json.getString("regionName"); // 省份
+            String city = json.getString("city");         // 城市
+
             if (StringUtils.isEmpty(region) && StringUtils.isEmpty(city)) {
-                log.warn("地理位置解析结果为空，IP：{}，原始响应：{}", ip, response);
+                log.warn("主服务解析结果为空，IP：{}，响应：{}", ip, response);
                 return UNKNOWN;
             }
 
@@ -92,8 +97,46 @@ public class AddressUtils {
             ).trim();
 
         } catch (Exception e) {
-            // 7. 异常捕获与日志记录
-            log.error("获取IP地理位置异常，IP：{}，错误信息：{}", ip, e.getMessage(), e);
+            log.warn("主服务调用异常，IP：{}，错误：{}", ip, e.getMessage());
+            return UNKNOWN; // 异常时返回UNKNOWN，触发备用服务
+        }
+    }
+
+    /**
+     * 调用备用服务 ipquery.io
+     */
+    private static String trySecondaryService(String ip) {
+        try {
+            String url = SECONDARY_URL + ip;
+            String response = HttpUtils.sendGet(url, null, Constants.UTF8);
+
+            if (StringUtils.isEmpty(response)) {
+                log.warn("备用服务响应为空，IP：{}", ip);
+                return UNKNOWN;
+            }
+
+            JSONObject json = JSON.parseObject(response);
+            JSONObject location = json.getJSONObject("location");
+            if (location == null) {
+                log.warn("备用服务返回数据缺少location字段，IP：{}，响应：{}", ip, response);
+                return UNKNOWN;
+            }
+
+            String region = location.getString("state");   // 省份
+            String city = location.getString("city");      // 城市
+
+            if (StringUtils.isEmpty(region) && StringUtils.isEmpty(city)) {
+                log.warn("备用服务解析结果为空，IP：{}，响应：{}", ip, response);
+                return UNKNOWN;
+            }
+
+            return String.format("%s %s",
+                    StringUtils.defaultIfEmpty(region, ""),
+                    StringUtils.defaultIfEmpty(city, "")
+            ).trim();
+
+        } catch (Exception e) {
+            log.warn("备用服务调用异常，IP：{}，错误：{}", ip, e.getMessage());
             return UNKNOWN;
         }
     }
