@@ -111,7 +111,7 @@
           </el-date-picker>
         </el-form-item>
         <el-form-item label="当月总支出" prop="totalAmount">
-          <el-input v-model="form.totalAmount" placeholder="请输入当月总支出" />
+          <el-input v-model="form.totalAmount" placeholder="系统自动求和" disabled />
         </el-form-item>
         <el-form-item label="动态明细数据" prop="itemsData">
           <div v-for="(item, index) in dynamicItems" :key="index" style="display: flex; margin-bottom: 10px; align-items: center;">
@@ -186,6 +186,21 @@ export default {
           { required: false, message: "动态明细数据", trigger: "blur" }
         ],
       }
+    }
+  },
+  watch: {
+    dynamicItems: {
+      handler(newItems) {
+        let total = 0;
+        newItems.forEach(item => {
+          if (item.amount && !isNaN(item.amount)) {
+            total += parseFloat(item.amount);
+          }
+        });
+        // 保留两位小数
+        this.form.totalAmount = parseFloat(total.toFixed(2));
+      },
+      deep: true
     }
   },
   async created() {
