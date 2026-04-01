@@ -228,8 +228,18 @@ export default {
       };
 
       listBills(queryParams).then(response => {
-        if (response && response.rows && response.rows.length > 0) {
-          const latestBill = response.rows[0];
+        // 后端可能返回的是数组直接作为 response，或者是在 response.rows 下
+        let billList = [];
+        if (Array.isArray(response)) {
+            billList = response;
+        } else if (response && response.rows && Array.isArray(response.rows)) {
+            billList = response.rows;
+        } else if (response && response.data && Array.isArray(response.data)) {
+            billList = response.data;
+        }
+
+        if (billList && billList.length > 0) {
+          const latestBill = billList[0];
           this.parseBillData(latestBill);
         } else {
           // 没有数据时清空
@@ -249,8 +259,15 @@ export default {
       if (billRecord.itemsData) {
         try {
           let itemsJson = billRecord.itemsData;
+
+          // 如果返回的数据被多次转义 (像示例里那样 "[{\\"name\\":\\"月供\\"}]")，可能需要解析一次甚至两次
           if (typeof itemsJson === 'string') {
-             this.expenseData.items = JSON.parse(itemsJson);
+             let parsed = JSON.parse(itemsJson);
+             // 如果解析完还是字符串，再解析一次（应对过度转义的情况）
+             if (typeof parsed === 'string') {
+                 parsed = JSON.parse(parsed);
+             }
+             this.expenseData.items = parsed;
           } else {
              this.expenseData.items = itemsJson;
           }
