@@ -262,9 +262,12 @@ export default {
         try {
           let itemsJson = billRecord.itemsData;
 
-          // 如果返回的数据被多次转义 (像示例里那样 "[{\\"name\\":\\"月供\\"}]")，可能需要解析一次甚至两次
           if (typeof itemsJson === 'string') {
-             let parsed = JSON.parse(itemsJson);
+             // 处理后端返回的特殊转义字符串，例如: "[{\\\"name\\\":\\\"月供\\\"}]"
+             // 先将 \\" 替换为 "，然后再进行 JSON 解析
+             let cleanJsonString = itemsJson.replace(/\\"/g, '"');
+
+             let parsed = JSON.parse(cleanJsonString);
              // 如果解析完还是字符串，再解析一次（应对过度转义的情况）
              if (typeof parsed === 'string') {
                  parsed = JSON.parse(parsed);
