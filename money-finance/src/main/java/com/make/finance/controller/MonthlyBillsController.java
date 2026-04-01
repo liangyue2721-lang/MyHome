@@ -49,6 +49,15 @@ public class MonthlyBillsController extends BaseController {
     }
 
     /**
+     * 查询 (单JSON架构)列表
+     */
+    @GetMapping("/getViewList")
+    public List<MonthlyBills> getViewList(MonthlyBills monthlyBills) {
+        monthlyBills.setUserId(SecurityUtils.getUserId());
+        return monthlyBillsService.selectMonthlyBillsList(monthlyBills);
+    }
+
+    /**
      * 导出月度账单 (单JSON架构)列表
      */
     @PreAuthorize("@ss.hasPermi('finance:bills:export')")
