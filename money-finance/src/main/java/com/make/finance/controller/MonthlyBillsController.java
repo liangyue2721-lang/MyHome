@@ -101,4 +101,13 @@ public class MonthlyBillsController extends BaseController {
     public AjaxResult remove(@PathVariable Long[] ids) {
         return toAjax(monthlyBillsService.deleteMonthlyBillsByIds(ids));
     }
+
+    /**
+     * 查询月度账单 (单JSON架构)列表
+     */
+    @GetMapping("/getViewList")
+    public List<MonthlyBills> getViewList(MonthlyBills monthlyBills) {
+        monthlyBills.setUserId(SecurityUtils.getUserId());
+        return monthlyBillsService.selectMonthlyBillsList(monthlyBills);
+    }
 }

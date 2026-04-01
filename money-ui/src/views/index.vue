@@ -113,7 +113,7 @@ import {
   renderLoanRepaymentComparisonChart
 } from "@/api/finance/pieChart";
 import {getAnnualSummary} from "@/api/finance/annual_deposit_summary";
-import {listBills} from "@/api/finance/bills";
+import {getViewList, listBills} from "@/api/finance/bills";
 import Cookies from 'js-cookie';
 import ExpenseDashboard from "./dashboard/ExpenseDashboard.vue";
 
@@ -227,7 +227,7 @@ export default {
         pageSize: 1,
       };
 
-      listBills(queryParams).then(response => {
+      getViewList(queryParams).then(response => {
         // 后端可能返回的是数组直接作为 response，或者是在 response.rows 下
         let billList = [];
         if (Array.isArray(response)) {
