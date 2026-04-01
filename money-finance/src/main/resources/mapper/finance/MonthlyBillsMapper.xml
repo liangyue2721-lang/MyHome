@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.finance.mapper.MonthlyBillsMapper">
+
+    <resultMap type="MonthlyBills" id="MonthlyBillsResult">
+        <result property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="billMonth" column="bill_month"/>
+        <result property="totalAmount" column="total_amount"/>
+        <result property="itemsData" column="items_data"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="selectMonthlyBillsVo">
+        select id, user_id, bill_month, total_amount, items_data, created_at, updated_at
+        from monthly_bills
+    </sql>
+
+    <select id="selectMonthlyBillsList" parameterType="MonthlyBills" resultMap="MonthlyBillsResult">
+        <include refid="selectMonthlyBillsVo"/>
+        <where>
+            <if test="userId != null ">and user_id = #{userId}</if>
+            <if test="billMonth != null  and billMonth != ''">and bill_month = #{billMonth}</if>
+            <if test="totalAmount != null ">and total_amount = #{totalAmount}</if>
+            <if test="itemsData != null  and itemsData != ''">and items_data = #{itemsData}</if>
+            <if test="createdAt != null ">and created_at = #{createdAt}</if>
+            <if test="updatedAt != null ">and updated_at = #{updatedAt}</if>
+        </where>
+    </select>
+
+    <select id="selectMonthlyBillsById" parameterType="Long" resultMap="MonthlyBillsResult">
+        <include refid="selectMonthlyBillsVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertMonthlyBills" parameterType="MonthlyBills" useGeneratedKeys="true" keyProperty="id">
+        insert into monthly_bills
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="userId != null">user_id,</if>
+            <if test="billMonth != null and billMonth != ''">bill_month,</if>
+            <if test="totalAmount != null">total_amount,</if>
+            <if test="itemsData != null and itemsData != ''">items_data,</if>
+            <if test="createdAt != null">created_at,</if>
+            <if test="updatedAt != null">updated_at,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="userId != null">#{userId},</if>
+            <if test="billMonth != null and billMonth != ''">#{billMonth},</if>
+            <if test="totalAmount != null">#{totalAmount},</if>
+            <if test="itemsData != null and itemsData != ''">#{itemsData},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+            <if test="updatedAt != null">#{updatedAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateMonthlyBills" parameterType="MonthlyBills">
+        update monthly_bills
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="userId != null">user_id = #{userId},</if>
+            <if test="billMonth != null and billMonth != ''">bill_month = #{billMonth},</if>
+            <if test="totalAmount != null">total_amount = #{totalAmount},</if>
+            <if test="itemsData != null and itemsData != ''">items_data = #{itemsData},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteMonthlyBillsById" parameterType="Long">
+        delete
+        from monthly_bills
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteMonthlyBillsByIds" parameterType="String">
+        delete from monthly_bills where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

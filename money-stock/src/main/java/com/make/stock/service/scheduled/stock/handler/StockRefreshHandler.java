@@ -134,7 +134,7 @@ public class StockRefreshHandler implements IStockRefreshHandler {
             }
 
             if (ws.getLowPrice() != null && ws.getThresholdPrice() != null) {
-                BigDecimal currentPrice = ws.getLowPrice();
+                BigDecimal currentPrice = ws.getNewPrice();
                 BigDecimal threshold = ws.getThresholdPrice();
                 if (ws.getNewPrice().compareTo(BigDecimal.ZERO) > 0 && threshold != null && currentPrice.compareTo(threshold) < 0) {
                     if (DateUtil.isCurrentTimeInRange()) {
