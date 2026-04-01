@@ -9,7 +9,7 @@ export function listBills(query) {
   })
 }
 
-// 查询月度账单 (单JSON架构)列表
+// 查询月度账单无分页视图列表
 export function getViewList(query) {
   return request({
     url: '/finance/bills/getViewList',

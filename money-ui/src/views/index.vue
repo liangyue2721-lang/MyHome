@@ -113,7 +113,7 @@ import {
   renderLoanRepaymentComparisonChart
 } from "@/api/finance/pieChart";
 import {getAnnualSummary} from "@/api/finance/annual_deposit_summary";
-import {getViewList, listBills} from "@/api/finance/bills";
+import {getViewList} from "@/api/finance/bills";
 import Cookies from 'js-cookie';
 import ExpenseDashboard from "./dashboard/ExpenseDashboard.vue";
 
@@ -221,24 +221,26 @@ export default {
   methods: {
     // 加载月度支出明细数据
     loadExpenseDashboardData() {
-      // 尝试获取最新的一条账单数据
-      const queryParams = {
-        pageNum: 1,
-        pageSize: 1,
-      };
-
-      getViewList(queryParams).then(response => {
-        // 后端可能返回的是数组直接作为 response，或者是在 response.rows 下
+      // 获取当前用户的账单列表 (直接返回 List)
+      getViewList({}).then(response => {
         let billList = [];
+        // axios 拦截器或 ruoyi 框架的 request.js 可能把直接返回的 List 包在了 response.data 甚至只是 response 里
+        // 取决于后端的实现（没有经过分页的 getDataTable，可能就是一个普通的 List 序列化后的 JSON Array，如果配置了全局响应拦截器可能会有 code/msg 包装）
         if (Array.isArray(response)) {
             billList = response;
-        } else if (response && response.rows && Array.isArray(response.rows)) {
-            billList = response.rows;
         } else if (response && response.data && Array.isArray(response.data)) {
             billList = response.data;
+        } else if (response && response.rows && Array.isArray(response.rows)) {
+            billList = response.rows; // 虽然没分页，为了健壮性保留
         }
 
         if (billList && billList.length > 0) {
+          // 拿到最新的一条数据 (或者根据 billMonth 排序取最新，假定后端默认返回有序或最新即可，这里先取第一条)
+          // 为了确保是最新的，按 createdAt 降序或者 billMonth 降序
+          billList.sort((a, b) => {
+             return new Date(b.billMonth || b.createdAt).getTime() - new Date(a.billMonth || a.createdAt).getTime();
+          });
+
           const latestBill = billList[0];
           this.parseBillData(latestBill);
         } else {
