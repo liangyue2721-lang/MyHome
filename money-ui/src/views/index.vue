@@ -64,6 +64,13 @@
       </el-col>
     </el-row>
 
+    <!-- Expense Dashboard Section -->
+    <ExpenseDashboard
+      v-if="expenseData.items && expenseData.items.length > 0"
+      :total-amount="expenseData.totalAmount"
+      :items="expenseData.items"
+    />
+
     <el-row :gutter="20">
       <el-col :span="24">
         <el-card class="chart-card" shadow="hover">
@@ -106,7 +113,9 @@ import {
   renderLoanRepaymentComparisonChart
 } from "@/api/finance/pieChart";
 import {getAnnualSummary} from "@/api/finance/annual_deposit_summary";
+import {listBills} from "@/api/finance/bills";
 import Cookies from 'js-cookie';
+import ExpenseDashboard from "./dashboard/ExpenseDashboard.vue";
 
 // === 核心修改：细化后的财富阶梯 (19个阶段) ===
 const WEALTH_STAGES = [
@@ -155,7 +164,16 @@ export default {
         generateMonthlyLoanRepayment: null,
         profitLine: null,
       },
+
+      // 月度支出明细数据
+      expenseData: {
+        totalAmount: 0,
+        items: []
+      }
     };
+  },
+  components: {
+    ExpenseDashboard
   },
   computed: {
     // === 核心逻辑：智能聚焦窗口 ===
@@ -191,6 +209,7 @@ export default {
     this.initUserList().then(() => {
       this.$nextTick(() => {
         this.loadAllCharts();
+        this.loadExpenseDashboardData();
         window.addEventListener('resize', this.resizeCharts);
       });
     });
@@ -200,6 +219,50 @@ export default {
     this.disposeCharts();
   },
   methods: {
+    // 加载月度支出明细数据
+    loadExpenseDashboardData() {
+      // 尝试获取最新的一条账单数据
+      const queryParams = {
+        pageNum: 1,
+        pageSize: 1,
+      };
+
+      listBills(queryParams).then(response => {
+        if (response && response.rows && response.rows.length > 0) {
+          const latestBill = response.rows[0];
+          this.parseBillData(latestBill);
+        } else {
+          // 没有数据时清空
+          this.expenseData.totalAmount = 0;
+          this.expenseData.items = [];
+        }
+      }).catch(e => {
+        console.error("加载月度支出明细失败:", e);
+      });
+    },
+
+    parseBillData(billRecord) {
+      if (!billRecord) return;
+
+      this.expenseData.totalAmount = billRecord.totalAmount || 0;
+
+      if (billRecord.itemsData) {
+        try {
+          let itemsJson = billRecord.itemsData;
+          if (typeof itemsJson === 'string') {
+             this.expenseData.items = JSON.parse(itemsJson);
+          } else {
+             this.expenseData.items = itemsJson;
+          }
+        } catch (e) {
+          console.error("解析账单明细数据失败:", e);
+          this.expenseData.items = [];
+        }
+      } else {
+        this.expenseData.items = [];
+      }
+    },
+
     initUserList() {
       return new Promise((resolve) => {
         const userId = Cookies.get('userId');
