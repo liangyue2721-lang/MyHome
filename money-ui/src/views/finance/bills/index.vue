@@ -297,24 +297,53 @@ export default {
       const types = ['', 'success', 'warning', 'danger'];
       return types[index % types.length];
     },
+    safeParseJSON(dataStr) {
+      if (!dataStr) return [];
+      if (typeof dataStr === 'object') return dataStr;
+
+      let parsed = dataStr;
+      let maxDepth = 3;
+
+      while (typeof parsed === 'string' && maxDepth > 0) {
+        try {
+          parsed = JSON.parse(parsed);
+          maxDepth--;
+        } catch (e) {
+          // If JSON.parse fails, it might be due to over-escaping without outer quotes
+          // e.g., [{\"name\":\"餐饮\",\"amount\":1500}]
+          // We can try to unescape it by replacing literal backslashes
+          try {
+             let unescaped = parsed.replace(/\\"/g, '"');
+             parsed = JSON.parse(unescaped);
+             maxDepth--;
+          } catch (e2) {
+             console.error("解析 JSON 失败:", e2, "原始数据:", parsed);
+             break;
+          }
+        }
+      }
+
+      // 如果解析出来是一个数组，但数组里的元素仍然是字符串，进一步尝试解析
+      if (Array.isArray(parsed)) {
+        parsed = parsed.map(item => {
+          if (typeof item === 'string') {
+            try {
+              return JSON.parse(item);
+            } catch (e) {
+              return item;
+            }
+          }
+          return item;
+        });
+      }
+
+      return parsed;
+    },
     /**
      * 核心修复：解析 JSON 字符串，并过滤掉金额为 0 的项
      */
     parseItemsData(dataStr) {
-      if (!dataStr) return [];
-      let parsed = [];
-
-      // 处理已经是数组对象的情况 (Axios 有时会自动 Parse)
-      if (typeof dataStr === 'object') {
-        parsed = dataStr;
-      } else {
-        try {
-          parsed = JSON.parse(dataStr);
-        } catch (e) {
-          console.error("解析 JSON 失败:", e);
-          return [];
-        }
-      }
+      let parsed = this.safeParseJSON(dataStr);
 
       // 过滤掉金额为空或为 0 的项目，保持表格清爽
       if (Array.isArray(parsed)) {
@@ -332,16 +361,7 @@ export default {
       });
 
       if (existingDataStr) {
-        let parsed = [];
-        if (typeof existingDataStr === 'object') {
-          parsed = existingDataStr;
-        } else {
-          try {
-            parsed = JSON.parse(existingDataStr);
-          } catch (e) {
-            console.error("初始化解析失败", e);
-          }
-        }
+        let parsed = this.safeParseJSON(existingDataStr);
 
         if (Array.isArray(parsed)) {
           parsed.forEach(item => {
