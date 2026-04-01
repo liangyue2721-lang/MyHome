@@ -297,24 +297,45 @@ export default {
       const types = ['', 'success', 'warning', 'danger'];
       return types[index % types.length];
     },
+    safeParseJSON(dataStr) {
+      if (!dataStr) return [];
+      // 如果已经是对象/数组，直接返回
+      if (typeof dataStr !== 'string') return dataStr;
+
+      let parsed = dataStr;
+      try {
+        // 第一步：尝试标准的 JSON 解析
+        parsed = JSON.parse(parsed);
+      } catch (e) {
+        try {
+          // 第二步：核心修复！如果报错，说明包含非法的转义斜杠
+          // 暴力去除所有的 \ 符号，将 [{\"name\":\"月供\"}] 变成 [{"name":"月供"}]
+          let unescaped = parsed.replace(/\\/g, '');
+          parsed = JSON.parse(unescaped);
+        } catch (e2) {
+          console.error("去除转义后解析 JSON 依然失败:", e2, "原始数据:", dataStr);
+          return [];
+        }
+      }
+
+      // 第三步：应对“双重序列化”问题
+      // 有时候即使 parse 成功了，里面依然包裹着一层字符串，比如 "[{...}]"
+      if (typeof parsed === 'string') {
+        try {
+          parsed = JSON.parse(parsed);
+        } catch (e3) {
+          // 如果这里还错，说明它真的是个纯字符串，不做处理
+        }
+      }
+
+      // 第四步：确保最终返回给表格的一定是一个数组
+      return Array.isArray(parsed) ? parsed : [];
+    },
     /**
      * 核心修复：解析 JSON 字符串，并过滤掉金额为 0 的项
      */
     parseItemsData(dataStr) {
-      if (!dataStr) return [];
-      let parsed = [];
-
-      // 处理已经是数组对象的情况 (Axios 有时会自动 Parse)
-      if (typeof dataStr === 'object') {
-        parsed = dataStr;
-      } else {
-        try {
-          parsed = JSON.parse(dataStr);
-        } catch (e) {
-          console.error("解析 JSON 失败:", e);
-          return [];
-        }
-      }
+      let parsed = this.safeParseJSON(dataStr);
 
       // 过滤掉金额为空或为 0 的项目，保持表格清爽
       if (Array.isArray(parsed)) {
@@ -332,16 +353,7 @@ export default {
       });
 
       if (existingDataStr) {
-        let parsed = [];
-        if (typeof existingDataStr === 'object') {
-          parsed = existingDataStr;
-        } else {
-          try {
-            parsed = JSON.parse(existingDataStr);
-          } catch (e) {
-            console.error("初始化解析失败", e);
-          }
-        }
+        let parsed = this.safeParseJSON(existingDataStr);
 
         if (Array.isArray(parsed)) {
           parsed.forEach(item => {
