@@ -63,7 +63,21 @@
       <el-table-column label="所属用户 ID" align="center" prop="userId" />
       <el-table-column label="账单月份" align="center" prop="billMonth" />
       <el-table-column label="当月总支出" align="center" prop="totalAmount" />
-      <el-table-column label="动态明细数据 (存储JSON数组)" align="center" prop="itemsData" />
+      <el-table-column label="动态明细数据" align="center" prop="itemsData" min-width="200">
+        <template slot-scope="scope">
+          <div v-if="scope.row.itemsData" class="tags-container">
+            <el-tag
+              v-for="(item, index) in parseItemsData(scope.row.itemsData)"
+              :key="index"
+              size="small"
+              type="info"
+              style="margin-right: 5px; margin-bottom: 5px;"
+            >
+              {{ getIconFromName(item.name) }} {{ item.name }}: {{ item.amount }}
+            </el-tag>
+          </div>
+        </template>
+      </el-table-column>
       <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
         <template slot-scope="scope">
           <el-button
@@ -88,14 +102,28 @@
     <!-- 添加或修改月度账单 (单JSON架构)对话框 -->
     <el-dialog :title="title" :visible.sync="open" width="500px" append-to-body>
       <el-form ref="form" :model="form" :rules="rules" label-width="80px">
-        <el-form-item label="账单月份，格式 YYYY-MM" prop="billMonth">
-          <el-input v-model="form.billMonth" placeholder="请输入账单月份，格式 YYYY-MM" />
+        <el-form-item label="账单月份" prop="billMonth">
+          <el-date-picker clearable
+            v-model="form.billMonth"
+            type="month"
+            value-format="yyyy-MM"
+            placeholder="请选择账单月份">
+          </el-date-picker>
         </el-form-item>
         <el-form-item label="当月总支出" prop="totalAmount">
-          <el-input v-model="form.totalAmount" placeholder="请输入当月总支出" />
+          <el-input v-model="form.totalAmount" placeholder="系统自动求和" disabled />
         </el-form-item>
-        <el-form-item label="动态明细数据 (存储JSON数组)" prop="totalAmount">
-          <el-input v-model="form.itemsData" placeholder="请输入动态明细数据 (存储JSON数组)" />
+        <el-form-item label="动态明细数据" prop="itemsData">
+          <div v-for="(item, index) in dynamicItems" :key="index" style="display: flex; margin-bottom: 10px; align-items: center;">
+            <div style="width: 100px; display: flex; align-items: center;">
+              <span style="margin-right: 5px;">{{ getIconFromName(item.name) }}</span>
+              <el-input v-model="item.name" placeholder="名称" size="small" :disabled="isDefaultItem(item.name)" />
+            </div>
+            <span style="margin: 0 10px;">-</span>
+            <el-input-number v-model="item.amount" :precision="2" :step="10" placeholder="金额" size="small" style="flex: 1;" />
+            <el-button v-if="!isDefaultItem(item.name)" type="danger" icon="el-icon-delete" circle size="mini" style="margin-left: 10px;" @click="removeDynamicItem(index)"></el-button>
+          </div>
+          <el-button type="primary" plain size="small" icon="el-icon-plus" @click="addDynamicItem">添加自定义分类</el-button>
         </el-form-item>
       </el-form>
       <div slot="footer" class="dialog-footer">
@@ -113,6 +141,11 @@ export default {
   name: "Bills",
   data() {
     return {
+      dynamicItems: [],
+      defaultCategories: [
+        '房租', '月供', '餐饮', '交通', '购物', '娱乐', '水电煤', '通信',
+        '医疗', '教育', '人情', '信用卡', '零食', '服饰', '旅行', '日用'
+      ],
       // 遮罩层
       loading: true,
       // 选中数组
@@ -150,9 +183,24 @@ export default {
           { required: true, message: "账单月份，格式 YYYY-MM不能为空", trigger: "blur" }
         ],
         itemsData: [
-          { required: true, message: "动态明细数据 (存储JSON数组)不能为空", trigger: "blur" }
+          { required: false, message: "动态明细数据", trigger: "blur" }
         ],
       }
+    }
+  },
+  watch: {
+    dynamicItems: {
+      handler(newItems) {
+        let total = 0;
+        newItems.forEach(item => {
+          if (item.amount && !isNaN(item.amount)) {
+            total += parseFloat(item.amount);
+          }
+        });
+        // 保留两位小数
+        this.form.totalAmount = parseFloat(total.toFixed(2));
+      },
+      deep: true
     }
   },
   async created() {
@@ -238,6 +286,78 @@ export default {
       }
       this.resetForm("form")
     },
+    getIconFromName(name) {
+      const iconMap = {
+        '房租': '🏠',
+        '月供': '🏦',
+        '餐饮': '🍔',
+        '交通': '🚗',
+        '购物': '🛍️',
+        '娱乐': '🎮',
+        '水电煤': '⚡',
+        '通信': '📱',
+        '医疗': '🏥',
+        '教育': '📚',
+        '人情': '🤝',
+        '信用卡': '💳',
+        '零食': '🍩',
+        '服饰': '👕',
+        '旅行': '✈️',
+        '日用': '🧼'
+      };
+      return iconMap[name] || '📌';
+    },
+    parseItemsData(dataStr) {
+      if (!dataStr) return [];
+      try {
+        return JSON.parse(dataStr);
+      } catch (e) {
+        return [];
+      }
+    },
+    isDefaultItem(name) {
+      return this.defaultCategories.includes(name);
+    },
+    initDynamicItems(existingDataStr = null) {
+      // Initialize with default categories
+      let itemsMap = {};
+      this.defaultCategories.forEach(cat => {
+        itemsMap[cat] = { name: cat, amount: 0 };
+      });
+
+      if (existingDataStr) {
+        try {
+          const parsed = JSON.parse(existingDataStr);
+          if (Array.isArray(parsed)) {
+            parsed.forEach(item => {
+              if (item.name) {
+                itemsMap[item.name] = { name: item.name, amount: item.amount || 0 };
+              }
+            });
+          }
+        } catch (e) {
+          console.error("Failed to parse itemsData:", e);
+        }
+      }
+
+      // Convert map back to array, ensuring default categories come first
+      let result = [];
+      this.defaultCategories.forEach(cat => {
+        result.push(itemsMap[cat]);
+        delete itemsMap[cat];
+      });
+      // Add any remaining custom categories
+      Object.values(itemsMap).forEach(item => {
+        result.push(item);
+      });
+      this.dynamicItems = result;
+    },
+    addDynamicItem() {
+      this.dynamicItems.push({ name: '', amount: 0 });
+    },
+    removeDynamicItem(index) {
+      this.dynamicItems.splice(index, 1);
+    },
     /** 搜索按钮操作 */
     handleQuery() {
       this.queryParams.pageNum = 1
@@ -257,6 +377,7 @@ export default {
     /** 新增按钮操作 */
     handleAdd() {
       this.reset()
+      this.initDynamicItems()
       this.open = true
       this.title = "添加月度账单 (单JSON架构)"
     },
@@ -266,6 +387,7 @@ export default {
       const id = row.id || this.ids
       getBills(id).then(response => {
         this.form = response.data
+        this.initDynamicItems(this.form.itemsData)
         this.open = true
         this.title = "修改月度账单 (单JSON架构)"
       })
@@ -274,6 +396,15 @@ export default {
     submitForm() {
       this.$refs["form"].validate(valid => {
         if (valid) {
+          // Prepare dynamicItems for saving
+          const itemsToSave = this.dynamicItems
+            .filter(item => item.name && item.name.trim() !== '')
+            .map(item => ({
+              name: item.name,
+              amount: item.amount || 0
+            }));
+          this.form.itemsData = JSON.stringify(itemsToSave);
+
           if (this.form.id != null) {
             updateBills(this.form).then(response => {
               this.$modal.msgSuccess("修改成功")
