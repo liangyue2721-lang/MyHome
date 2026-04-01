@@ -1,14 +1,6 @@
 <template>
   <div class="app-container">
     <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch" label-width="68px">
-      <el-form-item label="所属用户 ID" prop="userId">
-        <el-input
-          v-model="queryParams.userId"
-          placeholder="请输入所属用户 ID"
-          clearable
-          @keyup.enter.native="handleQuery"
-        />
-      </el-form-item>
       <el-form-item label="账单月份，格式 YYYY-MM" prop="billMonth">
         <el-input
           v-model="queryParams.billMonth"
@@ -16,34 +8,6 @@
           clearable
           @keyup.enter.native="handleQuery"
         />
-      </el-form-item>
-      <el-form-item label="当月总支出" prop="totalAmount">
-        <el-input
-          v-model="queryParams.totalAmount"
-          placeholder="请输入当月总支出"
-          clearable
-          @keyup.enter.native="handleQuery"
-        />
-      </el-form-item>
-      <el-form-item label="创建时间" prop="createdAt">
-        <el-date-picker clearable
-          v-model="queryParams.createdAt"
-          type="date"
-          value-format="yyyy-MM-dd"
-          placeholder="请选择创建时间">
-        </el-date-picker>
-      </el-form-item>
-      <el-form-item label="更新时间" prop="updatedAt">
-        <el-date-picker clearable
-          v-model="queryParams.updatedAt"
-          type="date"
-          value-format="yyyy-MM-dd"
-          placeholder="请选择更新时间">
-        </el-date-picker>
-      </el-form-item>
-      <el-form-item>
-        <el-button type="primary" icon="el-icon-search" size="mini" @click="handleQuery">搜索</el-button>
-        <el-button icon="el-icon-refresh" size="mini" @click="resetQuery">重置</el-button>
       </el-form-item>
     </el-form>
 
@@ -97,19 +61,9 @@
       <el-table-column type="selection" width="55" align="center" />
       <el-table-column label="账单主键 ID" align="center" prop="id" />
       <el-table-column label="所属用户 ID" align="center" prop="userId" />
-      <el-table-column label="账单月份，格式 YYYY-MM" align="center" prop="billMonth" />
+      <el-table-column label="账单月份" align="center" prop="billMonth" />
       <el-table-column label="当月总支出" align="center" prop="totalAmount" />
       <el-table-column label="动态明细数据 (存储JSON数组)" align="center" prop="itemsData" />
-      <el-table-column label="创建时间" align="center" prop="createdAt" width="180">
-        <template slot-scope="scope">
-          <span>{{ parseTime(scope.row.createdAt, '{y}-{m}-{d}') }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="更新时间" align="center" prop="updatedAt" width="180">
-        <template slot-scope="scope">
-          <span>{{ parseTime(scope.row.updatedAt, '{y}-{m}-{d}') }}</span>
-        </template>
-      </el-table-column>
       <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
         <template slot-scope="scope">
           <el-button
@@ -119,13 +73,6 @@
             @click="handleUpdate(scope.row)"
             v-hasPermi="['finance:bills:edit']"
           >修改</el-button>
-          <el-button
-            size="mini"
-            type="text"
-            icon="el-icon-delete"
-            @click="handleDelete(scope.row)"
-            v-hasPermi="['finance:bills:remove']"
-          >删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -141,30 +88,14 @@
     <!-- 添加或修改月度账单 (单JSON架构)对话框 -->
     <el-dialog :title="title" :visible.sync="open" width="500px" append-to-body>
       <el-form ref="form" :model="form" :rules="rules" label-width="80px">
-        <el-form-item label="所属用户 ID" prop="userId">
-          <el-input v-model="form.userId" placeholder="请输入所属用户 ID" />
-        </el-form-item>
         <el-form-item label="账单月份，格式 YYYY-MM" prop="billMonth">
           <el-input v-model="form.billMonth" placeholder="请输入账单月份，格式 YYYY-MM" />
         </el-form-item>
         <el-form-item label="当月总支出" prop="totalAmount">
           <el-input v-model="form.totalAmount" placeholder="请输入当月总支出" />
         </el-form-item>
-        <el-form-item label="创建时间" prop="createdAt">
-          <el-date-picker clearable
-            v-model="form.createdAt"
-            type="date"
-            value-format="yyyy-MM-dd"
-            placeholder="请选择创建时间">
-          </el-date-picker>
-        </el-form-item>
-        <el-form-item label="更新时间" prop="updatedAt">
-          <el-date-picker clearable
-            v-model="form.updatedAt"
-            type="date"
-            value-format="yyyy-MM-dd"
-            placeholder="请选择更新时间">
-          </el-date-picker>
+        <el-form-item label="动态明细数据 (存储JSON数组)" prop="totalAmount">
+          <el-input v-model="form.itemsData" placeholder="请输入动态明细数据 (存储JSON数组)" />
         </el-form-item>
       </el-form>
       <div slot="footer" class="dialog-footer">
@@ -215,14 +146,8 @@ export default {
       form: {},
       // 表单校验
       rules: {
-        userId: [
-          { required: true, message: "所属用户 ID不能为空", trigger: "blur" }
-        ],
         billMonth: [
           { required: true, message: "账单月份，格式 YYYY-MM不能为空", trigger: "blur" }
-        ],
-        totalAmount: [
-          { required: true, message: "当月总支出不能为空", trigger: "blur" }
         ],
         itemsData: [
           { required: true, message: "动态明细数据 (存储JSON数组)不能为空", trigger: "blur" }
