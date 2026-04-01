@@ -65,11 +65,16 @@
     </el-row>
 
     <!-- Expense Dashboard Section -->
-    <ExpenseDashboard
-      v-if="expenseData.items && expenseData.items.length > 0"
-      :total-amount="expenseData.totalAmount"
-      :items="expenseData.items"
-    />
+    <el-row :gutter="20" v-if="expenseData.items && expenseData.items.length > 0">
+      <el-col :span="24">
+        <el-card class="chart-card" shadow="hover">
+          <ExpenseDashboard
+            :total-amount="expenseData.totalAmount"
+            :items="expenseData.items"
+          />
+        </el-card>
+      </el-col>
+    </el-row>
 
     <el-row :gutter="20">
       <el-col :span="24">

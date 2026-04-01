@@ -37,7 +37,7 @@
             <div class="progress-track">
               <div
                 class="progress-fill"
-                :style="{ width: item.percentage + '%', backgroundColor: item.isKeyExpense ? '#F56C6C' : '#409EFF' }"
+                :style="{ width: Math.min(Number(item.percentage), 100) + '%', backgroundColor: item.isKeyExpense ? '#F56C6C' : '#409EFF' }"
               ></div>
             </div>
             <span class="percentage-text" :class="{ 'text-danger': item.isKeyExpense }">
@@ -125,8 +125,8 @@ export default {
 <style lang="scss" scoped>
 .expense-dashboard {
   background-color: var(--theme-bg-color, transparent);
-  margin-bottom: 20px;
   border-radius: 8px;
+  /* 去除了 margin-bottom，因为外层 el-card 会处理间距 */
 
   .header-section {
     display: flex;
