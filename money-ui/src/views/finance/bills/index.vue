@@ -102,8 +102,13 @@
     <!-- 添加或修改月度账单 (单JSON架构)对话框 -->
     <el-dialog :title="title" :visible.sync="open" width="500px" append-to-body>
       <el-form ref="form" :model="form" :rules="rules" label-width="80px">
-        <el-form-item label="账单月份，格式 YYYY-MM" prop="billMonth">
-          <el-input v-model="form.billMonth" placeholder="请输入账单月份，格式 YYYY-MM" />
+        <el-form-item label="账单月份" prop="billMonth">
+          <el-date-picker clearable
+            v-model="form.billMonth"
+            type="month"
+            value-format="yyyy-MM"
+            placeholder="请选择账单月份">
+          </el-date-picker>
         </el-form-item>
         <el-form-item label="当月总支出" prop="totalAmount">
           <el-input v-model="form.totalAmount" placeholder="请输入当月总支出" />
