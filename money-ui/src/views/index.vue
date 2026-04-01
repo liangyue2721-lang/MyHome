@@ -67,10 +67,15 @@
     <!-- Expense Dashboard Section -->
     <el-row :gutter="20" v-if="expenseData.items && expenseData.items.length > 0">
       <el-col :span="24">
-        <el-card class="chart-card" shadow="hover">
+        <el-card
+          class="chart-card"
+          :class="{ 'privacy-blur': isPrivacyMode }"
+          shadow="hover"
+        >
           <ExpenseDashboard
             :total-amount="expenseData.totalAmount"
             :items="expenseData.items"
+            :is-privacy="isPrivacyMode"
           />
         </el-card>
       </el-col>
@@ -232,18 +237,18 @@ export default {
         // axios 拦截器或 ruoyi 框架的 request.js 可能把直接返回的 List 包在了 response.data 甚至只是 response 里
         // 取决于后端的实现（没有经过分页的 getDataTable，可能就是一个普通的 List 序列化后的 JSON Array，如果配置了全局响应拦截器可能会有 code/msg 包装）
         if (Array.isArray(response)) {
-            billList = response;
+          billList = response;
         } else if (response && response.data && Array.isArray(response.data)) {
-            billList = response.data;
+          billList = response.data;
         } else if (response && response.rows && Array.isArray(response.rows)) {
-            billList = response.rows; // 虽然没分页，为了健壮性保留
+          billList = response.rows; // 虽然没分页，为了健壮性保留
         }
 
         if (billList && billList.length > 0) {
           // 拿到最新的一条数据 (或者根据 billMonth 排序取最新，假定后端默认返回有序或最新即可，这里先取第一条)
           // 为了确保是最新的，按 createdAt 降序或者 billMonth 降序
           billList.sort((a, b) => {
-             return new Date(b.billMonth || b.createdAt).getTime() - new Date(a.billMonth || a.createdAt).getTime();
+            return new Date(b.billMonth || b.createdAt).getTime() - new Date(a.billMonth || a.createdAt).getTime();
           });
 
           const latestBill = billList[0];
@@ -268,18 +273,18 @@ export default {
           let itemsJson = billRecord.itemsData;
 
           if (typeof itemsJson === 'string') {
-             // 处理后端返回的特殊转义字符串，例如: "[{\\\"name\\\":\\\"月供\\\"}]"
-             // 先将 \\" 替换为 "，然后再进行 JSON 解析
-             let cleanJsonString = itemsJson.replace(/\\"/g, '"');
+            // 处理后端返回的特殊转义字符串，例如: "[{\\\"name\\\":\\\"月供\\\"}]"
+            // 先将 \\" 替换为 "，然后再进行 JSON 解析
+            let cleanJsonString = itemsJson.replace(/\\"/g, '"');
 
-             let parsed = JSON.parse(cleanJsonString);
-             // 如果解析完还是字符串，再解析一次（应对过度转义的情况）
-             if (typeof parsed === 'string') {
-                 parsed = JSON.parse(parsed);
-             }
-             this.expenseData.items = parsed;
+            let parsed = JSON.parse(cleanJsonString);
+            // 如果解析完还是字符串，再解析一次（应对过度转义的情况）
+            if (typeof parsed === 'string') {
+              parsed = JSON.parse(parsed);
+            }
+            this.expenseData.items = parsed;
           } else {
-             this.expenseData.items = itemsJson;
+            this.expenseData.items = itemsJson;
           }
         } catch (e) {
           console.error("解析账单明细数据失败:", e);
