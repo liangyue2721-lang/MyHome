@@ -214,6 +214,19 @@ export default {
       return all.slice(start, end);
     }
   },
+  watch: {
+    selectedUserId: {
+      handler(val) {
+        if (val) {
+          // 当 userId 有值时，统一触发数据加载
+          this.loadExpenseDashboardData();
+          this.loadAllCharts();
+          this.fetchWealthStage(); // 建议也放进来，确保数据同步
+        }
+      },
+      immediate: true // 关键：组件创建时立即执行一次 handler
+    }
+  },
   mounted() {
     this.fetchWealthStage();
     this.initUserList().then(() => {
@@ -231,30 +244,37 @@ export default {
   methods: {
     // 加载月度支出明细数据
     loadExpenseDashboardData() {
-      // 获取当前用户的账单列表 (直接返回 List)
-      getViewList({}).then(response => {
+      // 1. 获取当前年月 (格式: YYYY-MM)
+      const now = new Date();
+      const year = now.getFullYear(); // 2026
+      const month = (now.getMonth() + 1).toString().padStart(2, '0'); // 04
+      const currentMonthStr = `${year}-${month}`; // "2026-04"
+
+      // 2. 传入查询参数
+      const queryParams = {
+        billMonth: currentMonthStr,
+        userId: this.selectedUserId // 建议同时带上用户ID
+      };
+
+      getViewList(queryParams).then(response => {
         let billList = [];
-        // axios 拦截器或 ruoyi 框架的 request.js 可能把直接返回的 List 包在了 response.data 甚至只是 response 里
-        // 取决于后端的实现（没有经过分页的 getDataTable，可能就是一个普通的 List 序列化后的 JSON Array，如果配置了全局响应拦截器可能会有 code/msg 包装）
         if (Array.isArray(response)) {
           billList = response;
         } else if (response && response.data && Array.isArray(response.data)) {
           billList = response.data;
         } else if (response && response.rows && Array.isArray(response.rows)) {
-          billList = response.rows; // 虽然没分页，为了健壮性保留
+          billList = response.rows;
         }
 
         if (billList && billList.length > 0) {
-          // 拿到最新的一条数据 (或者根据 billMonth 排序取最新，假定后端默认返回有序或最新即可，这里先取第一条)
-          // 为了确保是最新的，按 createdAt 降序或者 billMonth 降序
+          // 即使后端过滤了月份，前端按创建时间倒序取最新一条仍是更稳妥的做法
           billList.sort((a, b) => {
-            return new Date(b.billMonth || b.createdAt).getTime() - new Date(a.billMonth || a.createdAt).getTime();
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
           });
 
           const latestBill = billList[0];
           this.parseBillData(latestBill);
         } else {
-          // 没有数据时清空
           this.expenseData.totalAmount = 0;
           this.expenseData.items = [];
         }
