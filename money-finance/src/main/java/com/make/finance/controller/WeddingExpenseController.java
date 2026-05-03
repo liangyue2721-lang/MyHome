@@ -3,6 +3,7 @@ package com.make.finance.controller;
 import java.util.List;
 import javax.servlet.http.HttpServletResponse;
 
+import com.make.common.utils.SecurityUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -35,13 +36,14 @@ public class WeddingExpenseController extends BaseController {
     @Autowired
     private IWeddingExpenseService weddingExpenseService;
 
-/**
- * 查询婚礼支出记录列表
- */
-@PreAuthorize("@ss.hasPermi('finance:weddingExpense:list')")
-@GetMapping("/list")
+    /**
+     * 查询婚礼支出记录列表
+     */
+    @PreAuthorize("@ss.hasPermi('finance:weddingExpense:list')")
+    @GetMapping("/list")
     public TableDataInfo list(WeddingExpense weddingExpense) {
         startPage();
+        weddingExpense.setUserId(SecurityUtils.getUserId());
         List<WeddingExpense> list = weddingExpenseService.selectWeddingExpenseList(weddingExpense);
         return getDataTable(list);
     }
@@ -53,8 +55,9 @@ public class WeddingExpenseController extends BaseController {
     @Log(title = "婚礼支出记录", businessType = BusinessType.EXPORT)
     @PostMapping("/export")
     public void export(HttpServletResponse response, WeddingExpense weddingExpense) {
+        weddingExpense.setUserId(SecurityUtils.getUserId());
         List<WeddingExpense> list = weddingExpenseService.selectWeddingExpenseList(weddingExpense);
-        ExcelUtil<WeddingExpense> util = new ExcelUtil<WeddingExpense>(WeddingExpense. class);
+        ExcelUtil<WeddingExpense> util = new ExcelUtil<WeddingExpense>(WeddingExpense.class);
         util.exportExcel(response, list, "婚礼支出记录数据");
     }
 
@@ -74,6 +77,7 @@ public class WeddingExpenseController extends BaseController {
     @Log(title = "婚礼支出记录", businessType = BusinessType.INSERT)
     @PostMapping
     public AjaxResult add(@RequestBody WeddingExpense weddingExpense) {
+        weddingExpense.setUserId(SecurityUtils.getUserId());
         return toAjax(weddingExpenseService.insertWeddingExpense(weddingExpense));
     }
 
@@ -84,6 +88,7 @@ public class WeddingExpenseController extends BaseController {
     @Log(title = "婚礼支出记录", businessType = BusinessType.UPDATE)
     @PutMapping
     public AjaxResult edit(@RequestBody WeddingExpense weddingExpense) {
+        weddingExpense.setUserId(SecurityUtils.getUserId());
         return toAjax(weddingExpenseService.updateWeddingExpense(weddingExpense));
     }
 
