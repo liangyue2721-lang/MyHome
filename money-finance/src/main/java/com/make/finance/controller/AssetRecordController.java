@@ -22,6 +22,7 @@ import com.make.finance.domain.AssetRecord;
 import com.make.finance.service.IAssetRecordService;
 import com.make.common.utils.poi.ExcelUtil;
 import com.make.common.core.page.TableDataInfo;
+import org.springframework.validation.annotation.Validated;
 
 /**
  * 个人资产明细Controller
@@ -73,7 +74,7 @@ public class AssetRecordController extends BaseController {
     @PreAuthorize("@ss.hasPermi('finance:asset_record:add')")
     @Log(title = "个人资产明细", businessType = BusinessType.INSERT)
     @PostMapping
-    public AjaxResult add(@RequestBody AssetRecord assetRecord) {
+    public AjaxResult add(@Validated @RequestBody AssetRecord assetRecord) {
         return toAjax(assetRecordService.insertAssetRecord(assetRecord));
     }
 
@@ -83,7 +84,7 @@ public class AssetRecordController extends BaseController {
     @PreAuthorize("@ss.hasPermi('finance:asset_record:edit')")
     @Log(title = "个人资产明细", businessType = BusinessType.UPDATE)
     @PutMapping
-    public AjaxResult edit(@RequestBody AssetRecord assetRecord) {
+    public AjaxResult edit(@Validated @RequestBody AssetRecord assetRecord) {
         return toAjax(assetRecordService.updateAssetRecord(assetRecord));
     }
 

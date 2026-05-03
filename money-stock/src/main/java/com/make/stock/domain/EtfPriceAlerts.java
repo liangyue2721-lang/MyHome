@@ -8,6 +8,9 @@ import com.make.common.annotation.Excel;
 import com.make.common.core.domain.BaseEntity;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Size;
 
 /**
  * ETF买入卖出价格提醒对象 etf_price_alerts
@@ -27,6 +30,8 @@ public class EtfPriceAlerts extends BaseEntity {
     /**
      * 提醒类型：buy=买入提醒，sell=卖出提醒
      */
+    @NotBlank(message = "提醒类型不能为空")
+    @Size(max = 10, message = "提醒类型长度不能超过10个字符")
     @Excel(name = "提醒类型：buy=买入提醒，sell=卖出提醒")
     private String alertType;
 
@@ -40,12 +45,15 @@ public class EtfPriceAlerts extends BaseEntity {
     /**
      * ETF代码
      */
+    @NotBlank(message = "ETF代码不能为空")
+    @Size(max = 10, message = "ETF代码长度不能超过10个字符")
     @Excel(name = "ETF代码")
     private String stockCode;
 
     /**
      * ETF名称
      */
+    @Size(max = 50, message = "ETF名称长度不能超过50个字符")
     @Excel(name = "ETF名称")
     private String stockName;
 
@@ -58,6 +66,7 @@ public class EtfPriceAlerts extends BaseEntity {
     /**
      * 触发提醒的价格阈值
      */
+    @NotNull(message = "触发价格阈值不能为空")
     @Excel(name = "触发提醒的价格阈值")
     private BigDecimal thresholdPrice;
 

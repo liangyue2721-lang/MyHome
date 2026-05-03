@@ -22,6 +22,7 @@ import com.make.stock.domain.StockKline;
 import com.make.stock.service.IStockKlineService;
 import com.make.common.utils.poi.ExcelUtil;
 import com.make.common.core.page.TableDataInfo;
+import org.springframework.validation.annotation.Validated;
 
 /**
  * 股票K线数据Controller
@@ -83,7 +84,7 @@ public class StockKlineController extends BaseController {
     @PreAuthorize("@ss.hasPermi('stock:kline:add')")
     @Log(title = "股票K线数据", businessType = BusinessType.INSERT)
     @PostMapping
-    public AjaxResult add(@RequestBody StockKline stockKline) {
+    public AjaxResult add(@Validated @RequestBody StockKline stockKline) {
         return toAjax(stockKlineService.insertStockKline(stockKline));
     }
 
@@ -93,7 +94,7 @@ public class StockKlineController extends BaseController {
     @PreAuthorize("@ss.hasPermi('stock:kline:edit')")
     @Log(title = "股票K线数据", businessType = BusinessType.UPDATE)
     @PutMapping
-    public AjaxResult edit(@RequestBody StockKline stockKline) {
+    public AjaxResult edit(@Validated @RequestBody StockKline stockKline) {
         return toAjax(stockKlineService.updateStockKline(stockKline));
     }
 

@@ -24,7 +24,14 @@ import org.springframework.stereotype.Component;
 @Component
 public class RedisCache {
     @Autowired
-    public RedisTemplate redisTemplate;
+    private RedisTemplate redisTemplate;
+
+    /**
+     * 获取 RedisTemplate 实例（供特殊场景使用）
+     */
+    public RedisTemplate getRedisTemplate() {
+        return redisTemplate;
+    }
 
     /**
      * 缓存基本的对象，Integer、String、实体类等

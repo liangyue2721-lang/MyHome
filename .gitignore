@@ -56,3 +56,4 @@ config/application.yml
 **/venv
 **/python/*json
 **/python/chrome*
+.vscode/settings.json

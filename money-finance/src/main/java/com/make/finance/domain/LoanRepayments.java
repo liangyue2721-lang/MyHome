@@ -10,6 +10,8 @@ import com.make.common.core.domain.BaseEntity;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
 import org.springframework.format.annotation.DateTimeFormat;
+import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Positive;
 
 /**
  * 贷款剩余计算对象 loan_repayments
@@ -28,12 +30,16 @@ public class LoanRepayments extends BaseEntity {
     /**
      * 贷款总额
      */
+    @NotNull(message = "贷款总额不能为空")
+    @Positive(message = "贷款总额必须为正数")
     @Excel(name = "贷款总额")
     private BigDecimal totalAmount;
 
     /**
      * 期数
      */
+    @NotNull(message = "期数不能为空")
+    @Positive(message = "期数必须为正数")
     @Excel(name = "期数")
     private Long installments;
 
@@ -53,12 +59,14 @@ public class LoanRepayments extends BaseEntity {
     /**
      * 应还本金
      */
+    @NotNull(message = "应还本金不能为空")
     @Excel(name = "应还本金")
     private BigDecimal principal;
 
     /**
      * 应还利息
      */
+    @NotNull(message = "应还利息不能为空")
     @Excel(name = "应还利息")
     private BigDecimal interest;
 

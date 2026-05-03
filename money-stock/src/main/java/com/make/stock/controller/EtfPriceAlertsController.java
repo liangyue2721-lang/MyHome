@@ -21,6 +21,7 @@ import com.make.stock.domain.EtfPriceAlerts;
 import com.make.stock.service.IEtfPriceAlertsService;
 import com.make.common.utils.poi.ExcelUtil;
 import com.make.common.core.page.TableDataInfo;
+import org.springframework.validation.annotation.Validated;
 
 /**
  * ETF买入卖出价格提醒Controller
@@ -73,7 +74,7 @@ public class EtfPriceAlertsController extends BaseController {
     @PreAuthorize("@ss.hasPermi('stock:etf_price_alerts:add')")
     @Log(title = "ETF买入卖出价格提醒", businessType = BusinessType.INSERT)
     @PostMapping
-    public AjaxResult add(@RequestBody EtfPriceAlerts etfPriceAlerts) {
+    public AjaxResult add(@Validated @RequestBody EtfPriceAlerts etfPriceAlerts) {
         return toAjax(etfPriceAlertsService.insertEtfPriceAlerts(etfPriceAlerts));
     }
 
@@ -83,7 +84,7 @@ public class EtfPriceAlertsController extends BaseController {
     @PreAuthorize("@ss.hasPermi('stock:etf_price_alerts:edit')")
     @Log(title = "ETF买入卖出价格提醒", businessType = BusinessType.UPDATE)
     @PutMapping
-    public AjaxResult edit(@RequestBody EtfPriceAlerts etfPriceAlerts) {
+    public AjaxResult edit(@Validated @RequestBody EtfPriceAlerts etfPriceAlerts) {
         return toAjax(etfPriceAlertsService.updateEtfPriceAlerts(etfPriceAlerts));
     }
 

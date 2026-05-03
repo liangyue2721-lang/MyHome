@@ -8,6 +8,8 @@ import com.make.common.annotation.Excel;
 import com.make.common.core.domain.BaseEntity;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
+import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Size;
 
 /**
  * 个人资产明细对象 asset_record
@@ -32,18 +34,21 @@ public class AssetRecord extends BaseEntity {
     /**
      * 资产类型[1流动资产 2投资资产 3固定资产]
      */
+    @NotNull(message = "资产类型不能为空")
     @Excel(name = "资产类型[1流动资产 2投资资产 3固定资产]")
     private Integer assetType;
 
     /**
      * 资产价值
      */
+    @NotNull(message = "资产价值不能为空")
     @Excel(name = "资产价值")
     private BigDecimal amount;
 
     /**
      * 货币类型(ISO 4217)
      */
+    @Size(max = 10, message = "货币类型长度不能超过10个字符")
     @Excel(name = "货币类型(ISO 4217)")
     private String currency;
 

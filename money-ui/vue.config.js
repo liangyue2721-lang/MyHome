@@ -10,8 +10,7 @@ const CompressionPlugin = require('compression-webpack-plugin') // :contentRefer
 
 const name = process.env.VUE_APP_TITLE || 'TECHNOLOGY' // :contentReference[oaicite:19]{index=19}:contentReference[oaicite:21]{index=21}
 
-//const baseUrl = 'http://115.190.121.53:6004' // :contentReference[oaicite:23]{index=23}:contentReference[oaicite:25]{index=25}
-const baseUrl = 'http://localhost:8085' // :contentReference[oaicite:23]{index=23}:contentReference[oaicite:25]{index=25}
+const baseUrl = process.env.VUE_APP_BASE_URL || 'http://localhost:8085'
 
 const port = process.env.port || process.env.npm_config_port || 80 // :contentReference[oaicite:27]{index=27}:contentReference[oaicite:29]{index=29}
 

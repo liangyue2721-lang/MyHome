@@ -14,6 +14,7 @@ import com.make.finance.domain.vo.LoanRepaymentsChart;
 import com.make.finance.utils.LoanCalculatorUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import com.make.finance.mapper.LoanRepaymentsMapper;
 import com.make.finance.domain.LoanRepayments;
 import com.make.finance.service.ILoanRepaymentsService;
@@ -59,6 +60,7 @@ public class LoanRepaymentsServiceImpl implements ILoanRepaymentsService {
      * @return 结果
      */
     @Override
+    @Transactional
     public int insertLoanRepayments(LoanRepayments loanRepayments) {
         loanRepayments.setCreateTime(DateUtils.getNowDate());
         return loanRepaymentsMapper.insertLoanRepayments(loanRepayments);
@@ -71,6 +73,7 @@ public class LoanRepaymentsServiceImpl implements ILoanRepaymentsService {
      * @return 结果
      */
     @Override
+    @Transactional
     public int updateLoanRepayments(LoanRepayments loanRepayments) {
         loanRepayments.setUpdateTime(DateUtils.getNowDate());
         return loanRepaymentsMapper.updateLoanRepayments(loanRepayments);
@@ -83,6 +86,7 @@ public class LoanRepaymentsServiceImpl implements ILoanRepaymentsService {
      * @return 结果
      */
     @Override
+    @Transactional
     public int deleteLoanRepaymentsByIds(Long[] ids) {
         return loanRepaymentsMapper.deleteLoanRepaymentsByIds(ids);
     }
@@ -100,27 +104,27 @@ public class LoanRepaymentsServiceImpl implements ILoanRepaymentsService {
 
 
     @Override
+    @Transactional
     public void resetRate() {
-        try {
-            List<LoanRepayments> loanRepayments = loanRepaymentsMapper.selectUnpaidLoansList();
-            BigDecimal totalSum = loanRepayments.get(0).getTotalAmount().add(BigDecimal.valueOf(2750));
-            BigDecimal floatingInterestRate = loanRepayments.get(0).getFloatingInterestRate();
-            // 将百分比转换为小数
-            BigDecimal rate = floatingInterestRate.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP);
-            List<BigDecimal> bigDecimals = LoanCalculatorUtil.calculateMonthlyPayment(totalSum, loanRepayments.size(), rate);
-            for (int i = 0; i < loanRepayments.size(); i++) {
-                LoanRepayments loanRepayment = loanRepayments.get(i);
-//                loanRepayment.setTotalPrincipalAndInterest(bigDecimals.get(i));
-                loanRepayment.setInterest(bigDecimals.get(i));
-                loanRepaymentsMapper.updateLoanRepayments(loanRepayment);
-            }
-        } catch (Exception e) {
-            e.getMessage();
+        List<LoanRepayments> loanRepayments = loanRepaymentsMapper.selectUnpaidLoansList();
+        if (loanRepayments == null || loanRepayments.isEmpty()) {
+            return;
         }
-
+        BigDecimal totalSum = loanRepayments.get(0).getTotalAmount().add(BigDecimal.valueOf(2750));
+        BigDecimal floatingInterestRate = loanRepayments.get(0).getFloatingInterestRate();
+        // 将百分比转换为小数
+        BigDecimal rate = floatingInterestRate.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP);
+        List<BigDecimal> bigDecimals = LoanCalculatorUtil.calculateMonthlyPayment(totalSum, loanRepayments.size(), rate);
+        for (int i = 0; i < loanRepayments.size(); i++) {
+            LoanRepayments loanRepayment = loanRepayments.get(i);
+//                loanRepayment.setTotalPrincipalAndInterest(bigDecimals.get(i));
+            loanRepayment.setInterest(bigDecimals.get(i));
+            loanRepaymentsMapper.updateLoanRepayments(loanRepayment);
+        }
     }
 
     @Override
+    @Transactional
     public int updateLoanRepaymentsById(LoanRepayments loanRepaymentsObj) {
 
         return loanRepaymentsMapper.updateLoanRepaymentsById(loanRepaymentsObj);

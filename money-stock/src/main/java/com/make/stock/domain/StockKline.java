@@ -8,6 +8,8 @@ import com.make.common.core.domain.BaseEntity;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
 import lombok.experimental.Accessors;
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.Size;
 
 /**
  * 股票K线数据对象 stock_kline
@@ -24,10 +26,14 @@ public class StockKline extends BaseEntity{
     private String id;
 
     /** 股票代码，例如 600519 */
+    @NotBlank(message = "股票代码不能为空")
+    @Size(max = 10, message = "股票代码长度不能超过10个字符")
     @Excel(name = "股票代码，例如 600519")
     private String stockCode;
 
     /** 市场标识，如 SH、SZ */
+    @NotBlank(message = "市场标识不能为空")
+    @Size(max = 4, message = "市场标识长度不能超过4个字符")
     @Excel(name = "市场标识，如 SH、SZ")
     private String market;
 

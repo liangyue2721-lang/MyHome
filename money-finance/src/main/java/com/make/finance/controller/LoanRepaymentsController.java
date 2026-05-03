@@ -33,6 +33,7 @@ import com.make.finance.domain.LoanRepayments;
 import com.make.finance.service.ILoanRepaymentsService;
 import com.make.common.utils.poi.ExcelUtil;
 import com.make.common.core.page.TableDataInfo;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -89,7 +90,7 @@ public class LoanRepaymentsController extends BaseController {
     @PreAuthorize("@ss.hasPermi('finance:loan_repayments:add')")
     @Log(title = "贷款剩余计算", businessType = BusinessType.INSERT)
     @PostMapping
-    public AjaxResult add(@RequestBody LoanRepayments loanRepayments) {
+    public AjaxResult add(@Validated @RequestBody LoanRepayments loanRepayments) {
         return toAjax(loanRepaymentsService.insertLoanRepayments(loanRepayments));
     }
 
@@ -99,7 +100,7 @@ public class LoanRepaymentsController extends BaseController {
     @PreAuthorize("@ss.hasPermi('finance:loan_repayments:edit')")
     @Log(title = "贷款剩余计算", businessType = BusinessType.UPDATE)
     @PutMapping
-    public AjaxResult edit(@RequestBody LoanRepayments loanRepayments) {
+    public AjaxResult edit(@Validated @RequestBody LoanRepayments loanRepayments) {
         return toAjax(loanRepaymentsService.updateLoanRepayments(loanRepayments));
     }
 

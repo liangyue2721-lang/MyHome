@@ -10,6 +10,7 @@ import com.make.finance.enums.AssetStatusEnum;
 import com.make.finance.enums.AssetTypeEnum;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import com.make.finance.mapper.AssetRecordMapper;
 import com.make.finance.domain.AssetRecord;
 import com.make.finance.service.IAssetRecordService;
@@ -70,6 +71,7 @@ public class AssetRecordServiceImpl implements IAssetRecordService {
      * @return 结果
      */
     @Override
+    @Transactional
     public int insertAssetRecord(AssetRecord assetRecord) {
         return assetRecordMapper.insertAssetRecord(assetRecord);
     }
@@ -81,6 +83,7 @@ public class AssetRecordServiceImpl implements IAssetRecordService {
      * @return 结果
      */
     @Override
+    @Transactional
     public int updateAssetRecord(AssetRecord assetRecord) {
         String cacheKey = "finance:asset_" + "assetRecord";
         redisCache.deleteObject(cacheKey);
@@ -94,6 +97,7 @@ public class AssetRecordServiceImpl implements IAssetRecordService {
      * @return 结果
      */
     @Override
+    @Transactional
     public int deleteAssetRecordByAssetIds(Long[] assetIds) {
         return assetRecordMapper.deleteAssetRecordByAssetIds(assetIds);
     }

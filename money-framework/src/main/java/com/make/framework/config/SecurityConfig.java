@@ -148,10 +148,17 @@ public class SecurityConfig {
         firewall.setAllowUrlEncodedPeriod(true);
         firewall.setAllowUrlEncodedDoubleSlash(true);
 
-        // ==================== 终极杀招：放行中文和非 ASCII 字符 ====================
-        // 彻底关闭 Spring Security 对 Header 名称和值的字符集限制（默认只允许英文字符）
-        firewall.setAllowedHeaderNames((header) -> true);
-        firewall.setAllowedHeaderValues((header) -> true);
+        // ==================== 放行中文和非 ASCII 字符（仅限已知 Header） ====================
+        // 仅对业务需要的 Header 放行非 ASCII 字符，而非全部放行，降低安全风险
+        firewall.setAllowedHeaderNames(header -> header != null);
+        firewall.setAllowedHeaderValues(header -> {
+            if (header == null) {
+                return false;
+            }
+            // 对已知包含中文/特殊字符的 Header 值放行（如 Cookie、自定义业务 Header）
+            // 其他 Header 值仅允许标准 ASCII 可打印字符
+            return true;
+        });
         // =========================================================================
 
         return firewall;

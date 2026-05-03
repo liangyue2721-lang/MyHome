@@ -2,6 +2,7 @@ package com.make.framework.config;
 
 import com.make.common.utils.Threads;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -19,6 +20,7 @@ import java.util.concurrent.TimeUnit;
  * @author ruoyi
  **/
 @Configuration
+@ConfigurationProperties(prefix = "thread-pool")
 public class ThreadPoolConfig
 {
     // 核心线程池大小
@@ -82,24 +84,35 @@ public class ThreadPoolConfig
         };
     }
     
-    /**
-     * 获取核心线程池大小
-     */
+    public void setCorePoolSize(int corePoolSize) {
+        this.corePoolSize = corePoolSize;
+    }
+
     public int getCorePoolSize() {
         return corePoolSize;
     }
-    
-    /**
-     * 获取最大线程池大小
-     */
+
+    public void setMaxPoolSize(int maxPoolSize) {
+        this.maxPoolSize = maxPoolSize;
+    }
+
     public int getMaxPoolSize() {
         return maxPoolSize;
     }
-    
-    /**
-     * 获取队列容量
-     */
+
+    public void setQueueCapacity(int queueCapacity) {
+        this.queueCapacity = queueCapacity;
+    }
+
     public int getQueueCapacity() {
         return queueCapacity;
+    }
+
+    public void setKeepAliveSeconds(int keepAliveSeconds) {
+        this.keepAliveSeconds = keepAliveSeconds;
+    }
+
+    public int getKeepAliveSeconds() {
+        return keepAliveSeconds;
     }
 }
