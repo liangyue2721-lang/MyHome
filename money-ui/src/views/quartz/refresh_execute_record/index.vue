@@ -125,7 +125,7 @@
           <el-input v-model="form.nodeIp" placeholder="请输入执行节点IP"/>
         </el-form-item>
         <el-form-item label="任务执行时间" prop="executeTime">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.executeTime"
                           type="date"
                           value-format="yyyy-MM-dd"

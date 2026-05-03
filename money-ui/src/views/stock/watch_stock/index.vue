@@ -3,7 +3,7 @@
     <el-card shadow="never" class="search-wrapper mb-20">
       <el-form :model="queryParams" ref="queryForm" :inline="true" size="small">
         <el-form-item label="日期" prop="date">
-          <el-date-picker
+          <el-date-picker :editable="false"
             v-model="queryParams.date"
             type="date"
             placeholder="请选择日期"

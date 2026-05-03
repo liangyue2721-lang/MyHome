@@ -10,7 +10,7 @@
         />
       </el-form-item>
       <el-form-item label="交易日期" prop="tradeDate">
-        <el-date-picker clearable
+        <el-date-picker :editable="false" clearable
           v-model="queryParams.tradeDate"
           type="date"
           value-format="yyyy-MM-dd"
@@ -18,7 +18,7 @@
         </el-date-picker>
       </el-form-item>
       <el-form-item label="成交时刻" prop="tradeTime">
-        <el-date-picker clearable
+        <el-date-picker :editable="false" clearable
           v-model="queryParams.tradeTime"
           type="date"
           value-format="yyyy-MM-dd"
@@ -180,7 +180,7 @@
           <el-input v-model="form.stockCode" placeholder="请输入股票代码" />
         </el-form-item>
         <el-form-item label="交易日期" prop="tradeDate">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
             v-model="form.tradeDate"
             type="date"
             value-format="yyyy-MM-dd"
@@ -188,7 +188,7 @@
           </el-date-picker>
         </el-form-item>
         <el-form-item label="成交时刻" prop="tradeTime">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
             v-model="form.tradeTime"
             type="date"
             value-format="yyyy-MM-dd"

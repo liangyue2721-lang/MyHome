@@ -42,7 +42,7 @@
         />
       </el-form-item>
       <el-form-item label="计划执行时间" prop="scheduledTime">
-        <el-date-picker clearable
+        <el-date-picker :editable="false" clearable
                         v-model="queryParams.scheduledTime"
                         type="date"
                         value-format="yyyy-MM-dd"
@@ -50,7 +50,7 @@
         </el-date-picker>
       </el-form-item>
       <el-form-item label="进入队列时间" prop="enqueueTime">
-        <el-date-picker clearable
+        <el-date-picker :editable="false" clearable
                         v-model="queryParams.enqueueTime"
                         type="date"
                         value-format="yyyy-MM-dd"
@@ -58,7 +58,7 @@
         </el-date-picker>
       </el-form-item>
       <el-form-item label="实际开始执行时间" prop="startTime">
-        <el-date-picker clearable
+        <el-date-picker :editable="false" clearable
                         v-model="queryParams.startTime"
                         type="date"
                         value-format="yyyy-MM-dd"
@@ -220,7 +220,7 @@
           <el-input v-model="form.nodeId" placeholder="请输入当前执行节点ID"/>
         </el-form-item>
         <el-form-item label="计划执行时间" prop="scheduledTime">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.scheduledTime"
                           type="date"
                           value-format="yyyy-MM-dd"
@@ -228,7 +228,7 @@
           </el-date-picker>
         </el-form-item>
         <el-form-item label="进入队列时间" prop="enqueueTime">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.enqueueTime"
                           type="date"
                           value-format="yyyy-MM-dd"
@@ -236,7 +236,7 @@
           </el-date-picker>
         </el-form-item>
         <el-form-item label="实际开始执行时间" prop="startTime">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.startTime"
                           type="date"
                           value-format="yyyy-MM-dd"

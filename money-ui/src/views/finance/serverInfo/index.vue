@@ -157,7 +157,7 @@
           <el-input v-model="form.provider" placeholder="请输入服务提供商"/>
         </el-form-item>
         <el-form-item label="购买日期" prop="purchaseDate">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.purchaseDate"
                           type="date"
                           value-format="yyyy-MM-dd"
@@ -165,7 +165,7 @@
           </el-date-picker>
         </el-form-item>
         <el-form-item label="到期日期" prop="expireDate">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.expireDate"
                           type="date"
                           value-format="yyyy-MM-dd"

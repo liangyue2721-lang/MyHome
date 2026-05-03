@@ -18,7 +18,7 @@
         />
       </el-form-item>
       <el-form-item label="申购日期" prop="applyDate">
-        <el-date-picker clearable
+        <el-date-picker :editable="false" clearable
                         v-model="queryParams.applyDate"
                         type="date"
                         value-format="yyyy-MM-dd"
@@ -26,7 +26,7 @@
         </el-date-picker>
       </el-form-item>
       <el-form-item label="上市日期" prop="listingDate">
-        <el-date-picker clearable
+        <el-date-picker :editable="false" clearable
                         v-model="queryParams.listingDate"
                         type="date"
                         value-format="yyyy-MM-dd"
@@ -34,7 +34,7 @@
         </el-date-picker>
       </el-form-item>
       <el-form-item label="中签号公布日" prop="ballotNumDate">
-        <el-date-picker clearable
+        <el-date-picker :editable="false" clearable
                         v-model="queryParams.ballotNumDate"
                         type="date"
                         value-format="yyyy-MM-dd"
@@ -42,7 +42,7 @@
         </el-date-picker>
       </el-form-item>
       <el-form-item label="中签缴款日" prop="ballotPayDate">
-        <el-date-picker clearable
+        <el-date-picker :editable="false" clearable
                         v-model="queryParams.ballotPayDate"
                         type="date"
                         value-format="yyyy-MM-dd"
@@ -276,7 +276,7 @@
           <el-input v-model="form.newestPrice" placeholder="请输入最新价格"/>
         </el-form-item>
         <el-form-item label="申购日期" prop="applyDate">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.applyDate"
                           type="date"
                           value-format="yyyy-MM-dd"
@@ -284,7 +284,7 @@
           </el-date-picker>
         </el-form-item>
         <el-form-item label="中签号公布日" prop="ballotNumDate">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.ballotNumDate"
                           type="date"
                           value-format="yyyy-MM-dd"
@@ -292,7 +292,7 @@
           </el-date-picker>
         </el-form-item>
         <el-form-item label="中签缴款日" prop="ballotPayDate">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.ballotPayDate"
                           type="date"
                           value-format="yyyy-MM-dd"
@@ -300,7 +300,7 @@
           </el-date-picker>
         </el-form-item>
         <el-form-item label="上市日期" prop="listingDate">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.listingDate"
                           type="date"
                           value-format="yyyy-MM-dd"

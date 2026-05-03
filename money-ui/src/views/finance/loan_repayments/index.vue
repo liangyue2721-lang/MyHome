@@ -23,7 +23,7 @@
           />
         </el-form-item>
         <el-form-item label="还款日期" prop="repaymentDate">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="queryParams.repaymentDate"
                           type="date"
                           value-format="yyyy-MM-dd"
@@ -210,7 +210,7 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="还款日期" prop="repaymentDate">
-              <el-date-picker clearable
+              <el-date-picker :editable="false" clearable
                               style="width: 100%"
                               v-model="form.repaymentDate"
                               type="date"

@@ -26,7 +26,7 @@
         />
       </el-form-item>
       <el-form-item label="消费日期" prop="expenseDate">
-        <el-date-picker clearable
+        <el-date-picker :editable="false" clearable
                         v-model="queryParams.expenseDate"
                         type="date"
                         value-format="yyyy-MM-dd"
@@ -34,7 +34,7 @@
         </el-date-picker>
       </el-form-item>
       <el-form-item label="记录时间" prop="createdAt">
-        <el-date-picker clearable
+        <el-date-picker :editable="false" clearable
                         v-model="queryParams.createdAt"
                         type="date"
                         value-format="yyyy-MM-dd"
@@ -170,7 +170,7 @@
           <el-input v-model="form.merchant" placeholder="请输入商户名称"/>
         </el-form-item>
         <el-form-item label="消费日期" prop="expenseDate">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.expenseDate"
                           type="date"
                           value-format="yyyy-MM-dd"
@@ -178,7 +178,7 @@
           </el-date-picker>
         </el-form-item>
 <!--        <el-form-item label="记录时间" prop="createdAt">-->
-<!--          <el-date-picker clearable-->
+<!--          <el-date-picker :editable="false" clearable-->
 <!--                          v-model="form.createdAt"-->
 <!--                          type="date"-->
 <!--                          value-format="yyyy-MM-dd"-->

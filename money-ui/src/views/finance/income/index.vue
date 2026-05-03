@@ -20,7 +20,7 @@
 <!--        </el-select>-->
 <!--      </el-form-item>-->
       <el-form-item label="收入日期" prop="incomeDate">
-        <el-date-picker clearable
+        <el-date-picker :editable="false" clearable
                         v-model="queryParams.incomeDate"
                         type="date"
                         value-format="yyyy-MM-dd"
@@ -28,7 +28,7 @@
         </el-date-picker>
       </el-form-item>
       <el-form-item label="记录时间" prop="createdAt">
-        <el-date-picker clearable
+        <el-date-picker :editable="false" clearable
                         v-model="queryParams.createdAt"
                         type="date"
                         value-format="yyyy-MM-dd"
@@ -160,7 +160,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="收入日期" prop="incomeDate">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.incomeDate"
                           type="date"
                           value-format="yyyy-MM-dd"

@@ -20,7 +20,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="工资月份" prop="createdAt">
-          <el-date-picker
+          <el-date-picker :editable="false"
             clearable
             v-model="queryParams.createdAt"
             type="month"
@@ -202,13 +202,13 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="工资月份" prop="createdAt">
-              <el-date-picker style="width: 100%" clearable v-model="form.createdAt" type="date"
+              <el-date-picker :editable="false" style="width: 100%" clearable v-model="form.createdAt" type="date"
                               value-format="yyyy-MM-dd" placeholder="归属月份"></el-date-picker>
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="发放日期" prop="issueDate">
-              <el-date-picker style="width: 100%" clearable v-model="form.issueDate" type="date"
+              <el-date-picker :editable="false" style="width: 100%" clearable v-model="form.issueDate" type="date"
                               value-format="yyyy-MM-dd" placeholder="实际发放日"></el-date-picker>
             </el-form-item>
           </el-col>

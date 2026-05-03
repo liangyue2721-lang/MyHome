@@ -3,7 +3,7 @@
     <el-card class="search-card" shadow="never" v-show="showSearch">
       <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" label-width="80px">
         <el-form-item label="账单月份" prop="billMonth">
-          <el-date-picker
+          <el-date-picker :editable="false"
             v-model="queryParams.billMonth"
             type="month"
             value-format="yyyy-MM"
@@ -110,7 +110,7 @@
           <el-row :gutter="20">
             <el-col :span="12">
               <el-form-item label="账单月份" prop="billMonth">
-                <el-date-picker
+                <el-date-picker :editable="false"
                   clearable
                   style="width: 100%;"
                   v-model="form.billMonth"

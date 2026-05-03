@@ -2,7 +2,7 @@
   <div class="app-container">
     <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch" label-width="68px">
       <el-form-item label="交易时间" prop="transactionTime">
-        <el-date-picker clearable
+        <el-date-picker :editable="false" clearable
                         v-model="queryParams.transactionTime"
                         type="date"
                         value-format="yyyy-MM-dd"
@@ -209,7 +209,7 @@
     <el-dialog :title="title" :visible.sync="open" width="500px" append-to-body>
       <el-form ref="form" :model="form" :rules="rules" label-width="80px">
         <el-form-item label="交易时间" prop="transactionTime">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.transactionTime"
                           type="date"
                           value-format="yyyy-MM-dd"
@@ -247,7 +247,7 @@
           <el-input v-model="form.note" type="textarea" placeholder="请输入内容"/>
         </el-form-item>
         <el-form-item label="创建时间" prop="createdAt">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.createdAt"
                           type="date"
                           value-format="yyyy-MM-dd"
@@ -255,7 +255,7 @@
           </el-date-picker>
         </el-form-item>
         <el-form-item label="更新时间" prop="updatedAt">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.updatedAt"
                           type="date"
                           value-format="yyyy-MM-dd"

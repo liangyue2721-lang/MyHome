@@ -10,7 +10,7 @@
         />
       </el-form-item>
       <el-form-item label="交易日期" prop="date">
-        <el-date-picker clearable
+        <el-date-picker :editable="false" clearable
                         v-model="queryParams.date"
                         type="date"
                         value-format="yyyy-MM-dd"
@@ -181,7 +181,7 @@
           <el-input v-model="form.SubBranch" placeholder="请输入分行"/>
         </el-form-item>
         <el-form-item label="交易日期" prop="Date">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.Date"
                           type="date"
                           value-format="yyyy-MM-dd"
@@ -207,7 +207,7 @@
           <el-input v-model="form.note" type="textarea" placeholder="请输入内容"/>
         </el-form-item>
         <el-form-item label="创建时间" prop="createdAt">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.createdAt"
                           type="date"
                           value-format="yyyy-MM-dd"
@@ -215,7 +215,7 @@
           </el-date-picker>
         </el-form-item>
         <el-form-item label="更新时间" prop="updatedAt">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.updatedAt"
                           type="date"
                           value-format="yyyy-MM-dd"

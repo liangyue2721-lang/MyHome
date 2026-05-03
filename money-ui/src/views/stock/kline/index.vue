@@ -90,7 +90,7 @@
         </el-select>
       </el-form-item>
       <el-form-item label="交易日期" prop="tradeDate">
-        <el-date-picker clearable
+        <el-date-picker :editable="false" clearable
                         v-model="queryParams.tradeDate"
                         type="date"
                         value-format="yyyy-MM-dd"
@@ -217,7 +217,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="交易日期" prop="tradeDate">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.tradeDate"
                           type="date"
                           value-format="yyyy-MM-dd"
