@@ -5,7 +5,7 @@
       <el-col :span="12" :xs="24">
         <el-card shadow="hover" class="chart-card">
           <div slot="header" class="clearfix">
-            <span><i class="el-icon-pie-chart"></i> 出资方支出分布</span>
+            <span><i class="el-icon-pie-chart"></i> 出资支出分布</span>
           </div>
           <div id="payerRingChart" style="height: 300px;"></div>
         </el-card>
