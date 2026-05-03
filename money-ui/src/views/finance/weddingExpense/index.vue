@@ -449,36 +449,43 @@ export default {
       const option = {
         tooltip: {
           trigger: 'item',
-          formatter: '{b}: {c} ({d}%)'
+          formatter: '{b}: {c}元 ({d}%)'
         },
         legend: {
-          top: '5%',
-          left: 'center'
+          bottom: '5%',
+          left: 'center',
+          icon: 'circle'
         },
+        color: ['#409EFF', '#67C23A', '#E6A23C', '#F56C6C', '#909399'],
         series: [
           {
             name: '出资方支出',
             type: 'pie',
-            radius: ['40%', '70%'],
-            avoidLabelOverlap: false,
+            radius: ['45%', '70%'],
+            avoidLabelOverlap: true,
             itemStyle: {
               borderRadius: 10,
               borderColor: '#fff',
               borderWidth: 2
             },
             label: {
-              show: false,
-              position: 'center'
+              show: true,
+              formatter: '{b}: {c}元',
+              color: '#666',
+              fontSize: 14
             },
             emphasis: {
               label: {
                 show: true,
-                fontSize: '20',
+                fontSize: '18',
                 fontWeight: 'bold'
               }
             },
             labelLine: {
-              show: false
+              show: true,
+              smooth: 0.2,
+              length: 10,
+              length2: 20
             },
             data: seriesData
           }
@@ -496,27 +503,30 @@ export default {
       const totalAmount = data.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 
       const option = {
+        color: ['#409EFF', '#67C23A', '#E6A23C', '#F56C6C', '#909399'],
         series: [{
           type: 'liquidFill',
-          data: [0.6, 0.55, 0.5],
+          data: [0.65, 0.6, 0.55],
           radius: '80%',
           color: ['#409EFF', '#66b1ff', '#8cc5ff'],
           backgroundStyle: {
-             color: '#f0f2f5'
+             color: 'rgba(64, 158, 255, 0.1)'
           },
           label: {
             formatter: function() {
-              return '总支出\n' + totalAmount.toLocaleString() + '元';
+              return '总支出\n' + totalAmount.toLocaleString() + ' 元';
             },
-            fontSize: 28,
-            color: '#409EFF',
-            insideColor: '#fff'
+            fontSize: 32,
+            fontWeight: 'bold',
+            color: '#333',
+            insideColor: '#fff',
+            lineHeight: 40
           },
           outline: {
             show: true,
-            borderDistance: 0,
+            borderDistance: 5,
             itemStyle: {
-              borderWidth: 2,
+              borderWidth: 3,
               borderColor: '#409EFF',
             }
           }
