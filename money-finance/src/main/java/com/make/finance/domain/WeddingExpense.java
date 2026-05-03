@@ -30,28 +30,9 @@ public class WeddingExpense extends BaseEntity {
     private Long userId;
 
     /**
-     * 婚礼名称
+     * 支出分类
      */
-    @Excel(name = "婚礼名称")
-    private String weddingName;
-
-    /**
-     * 婚礼日期
-     */
-    @JsonFormat(pattern = "yyyy-MM-dd")
-    @Excel(name = "婚礼日期", width = 30, dateFormat = "yyyy-MM-dd")
-    private Date weddingDate;
-
-    /**
-     * 婚礼举办城市
-     */
-    @Excel(name = "婚礼举办城市")
-    private String weddingCity;
-
-    /**
-     * 支出分类（酒席/婚纱/摄影/主持/场地/礼品/其他）
-     */
-    @Excel(name = "支出分类", readConverterExp = "酒=席/婚纱/摄影/主持/场地/礼品/其他")
+    @Excel(name = "支出分类")
     private String expenseCategory;
 
     /**
@@ -63,7 +44,7 @@ public class WeddingExpense extends BaseEntity {
     /**
      * 支出金额（元）
      */
-    @Excel(name = "支出金额", readConverterExp = "支出金额（元）")
+    @Excel(name = "支出金额")
     private BigDecimal amount;
 
     /**
@@ -74,10 +55,16 @@ public class WeddingExpense extends BaseEntity {
     private Date paymentDate;
 
     /**
-     * 收款方
+     * 婚礼阶段
      */
-    @Excel(name = "收款方")
-    private String payee;
+    @Excel(name = "婚礼阶段")
+    private Integer stage;
+
+    /**
+     * 出资方归属
+     */
+    @Excel(name = "出资方归属")
+    private Integer payerType;
 
     /**
      * 付款人
@@ -124,30 +111,6 @@ public class WeddingExpense extends BaseEntity {
         return userId;
     }
 
-    public void setWeddingName(String weddingName) {
-        this.weddingName = weddingName;
-    }
-
-    public String getWeddingName() {
-        return weddingName;
-    }
-
-    public void setWeddingDate(Date weddingDate) {
-        this.weddingDate = weddingDate;
-    }
-
-    public Date getWeddingDate() {
-        return weddingDate;
-    }
-
-    public void setWeddingCity(String weddingCity) {
-        this.weddingCity = weddingCity;
-    }
-
-    public String getWeddingCity() {
-        return weddingCity;
-    }
-
     public void setExpenseCategory(String expenseCategory) {
         this.expenseCategory = expenseCategory;
     }
@@ -180,12 +143,20 @@ public class WeddingExpense extends BaseEntity {
         return paymentDate;
     }
 
-    public void setPayee(String payee) {
-        this.payee = payee;
+    public Integer getStage() {
+        return stage;
     }
 
-    public String getPayee() {
-        return payee;
+    public void setStage(Integer stage) {
+        this.stage = stage;
+    }
+
+    public Integer getPayerType() {
+        return payerType;
+    }
+
+    public void setPayerType(Integer payerType) {
+        this.payerType = payerType;
     }
 
     public void setPayer(String payer) {
@@ -233,14 +204,12 @@ public class WeddingExpense extends BaseEntity {
         return new ToStringBuilder(this, ToStringStyle.MULTI_LINE_STYLE)
                 .append("id", getId())
                 .append("userId", getUserId())
-                .append("weddingName", getWeddingName())
-                .append("weddingDate", getWeddingDate())
-                .append("weddingCity", getWeddingCity())
                 .append("expenseCategory", getExpenseCategory())
                 .append("expenseItem", getExpenseItem())
                 .append("amount", getAmount())
                 .append("paymentDate", getPaymentDate())
-                .append("payee", getPayee())
+                .append("stage", getStage())
+                .append("payerType", getPayerType())
                 .append("payer", getPayer())
                 .append("notes", getNotes())
                 .append("createdAt", getCreatedAt())

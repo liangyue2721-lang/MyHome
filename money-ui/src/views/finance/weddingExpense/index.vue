@@ -5,7 +5,7 @@
       <el-col :span="12" :xs="24">
         <el-card shadow="hover" class="chart-card">
           <div slot="header" class="clearfix">
-            <span><i class="el-icon-pie-chart"></i> 付款人支出分布</span>
+            <span><i class="el-icon-pie-chart"></i> 出资方支出分布</span>
           </div>
           <div id="payerRingChart" style="height: 300px;"></div>
         </el-card>
@@ -23,39 +23,46 @@
     <!-- Search Form -->
     <el-card shadow="never" class="mb20">
       <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch" label-width="68px">
-<!--        <el-form-item label="用户" prop="userId">-->
-<!--          <el-select v-model="queryParams.userId" placeholder="请选择用户" clearable filterable style="width: 200px">-->
-<!--            <el-option-->
-<!--              v-for="u in users"-->
-<!--              :key="u.userId"-->
-<!--              :label="u.nickName"-->
-<!--              :value="u.userId"-->
-<!--            />-->
-<!--          </el-select>-->
-<!--        </el-form-item>-->
-        <el-form-item label="婚礼名称" prop="weddingName">
-          <el-input
-            v-model="queryParams.weddingName"
-            placeholder="请输入婚礼名称"
-            clearable
-            @keyup.enter.native="handleQuery"
-          />
+        <el-form-item label="婚礼阶段" prop="stage">
+          <el-select v-model="queryParams.stage" placeholder="请选择婚礼阶段" clearable>
+            <el-option
+              v-for="dict in dict.type.wedding_stage"
+              :key="dict.value"
+              :label="dict.label"
+              :value="dict.value"
+            />
+          </el-select>
         </el-form-item>
-        <el-form-item label="付款人" prop="payer">
-          <el-input
-            v-model="queryParams.payer"
-            placeholder="请输入付款人"
-            clearable
-            @keyup.enter.native="handleQuery"
-          />
+        <el-form-item label="出资方" prop="payerType">
+          <el-select v-model="queryParams.payerType" placeholder="请选择出资方归属" clearable>
+            <el-option
+              v-for="dict in dict.type.wedding_payer_type"
+              :key="dict.value"
+              :label="dict.label"
+              :value="dict.value"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="支出分类" prop="expenseCategory">
-          <el-input
-            v-model="queryParams.expenseCategory"
-            placeholder="请输入支出分类"
-            clearable
-            @keyup.enter.native="handleQuery"
-          />
+          <el-select v-model="queryParams.expenseCategory" placeholder="请选择支出分类" clearable filterable>
+            <el-option
+              v-for="dict in dict.type.wedding_expense_category"
+              :key="dict.value"
+              :label="dict.label"
+              :value="dict.value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="支付日期">
+          <el-date-picker
+            v-model="daterangePaymentDate"
+            style="width: 240px"
+            value-format="yyyy-MM-dd"
+            type="daterange"
+            range-separator="-"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+          ></el-date-picker>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" icon="el-icon-search" size="mini" @click="handleQuery">搜索</el-button>
@@ -115,25 +122,24 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <!-- Data Table -->
     <el-table v-loading="loading" :data="weddingExpenseList" @selection-change="handleSelectionChange" border stripe>
       <el-table-column type="selection" width="55" align="center"/>
-      <!-- <el-table-column label="主键ID" align="center" prop="id"/> -->
-      <el-table-column label="婚礼名称" align="center" prop="weddingName"/>
-      <el-table-column label="付款人" align="center" prop="payer">
+      <el-table-column label="婚礼阶段" align="center" prop="stage">
         <template slot-scope="scope">
-          <el-tag size="small" v-if="scope.row.payer">{{ scope.row.payer }}</el-tag>
-          <span v-else>-</span>
+          <dict-tag :options="dict.type.wedding_stage" :value="scope.row.stage"/>
         </template>
       </el-table-column>
-      <el-table-column label="婚礼日期" align="center" prop="weddingDate" width="120">
+      <el-table-column label="出资方归属" align="center" prop="payerType">
         <template slot-scope="scope">
-          <span>{{ parseTime(scope.row.weddingDate, '{y}-{m}-{d}') }}</span>
+          <dict-tag :options="dict.type.wedding_payer_type" :value="scope.row.payerType"/>
         </template>
       </el-table-column>
-      <el-table-column label="城市" align="center" prop="weddingCity"/>
-      <el-table-column label="支出分类" align="center" prop="expenseCategory"/>
-      <el-table-column label="具体项目" align="center" prop="expenseItem"/>
+      <el-table-column label="支出分类" align="center" prop="expenseCategory">
+        <template slot-scope="scope">
+          <dict-tag :options="dict.type.wedding_expense_category" :value="scope.row.expenseCategory"/>
+        </template>
+      </el-table-column>
+      <el-table-column label="具体项目" align="center" prop="expenseItem" show-overflow-tooltip/>
       <el-table-column label="金额 (元)" align="center" prop="amount">
         <template slot-scope="scope">
           <span style="font-weight: bold; color: #F56C6C;">{{ scope.row.amount }}</span>
@@ -144,7 +150,12 @@
           <span>{{ parseTime(scope.row.paymentDate, '{y}-{m}-{d}') }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="收款方" align="center" prop="payee"/>
+      <el-table-column label="经手付款人" align="center" prop="payer">
+        <template slot-scope="scope">
+          <el-tag size="small" v-if="scope.row.payer">{{ scope.row.payer }}</el-tag>
+          <span v-else>-</span>
+        </template>
+      </el-table-column>
       <el-table-column label="备注" align="center" prop="notes" show-overflow-tooltip/>
       <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
         <template slot-scope="scope">
@@ -181,45 +192,41 @@
       <el-form ref="form" :model="form" :rules="rules" label-width="100px">
         <el-row>
           <el-col :span="12">
-            <el-form-item label="婚礼名称" prop="weddingName">
-              <el-input v-model="form.weddingName" placeholder="请输入婚礼名称"/>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="婚礼日期" prop="weddingDate">
-              <el-date-picker clearable
-                              v-model="form.weddingDate"
-                              type="date"
-                              value-format="yyyy-MM-dd"
-                              placeholder="请选择婚礼日期"
-                              style="width: 100%">
-              </el-date-picker>
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row>
-          <el-col :span="12">
-            <el-form-item label="付款人" prop="payer">
-              <el-select v-model="form.payer" placeholder="请选择付款人" filterable style="width: 100%">
+            <el-form-item label="婚礼阶段" prop="stage">
+              <el-select v-model="form.stage" placeholder="请选择婚礼阶段" style="width: 100%">
                 <el-option
-                  v-for="u in users"
-                  :key="u.userId"
-                  :label="u.nickName"
-                  :value="u.nickName"
-                />
+                  v-for="dict in dict.type.wedding_stage"
+                  :key="dict.value"
+                  :label="dict.label"
+                  :value="parseInt(dict.value)"
+                ></el-option>
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="城市" prop="weddingCity">
-              <el-input v-model="form.weddingCity" placeholder="请输入婚礼举办城市"/>
+            <el-form-item label="出资方归属" prop="payerType">
+              <el-select v-model="form.payerType" placeholder="请选择出资方归属" style="width: 100%">
+                <el-option
+                  v-for="dict in dict.type.wedding_payer_type"
+                  :key="dict.value"
+                  :label="dict.label"
+                  :value="parseInt(dict.value)"
+                ></el-option>
+              </el-select>
             </el-form-item>
           </el-col>
         </el-row>
         <el-row>
           <el-col :span="12">
             <el-form-item label="支出分类" prop="expenseCategory">
-              <el-input v-model="form.expenseCategory" placeholder="例如：酒席、婚纱"/>
+              <el-select v-model="form.expenseCategory" placeholder="请选择支出分类" filterable allow-create default-first-option style="width: 100%">
+                <el-option
+                  v-for="dict in dict.type.wedding_expense_category"
+                  :key="dict.value"
+                  :label="dict.label"
+                  :value="dict.value"
+                ></el-option>
+              </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -246,9 +253,20 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-form-item label="收款方" prop="payee">
-          <el-input v-model="form.payee" placeholder="请输入收款方"/>
-        </el-form-item>
+        <el-row>
+          <el-col :span="12">
+            <el-form-item label="经手付款人" prop="payer">
+              <el-select v-model="form.payer" placeholder="请选择付款人" filterable style="width: 100%">
+                <el-option
+                  v-for="u in users"
+                  :key="u.userId"
+                  :label="u.nickName"
+                  :value="u.nickName"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
         <el-form-item label="备注说明" prop="notes">
           <el-input v-model="form.notes" type="textarea" placeholder="请输入内容"/>
         </el-form-item>
@@ -275,6 +293,7 @@ import {listUser} from "@/api/stock/dropdown_component";
 
 export default {
   name: "WeddingExpense",
+  dicts: ['wedding_stage', 'wedding_payer_type', 'wedding_expense_category'],
   data() {
     return {
       // 遮罩层
@@ -297,20 +316,20 @@ export default {
       title: "",
       // 是否显示弹出层
       open: false,
+      // 支付日期范围
+      daterangePaymentDate: [],
       // 查询参数
       queryParams: {
         pageNum: 1,
         pageSize: 10,
         userId: null,
-        weddingName: null,
-        weddingDate: null,
-        weddingCity: null,
         expenseCategory: null,
         expenseItem: null,
         amount: null,
         paymentDate: null,
-        payee: null,
         payer: null,
+        stage: null,
+        payerType: null,
         notes: null,
         updatedAt: null,
       },
@@ -318,14 +337,20 @@ export default {
       form: {},
       // 表单校验
       rules: {
+        stage: [
+          {required: true, message: "婚礼阶段不能为空", trigger: "change"}
+        ],
+        payerType: [
+          {required: true, message: "出资方归属不能为空", trigger: "change"}
+        ],
         expenseCategory: [
-          {required: true, message: "支出分类不能为空", trigger: "blur"}
+          {required: true, message: "支出分类不能为空", trigger: "change"}
         ],
         amount: [
           {required: true, message: "支出金额不能为空", trigger: "blur"}
         ],
-        weddingDate: [
-           {required: true, message: "婚礼日期不能为空", trigger: "blur"}
+        paymentDate: [
+           {required: true, message: "支付日期不能为空", trigger: "blur"}
         ]
       },
       // Charts
@@ -359,8 +384,6 @@ export default {
         // 尝试匹配当前登录用户
         const savedUsername = this.$cookies.get('username');
         if (savedUsername && this.users.length > 0) {
-           // 注意：users里的结构通常是 { userId, userName, nickName }
-           // 这里我们尝试匹配 userName 或 nickName
            const matchedUser = this.users.find(u => u.userName === savedUsername || u.nickName === savedUsername);
            if (matchedUser) {
              this.queryParams.userId = matchedUser.userId;
@@ -373,6 +396,11 @@ export default {
     /** 查询婚礼支出记录列表 */
     getList() {
       this.loading = true
+      this.queryParams.params = {};
+      if (null != this.daterangePaymentDate && '' != this.daterangePaymentDate) {
+        this.queryParams.params["beginPaymentDate"] = this.daterangePaymentDate[0];
+        this.queryParams.params["endPaymentDate"] = this.daterangePaymentDate[1];
+      }
       listWeddingExpense(this.queryParams).then(response => {
         this.weddingExpenseList = response.rows
         this.total = response.total
@@ -398,13 +426,18 @@ export default {
       if (this.charts.payerRing) this.charts.payerRing.dispose();
       this.charts.payerRing = echarts.init(dom);
 
-      // Aggregation
+      // Aggregation based on payerType using dicts mapping
       const payerMap = {};
       let totalAmount = 0;
       data.forEach(item => {
-        const payer = item.payer || '未知';
+        let payerName = '未知';
+        if (item.payerType !== null && item.payerType !== undefined && this.dict.type.wedding_payer_type) {
+           const dictItem = this.dict.type.wedding_payer_type.find(d => parseInt(d.value) === item.payerType);
+           if (dictItem) payerName = dictItem.label;
+        }
+
         const amount = Number(item.amount) || 0;
-        payerMap[payer] = (payerMap[payer] || 0) + amount;
+        payerMap[payerName] = (payerMap[payerName] || 0) + amount;
         totalAmount += amount;
       });
 
@@ -424,7 +457,7 @@ export default {
         },
         series: [
           {
-            name: '付款人支出',
+            name: '出资方支出',
             type: 'pie',
             radius: ['40%', '70%'],
             avoidLabelOverlap: false,
@@ -461,10 +494,6 @@ export default {
       this.charts.totalLiquid = echarts.init(dom);
 
       const totalAmount = data.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-
-      // Liquid fill typically expects a value between 0 and 1.
-      // Since we just want to show the total amount, we can fake a "fullness" or just show it.
-      // We will set it to 0.6 (60%) for visual effect and display the total amount as text.
 
       const option = {
         series: [{
@@ -515,14 +544,12 @@ export default {
       this.form = {
         id: null,
         userId: this.queryParams.userId, // Keep userId
-        weddingName: null,
-        weddingDate: null,
-        weddingCity: null,
+        stage: null,
+        payerType: null,
         expenseCategory: null,
         expenseItem: null,
         amount: null,
         paymentDate: null,
-        payee: null,
         payer: null,
         notes: null,
         createdAt: null,
@@ -538,10 +565,8 @@ export default {
     },
     /** 重置按钮操作 */
     resetQuery() {
+      this.daterangePaymentDate = []
       this.resetForm("queryForm")
-      // restore userId if needed, but resetForm might clear it if it's in the form.
-      // queryForm matches props. We should verify if userId is in queryForm?
-      // No, queryParams.userId is not bound to a form field in template, so resetForm("queryForm") won't touch it.
       this.handleQuery()
     },
     // 多选框选中数据

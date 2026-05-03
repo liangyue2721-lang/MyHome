@@ -7,14 +7,12 @@
     <resultMap type="WeddingExpense" id="WeddingExpenseResult">
         <result property="id" column="id"/>
         <result property="userId" column="user_id"/>
-        <result property="weddingName" column="wedding_name"/>
-        <result property="weddingDate" column="wedding_date"/>
-        <result property="weddingCity" column="wedding_city"/>
         <result property="expenseCategory" column="expense_category"/>
         <result property="expenseItem" column="expense_item"/>
         <result property="amount" column="amount"/>
         <result property="paymentDate" column="payment_date"/>
-        <result property="payee" column="payee"/>
+        <result property="stage" column="stage"/>
+        <result property="payerType" column="payer_type"/>
         <result property="payer" column="payer"/>
         <result property="notes" column="notes"/>
         <result property="createdAt" column="created_at"/>
@@ -25,14 +23,12 @@
     <sql id="selectWeddingExpenseVo">
         select id,
                user_id,
-               wedding_name,
-               wedding_date,
-               wedding_city,
                expense_category,
                expense_item,
                amount,
                payment_date,
-               payee,
+               stage,
+               payer_type,
                payer,
                notes,
                created_at,
@@ -44,16 +40,15 @@
     <select id="selectWeddingExpenseList" parameterType="WeddingExpense" resultMap="WeddingExpenseResult">
         <include refid="selectWeddingExpenseVo"/>
         <where>
-            <if test="weddingName != null  and weddingName != ''">and wedding_name like concat('%', #{weddingName},
-                '%')
-            </if>
-            <if test="weddingDate != null ">and wedding_date = #{weddingDate}</if>
-            <if test="weddingCity != null  and weddingCity != ''">and wedding_city = #{weddingCity}</if>
             <if test="expenseCategory != null  and expenseCategory != ''">and expense_category = #{expenseCategory}</if>
             <if test="expenseItem != null  and expenseItem != ''">and expense_item = #{expenseItem}</if>
             <if test="amount != null ">and amount = #{amount}</if>
             <if test="paymentDate != null ">and payment_date = #{paymentDate}</if>
-            <if test="payee != null  and payee != ''">and payee = #{payee}</if>
+            <if test="params.beginPaymentDate != null and params.beginPaymentDate != '' and params.endPaymentDate != null and params.endPaymentDate != ''">
+                and payment_date between #{params.beginPaymentDate} and #{params.endPaymentDate}
+            </if>
+            <if test="stage != null ">and stage = #{stage}</if>
+            <if test="payerType != null ">and payer_type = #{payerType}</if>
             <if test="payer != null  and payer != ''">and payer = #{payer}</if>
             <if test="notes != null  and notes != ''">and notes = #{notes}</if>
             <if test="updatedAt != null ">and updated_at = #{updatedAt}</if>
@@ -69,14 +64,12 @@
         insert into wedding_expense
         <trim prefix="(" suffix=")" suffixOverrides=",">
             <if test="userId != null">user_id,</if>
-            <if test="weddingName != null">wedding_name,</if>
-            <if test="weddingDate != null">wedding_date,</if>
-            <if test="weddingCity != null">wedding_city,</if>
             <if test="expenseCategory != null and expenseCategory != ''">expense_category,</if>
             <if test="expenseItem != null">expense_item,</if>
             <if test="amount != null">amount,</if>
             <if test="paymentDate != null">payment_date,</if>
-            <if test="payee != null">payee,</if>
+            <if test="stage != null">stage,</if>
+            <if test="payerType != null">payer_type,</if>
             <if test="payer != null">payer,</if>
             <if test="notes != null">notes,</if>
             <if test="createdAt != null">created_at,</if>
@@ -85,14 +78,12 @@
         </trim>
         <trim prefix="values (" suffix=")" suffixOverrides=",">
             <if test="userId != null">#{userId},</if>
-            <if test="weddingName != null">#{weddingName},</if>
-            <if test="weddingDate != null">#{weddingDate},</if>
-            <if test="weddingCity != null">#{weddingCity},</if>
             <if test="expenseCategory != null and expenseCategory != ''">#{expenseCategory},</if>
             <if test="expenseItem != null">#{expenseItem},</if>
             <if test="amount != null">#{amount},</if>
             <if test="paymentDate != null">#{paymentDate},</if>
-            <if test="payee != null">#{payee},</if>
+            <if test="stage != null">#{stage},</if>
+            <if test="payerType != null">#{payerType},</if>
             <if test="payer != null">#{payer},</if>
             <if test="notes != null">#{notes},</if>
             <if test="createdAt != null">#{createdAt},</if>
@@ -105,14 +96,12 @@
         update wedding_expense
         <trim prefix="SET" suffixOverrides=",">
             <if test="userId != null">user_id = #{userId},</if>
-            <if test="weddingName != null">wedding_name = #{weddingName},</if>
-            <if test="weddingDate != null">wedding_date = #{weddingDate},</if>
-            <if test="weddingCity != null">wedding_city = #{weddingCity},</if>
             <if test="expenseCategory != null and expenseCategory != ''">expense_category = #{expenseCategory},</if>
             <if test="expenseItem != null">expense_item = #{expenseItem},</if>
             <if test="amount != null">amount = #{amount},</if>
             <if test="paymentDate != null">payment_date = #{paymentDate},</if>
-            <if test="payee != null">payee = #{payee},</if>
+            <if test="stage != null">stage = #{stage},</if>
+            <if test="payerType != null">payer_type = #{payerType},</if>
             <if test="payer != null">payer = #{payer},</if>
             <if test="notes != null">notes = #{notes},</if>
             <if test="createdAt != null">created_at = #{createdAt},</if>
