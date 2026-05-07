@@ -209,41 +209,104 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
+        <div class="mb8" style="margin-bottom: 20px; margin-top: 10px;">
+      <el-radio-group v-model="queryParams.rankDays" @change="handleQuery">
+        <el-radio :label="1">今日排行</el-radio>
+        <el-radio :label="3">3日排行</el-radio>
+        <el-radio :label="5">5日排行</el-radio>
+        <el-radio :label="10">10日排行</el-radio>
+      </el-radio-group>
+    </div>
+
     <el-table v-loading="loading" :data="stockFlowList" @selection-change="handleSelectionChange">
       <el-table-column type="selection" width="55" align="center"/>
-      <el-table-column label="主键ID" align="center" prop="id"/>
-      <el-table-column label="交易日期 (按天分区或查询过滤使用)" align="center" prop="tradeDate" width="180">
+      <el-table-column label="序号" type="index" width="50" align="center" />
+      <el-table-column label="代码" align="center" prop="stockCode">
         <template slot-scope="scope">
-          <span>{{ parseTime(scope.row.tradeDate, '{y}-{m}-{d}') }}</span>
+          <span style="color: #409EFF; cursor: pointer;">{{ scope.row.stockCode }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="股票代码" align="center" prop="stockCode"/>
-      <el-table-column label="股票名称" align="center" prop="stockName"/>
-      <el-table-column label="市场类型: 0-深交所, 1-上交所" align="center" prop="marketType"/>
-      <el-table-column label="最新价 (元)" align="center" prop="latestPrice"/>
-      <el-table-column label="涨跌幅 (%)" align="center" prop="changePercent"/>
-      <el-table-column label="当天成交总额 (元)" align="center" prop="totalAmount"/>
-      <el-table-column label="主力净流入净额 (元)" align="center" prop="mainNetInflow"/>
-      <el-table-column label="主力净流入占比 (%)" align="center" prop="mainInflowRatio"/>
-      <el-table-column label="超大单净流入额 (元)" align="center" prop="superLargeInflow"/>
-      <el-table-column label="超大单净流入占比 (%)" align="center" prop="superLargeRatio"/>
-      <el-table-column label="大单净流入额 (元)" align="center" prop="largeInflow"/>
-      <el-table-column label="大单净流入占比 (%)" align="center" prop="largeRatio"/>
-      <el-table-column label="中单净流入额 (元)" align="center" prop="mediumInflow"/>
-      <el-table-column label="中单净流入占比 (%)" align="center" prop="mediumRatio"/>
-      <el-table-column label="小单净流入额 (元)" align="center" prop="smallInflow"/>
-      <el-table-column label="小单净流入占比 (%)" align="center" prop="smallRatio"/>
-      <el-table-column label="源数据更新时间戳 (Unix秒)" align="center" prop="dataTimestamp"/>
-      <el-table-column label="记录创建时间" align="center" prop="createdAt" width="180">
+      <el-table-column label="名称" align="center" prop="stockName">
         <template slot-scope="scope">
-          <span>{{ parseTime(scope.row.createdAt, '{y}-{m}-{d}') }}</span>
+          <span style="color: #409EFF; cursor: pointer;">{{ scope.row.stockName }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="记录更新时间" align="center" prop="updatedAt" width="180">
+      <el-table-column label="最新价" align="center" prop="latestPrice">
         <template slot-scope="scope">
-          <span>{{ parseTime(scope.row.updatedAt, '{y}-{m}-{d}') }}</span>
+          <span :class="getColorClass(scope.row.changePercent)">{{ formatPrice(scope.row.latestPrice) }}</span>
         </template>
       </el-table-column>
+      <el-table-column :label="rankPrefix + '涨跌幅'" align="center" prop="changePercent">
+        <template slot-scope="scope">
+          <span :class="getColorClass(scope.row.changePercent)">{{ formatRatio(scope.row.changePercent) }}</span>
+        </template>
+      </el-table-column>
+
+      <el-table-column :label="rankPrefix + '主力净流入'" align="center">
+        <el-table-column label="净额" align="center" prop="mainNetInflow">
+          <template slot-scope="scope">
+            <span :class="getColorClass(scope.row.mainNetInflow)">{{ formatAmount(scope.row.mainNetInflow) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="净占比" align="center" prop="mainInflowRatio">
+          <template slot-scope="scope">
+            <span :class="getColorClass(scope.row.mainInflowRatio)">{{ formatRatio(scope.row.mainInflowRatio) }}</span>
+          </template>
+        </el-table-column>
+      </el-table-column>
+
+      <el-table-column :label="rankPrefix + '超大单净流入'" align="center">
+        <el-table-column label="净额" align="center" prop="superLargeInflow">
+          <template slot-scope="scope">
+            <span :class="getColorClass(scope.row.superLargeInflow)">{{ formatAmount(scope.row.superLargeInflow) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="净占比" align="center" prop="superLargeRatio">
+          <template slot-scope="scope">
+            <span :class="getColorClass(scope.row.superLargeRatio)">{{ formatRatio(scope.row.superLargeRatio) }}</span>
+          </template>
+        </el-table-column>
+      </el-table-column>
+
+      <el-table-column :label="rankPrefix + '大单净流入'" align="center">
+        <el-table-column label="净额" align="center" prop="largeInflow">
+          <template slot-scope="scope">
+            <span :class="getColorClass(scope.row.largeInflow)">{{ formatAmount(scope.row.largeInflow) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="净占比" align="center" prop="largeRatio">
+          <template slot-scope="scope">
+            <span :class="getColorClass(scope.row.largeRatio)">{{ formatRatio(scope.row.largeRatio) }}</span>
+          </template>
+        </el-table-column>
+      </el-table-column>
+
+      <el-table-column :label="rankPrefix + '中单净流入'" align="center">
+        <el-table-column label="净额" align="center" prop="mediumInflow">
+          <template slot-scope="scope">
+            <span :class="getColorClass(scope.row.mediumInflow)">{{ formatAmount(scope.row.mediumInflow) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="净占比" align="center" prop="mediumRatio">
+          <template slot-scope="scope">
+            <span :class="getColorClass(scope.row.mediumRatio)">{{ formatRatio(scope.row.mediumRatio) }}</span>
+          </template>
+        </el-table-column>
+      </el-table-column>
+
+      <el-table-column :label="rankPrefix + '小单净流入'" align="center">
+        <el-table-column label="净额" align="center" prop="smallInflow">
+          <template slot-scope="scope">
+            <span :class="getColorClass(scope.row.smallInflow)">{{ formatAmount(scope.row.smallInflow) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="净占比" align="center" prop="smallRatio">
+          <template slot-scope="scope">
+            <span :class="getColorClass(scope.row.smallRatio)">{{ formatRatio(scope.row.smallRatio) }}</span>
+          </template>
+        </el-table-column>
+      </el-table-column>
+
       <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
         <template slot-scope="scope">
           <el-button
@@ -363,6 +426,12 @@ import {listStockFlow, getStockFlow, delStockFlow, addStockFlow, updateStockFlow
 import {listUser} from "@/api/stock/dropdown_component";  // 获取用户列表API
 export default {
   name: "StockFlow",
+  computed: {
+    rankPrefix() {
+      return this.queryParams.rankDays === 1 ? '今日' : this.queryParams.rankDays + '日';
+    }
+  },
+
   data() {
     return {
       // 遮罩层
@@ -385,6 +454,7 @@ export default {
       open: false,
       // 查询参数
       queryParams: {
+        rankDays: 3,
         pageNum: 1,
         pageSize: 10,
         tradeDate: null,
@@ -440,6 +510,36 @@ export default {
     this.getList();
   },
   methods: {
+    formatAmount(amount) {
+      if (amount === null || amount === undefined) return '-';
+      const num = Number(amount);
+      if (isNaN(num)) return amount;
+      if (Math.abs(num) >= 100000000) {
+        return (num / 100000000).toFixed(2) + '亿';
+      } else if (Math.abs(num) >= 10000) {
+        return (num / 10000).toFixed(2) + '万';
+      } else {
+        return num.toFixed(2);
+      }
+    },
+    formatRatio(ratio) {
+      if (ratio === null || ratio === undefined) return '-';
+      const num = Number(ratio);
+      if (isNaN(num)) return ratio;
+      return num.toFixed(2) + '%';
+    },
+    formatPrice(price) {
+      if (price === null || price === undefined) return '-';
+      const num = Number(price);
+      if (isNaN(num)) return price;
+      return num.toFixed(2);
+    },
+    getColorClass(val) {
+      if (val === null || val === undefined) return '';
+      const num = Number(val);
+      if (isNaN(num) || num === 0) return '';
+      return num > 0 ? 'text-red' : 'text-green';
+    },
     /**
      * 初始化用户列表数据
      * @returns {Promise<void>} 异步操作完成Promise
@@ -602,3 +702,12 @@ export default {
   }
 }
 </script>
+
+<style scoped>
+.text-red {
+  color: #f56c6c;
+}
+.text-green {
+  color: #3f9000;
+}
+</style>
