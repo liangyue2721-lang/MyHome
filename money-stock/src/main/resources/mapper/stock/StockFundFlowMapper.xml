@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.make.stock.mapper.StockFundFlowMapper">
+
+    <resultMap type="StockFundFlow" id="StockFundFlowResult">
+        <result property="id" column="id"/>
+        <result property="tradeDate" column="trade_date"/>
+        <result property="stockCode" column="stock_code"/>
+        <result property="stockName" column="stock_name"/>
+        <result property="marketType" column="market_type"/>
+        <result property="latestPrice" column="latest_price"/>
+        <result property="changePercent" column="change_percent"/>
+        <result property="totalAmount" column="total_amount"/>
+        <result property="mainNetInflow" column="main_net_inflow"/>
+        <result property="mainInflowRatio" column="main_inflow_ratio"/>
+        <result property="superLargeInflow" column="super_large_inflow"/>
+        <result property="superLargeRatio" column="super_large_ratio"/>
+        <result property="largeInflow" column="large_inflow"/>
+        <result property="largeRatio" column="large_ratio"/>
+        <result property="mediumInflow" column="medium_inflow"/>
+        <result property="mediumRatio" column="medium_ratio"/>
+        <result property="smallInflow" column="small_inflow"/>
+        <result property="smallRatio" column="small_ratio"/>
+        <result property="dataTimestamp" column="data_timestamp"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="selectStockFundFlowVo">
+        select id,
+               trade_date,
+               stock_code,
+               stock_name,
+               market_type,
+               latest_price,
+               change_percent,
+               total_amount,
+               main_net_inflow,
+               main_inflow_ratio,
+               super_large_inflow,
+               super_large_ratio,
+               large_inflow,
+               large_ratio,
+               medium_inflow,
+               medium_ratio,
+               small_inflow,
+               small_ratio,
+               data_timestamp,
+               created_at,
+               updated_at
+        from stock_fund_flow
+    </sql>
+
+    <select id="selectStockFundFlowList" parameterType="StockFundFlow" resultMap="StockFundFlowResult">
+        <include refid="selectStockFundFlowVo"/>
+        <where>
+            <if test="tradeDate != null ">and trade_date = #{tradeDate}</if>
+            <if test="stockCode != null  and stockCode != ''">and stock_code = #{stockCode}</if>
+            <if test="stockName != null  and stockName != ''">and stock_name like concat('%', #{stockName}, '%')</if>
+            <if test="marketType != null ">and market_type = #{marketType}</if>
+            <if test="latestPrice != null ">and latest_price = #{latestPrice}</if>
+            <if test="changePercent != null ">and change_percent = #{changePercent}</if>
+            <if test="totalAmount != null ">and total_amount = #{totalAmount}</if>
+            <if test="mainNetInflow != null ">and main_net_inflow = #{mainNetInflow}</if>
+            <if test="mainInflowRatio != null ">and main_inflow_ratio = #{mainInflowRatio}</if>
+            <if test="superLargeInflow != null ">and super_large_inflow = #{superLargeInflow}</if>
+            <if test="superLargeRatio != null ">and super_large_ratio = #{superLargeRatio}</if>
+            <if test="largeInflow != null ">and large_inflow = #{largeInflow}</if>
+            <if test="largeRatio != null ">and large_ratio = #{largeRatio}</if>
+            <if test="mediumInflow != null ">and medium_inflow = #{mediumInflow}</if>
+            <if test="mediumRatio != null ">and medium_ratio = #{mediumRatio}</if>
+            <if test="smallInflow != null ">and small_inflow = #{smallInflow}</if>
+            <if test="smallRatio != null ">and small_ratio = #{smallRatio}</if>
+            <if test="dataTimestamp != null ">and data_timestamp = #{dataTimestamp}</if>
+            <if test="createdAt != null ">and created_at = #{createdAt}</if>
+            <if test="updatedAt != null ">and updated_at = #{updatedAt}</if>
+        </where>
+    </select>
+
+    <select id="selectStockFundFlowById" parameterType="String" resultMap="StockFundFlowResult">
+        <include refid="selectStockFundFlowVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertStockFundFlow" parameterType="StockFundFlow" useGeneratedKeys="true" keyProperty="id">
+        insert into stock_fund_flow
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="tradeDate != null">trade_date,</if>
+            <if test="stockCode != null and stockCode != ''">stock_code,</if>
+            <if test="stockName != null and stockName != ''">stock_name,</if>
+            <if test="marketType != null">market_type,</if>
+            <if test="latestPrice != null">latest_price,</if>
+            <if test="changePercent != null">change_percent,</if>
+            <if test="totalAmount != null">total_amount,</if>
+            <if test="mainNetInflow != null">main_net_inflow,</if>
+            <if test="mainInflowRatio != null">main_inflow_ratio,</if>
+            <if test="superLargeInflow != null">super_large_inflow,</if>
+            <if test="superLargeRatio != null">super_large_ratio,</if>
+            <if test="largeInflow != null">large_inflow,</if>
+            <if test="largeRatio != null">large_ratio,</if>
+            <if test="mediumInflow != null">medium_inflow,</if>
+            <if test="mediumRatio != null">medium_ratio,</if>
+            <if test="smallInflow != null">small_inflow,</if>
+            <if test="smallRatio != null">small_ratio,</if>
+            <if test="dataTimestamp != null">data_timestamp,</if>
+            <if test="createdAt != null">created_at,</if>
+            <if test="updatedAt != null">updated_at,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="tradeDate != null">#{tradeDate},</if>
+            <if test="stockCode != null and stockCode != ''">#{stockCode},</if>
+            <if test="stockName != null and stockName != ''">#{stockName},</if>
+            <if test="marketType != null">#{marketType},</if>
+            <if test="latestPrice != null">#{latestPrice},</if>
+            <if test="changePercent != null">#{changePercent},</if>
+            <if test="totalAmount != null">#{totalAmount},</if>
+            <if test="mainNetInflow != null">#{mainNetInflow},</if>
+            <if test="mainInflowRatio != null">#{mainInflowRatio},</if>
+            <if test="superLargeInflow != null">#{superLargeInflow},</if>
+            <if test="superLargeRatio != null">#{superLargeRatio},</if>
+            <if test="largeInflow != null">#{largeInflow},</if>
+            <if test="largeRatio != null">#{largeRatio},</if>
+            <if test="mediumInflow != null">#{mediumInflow},</if>
+            <if test="mediumRatio != null">#{mediumRatio},</if>
+            <if test="smallInflow != null">#{smallInflow},</if>
+            <if test="smallRatio != null">#{smallRatio},</if>
+            <if test="dataTimestamp != null">#{dataTimestamp},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+            <if test="updatedAt != null">#{updatedAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateStockFundFlow" parameterType="StockFundFlow">
+        update stock_fund_flow
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="tradeDate != null">trade_date = #{tradeDate},</if>
+            <if test="stockCode != null and stockCode != ''">stock_code = #{stockCode},</if>
+            <if test="stockName != null and stockName != ''">stock_name = #{stockName},</if>
+            <if test="marketType != null">market_type = #{marketType},</if>
+            <if test="latestPrice != null">latest_price = #{latestPrice},</if>
+            <if test="changePercent != null">change_percent = #{changePercent},</if>
+            <if test="totalAmount != null">total_amount = #{totalAmount},</if>
+            <if test="mainNetInflow != null">main_net_inflow = #{mainNetInflow},</if>
+            <if test="mainInflowRatio != null">main_inflow_ratio = #{mainInflowRatio},</if>
+            <if test="superLargeInflow != null">super_large_inflow = #{superLargeInflow},</if>
+            <if test="superLargeRatio != null">super_large_ratio = #{superLargeRatio},</if>
+            <if test="largeInflow != null">large_inflow = #{largeInflow},</if>
+            <if test="largeRatio != null">large_ratio = #{largeRatio},</if>
+            <if test="mediumInflow != null">medium_inflow = #{mediumInflow},</if>
+            <if test="mediumRatio != null">medium_ratio = #{mediumRatio},</if>
+            <if test="smallInflow != null">small_inflow = #{smallInflow},</if>
+            <if test="smallRatio != null">small_ratio = #{smallRatio},</if>
+            <if test="dataTimestamp != null">data_timestamp = #{dataTimestamp},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteStockFundFlowById" parameterType="String">
+        delete
+        from stock_fund_flow
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteStockFundFlowByIds" parameterType="String">
+        delete from stock_fund_flow where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>
