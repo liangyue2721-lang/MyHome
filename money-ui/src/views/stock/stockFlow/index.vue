@@ -349,7 +349,7 @@ export default {
       open: false,
       // 查询参数
       queryParams: {
-        rankDays: 3,
+        rankDays: 1,
         pageNum: 1,
         pageSize: 10,
         tradeDate: null,
