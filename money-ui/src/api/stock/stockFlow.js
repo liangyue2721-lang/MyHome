@@ -51,6 +51,15 @@ export function getDivergenceData() {
   })
 }
 
+// 获取指定股票的最新资金流向数据
+export function getLatestFundFlowByCodes(codes) {
+  return request({
+    url: '/stock/stockFlow/latestByCodes',
+    method: 'get',
+    params: { codes: codes.join(',') }
+  })
+}
+
 // 删除主力资金流向
 export function delStockFlow(id) {
   return request({

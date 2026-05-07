@@ -69,6 +69,12 @@
           </el-row>
         </el-card>
       </el-col>
+      <el-col :span="24">
+        <h3 style="margin-top: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px;">关注股票资金博弈</h3>
+      </el-col>
+      <el-col v-for="flow in stockFundFlows" :key="flow.stockCode" :xs="24" :sm="12" :md="8" :lg="6">
+        <fund-flow-pie-chart :flow-data="flow"></fund-flow-pie-chart>
+      </el-col>
     </el-row>
   </div>
 </template>
@@ -87,13 +93,21 @@ import {
   renderLoanRepaymentComparisonChart  // 近一年还贷对比
 } from "@/api/finance/pieChart";
 
+import {listWatch_stock} from "@/api/stock/watch_stock";
+import {getLatestFundFlowByCodes} from "@/api/stock/stockFlow";
+import FundFlowPieChart from "./FundFlowPieChart.vue";
+
 // 定义宋体字体栈
 const FONT_FAMILY = '"SimSun", "Songti SC", "STSong", serif';
 
 export default {
   name: 'Charts',
+  components: {
+    FundFlowPieChart
+  },
   data() {
     return {
+      stockFundFlows: [],
       charts: {
         transactionType: null,
         monthlyConsumption: null,
@@ -109,6 +123,7 @@ export default {
   mounted() {
     this.$nextTick(() => {
       this.loadAllCharts();
+      this.loadStockFundFlows();
       window.addEventListener('resize', this.resizeCharts);
     });
   },
@@ -117,6 +132,19 @@ export default {
     this.disposeCharts();
   },
   methods: {
+    loadStockFundFlows() {
+      listWatch_stock({}).then(res => {
+        if (res.rows && res.rows.length > 0) {
+          const codes = res.rows.map(item => item.stockCode);
+          getLatestFundFlowByCodes(codes).then(flowRes => {
+            if (flowRes.data) {
+              this.stockFundFlows = flowRes.data;
+            }
+          });
+        }
+      });
+    },
+
     // --- 基础图表管理 ---
     disposeCharts() {
       Object.values(this.charts).forEach(chart => chart && chart.dispose());
