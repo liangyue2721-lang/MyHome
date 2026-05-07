@@ -36,12 +36,12 @@
     </el-row>
 
     <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch" label-width="68px">
-      <el-form-item label="交易日期 (按天分区或查询过滤使用)" prop="tradeDate">
+      <el-form-item label="交易日期" prop="tradeDate">
         <el-date-picker clearable
                         v-model="queryParams.tradeDate"
                         type="date"
                         value-format="yyyy-MM-dd"
-                        placeholder="请选择交易日期 (按天分区或查询过滤使用)">
+                        placeholder="请选择交易日期 (按天分区)">
         </el-date-picker>
       </el-form-item>
       <el-form-item label="股票代码" prop="stockCode">
@@ -59,134 +59,6 @@
           clearable
           @keyup.enter.native="handleQuery"
         />
-      </el-form-item>
-      <el-form-item label="最新价 (元)" prop="latestPrice">
-        <el-input
-          v-model="queryParams.latestPrice"
-          placeholder="请输入最新价 (元)"
-          clearable
-          @keyup.enter.native="handleQuery"
-        />
-      </el-form-item>
-      <el-form-item label="涨跌幅 (%)" prop="changePercent">
-        <el-input
-          v-model="queryParams.changePercent"
-          placeholder="请输入涨跌幅 (%)"
-          clearable
-          @keyup.enter.native="handleQuery"
-        />
-      </el-form-item>
-      <el-form-item label="当天成交总额 (元)" prop="totalAmount">
-        <el-input
-          v-model="queryParams.totalAmount"
-          placeholder="请输入当天成交总额 (元)"
-          clearable
-          @keyup.enter.native="handleQuery"
-        />
-      </el-form-item>
-      <el-form-item label="主力净流入净额 (元)" prop="mainNetInflow">
-        <el-input
-          v-model="queryParams.mainNetInflow"
-          placeholder="请输入主力净流入净额 (元)"
-          clearable
-          @keyup.enter.native="handleQuery"
-        />
-      </el-form-item>
-      <el-form-item label="主力净流入占比 (%)" prop="mainInflowRatio">
-        <el-input
-          v-model="queryParams.mainInflowRatio"
-          placeholder="请输入主力净流入占比 (%)"
-          clearable
-          @keyup.enter.native="handleQuery"
-        />
-      </el-form-item>
-      <el-form-item label="超大单净流入额 (元)" prop="superLargeInflow">
-        <el-input
-          v-model="queryParams.superLargeInflow"
-          placeholder="请输入超大单净流入额 (元)"
-          clearable
-          @keyup.enter.native="handleQuery"
-        />
-      </el-form-item>
-      <el-form-item label="超大单净流入占比 (%)" prop="superLargeRatio">
-        <el-input
-          v-model="queryParams.superLargeRatio"
-          placeholder="请输入超大单净流入占比 (%)"
-          clearable
-          @keyup.enter.native="handleQuery"
-        />
-      </el-form-item>
-      <el-form-item label="大单净流入额 (元)" prop="largeInflow">
-        <el-input
-          v-model="queryParams.largeInflow"
-          placeholder="请输入大单净流入额 (元)"
-          clearable
-          @keyup.enter.native="handleQuery"
-        />
-      </el-form-item>
-      <el-form-item label="大单净流入占比 (%)" prop="largeRatio">
-        <el-input
-          v-model="queryParams.largeRatio"
-          placeholder="请输入大单净流入占比 (%)"
-          clearable
-          @keyup.enter.native="handleQuery"
-        />
-      </el-form-item>
-      <el-form-item label="中单净流入额 (元)" prop="mediumInflow">
-        <el-input
-          v-model="queryParams.mediumInflow"
-          placeholder="请输入中单净流入额 (元)"
-          clearable
-          @keyup.enter.native="handleQuery"
-        />
-      </el-form-item>
-      <el-form-item label="中单净流入占比 (%)" prop="mediumRatio">
-        <el-input
-          v-model="queryParams.mediumRatio"
-          placeholder="请输入中单净流入占比 (%)"
-          clearable
-          @keyup.enter.native="handleQuery"
-        />
-      </el-form-item>
-      <el-form-item label="小单净流入额 (元)" prop="smallInflow">
-        <el-input
-          v-model="queryParams.smallInflow"
-          placeholder="请输入小单净流入额 (元)"
-          clearable
-          @keyup.enter.native="handleQuery"
-        />
-      </el-form-item>
-      <el-form-item label="小单净流入占比 (%)" prop="smallRatio">
-        <el-input
-          v-model="queryParams.smallRatio"
-          placeholder="请输入小单净流入占比 (%)"
-          clearable
-          @keyup.enter.native="handleQuery"
-        />
-      </el-form-item>
-      <el-form-item label="源数据更新时间戳 (Unix秒)" prop="dataTimestamp">
-        <el-input
-          v-model="queryParams.dataTimestamp"
-          placeholder="请输入源数据更新时间戳 (Unix秒)"
-          clearable
-          @keyup.enter.native="handleQuery"
-        />
-      </el-form-item>
-      <el-form-item label="记录创建时间" prop="createdAt">
-        <el-date-picker clearable
-                        v-model="queryParams.createdAt"
-                        type="date"
-                        value-format="yyyy-MM-dd"
-                        placeholder="请选择记录创建时间">
-        </el-date-picker>
-      </el-form-item>
-      <el-form-item label="记录更新时间" prop="updatedAt">
-        <el-date-picker clearable
-                        v-model="queryParams.updatedAt"
-                        type="date"
-                        value-format="yyyy-MM-dd"
-                        placeholder="请选择记录更新时间">
-        </el-date-picker>
       </el-form-item>
       <el-form-item>
         <el-button type="primary" icon="el-icon-search" size="mini" @click="handleQuery">搜索</el-button>
@@ -430,22 +302,6 @@
         </el-form-item>
         <el-form-item label="源数据更新时间戳 (Unix秒)" prop="dataTimestamp">
           <el-input v-model="form.dataTimestamp" placeholder="请输入源数据更新时间戳 (Unix秒)"/>
-        </el-form-item>
-        <el-form-item label="记录创建时间" prop="createdAt">
-          <el-date-picker clearable
-                          v-model="form.createdAt"
-                          type="date"
-                          value-format="yyyy-MM-dd"
-                          placeholder="请选择记录创建时间">
-          </el-date-picker>
-        </el-form-item>
-        <el-form-item label="记录更新时间" prop="updatedAt">
-          <el-date-picker clearable
-                          v-model="form.updatedAt"
-                          type="date"
-                          value-format="yyyy-MM-dd"
-                          placeholder="请选择记录更新时间">
-          </el-date-picker>
         </el-form-item>
       </el-form>
       <div slot="footer" class="dialog-footer">
