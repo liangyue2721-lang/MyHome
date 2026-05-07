@@ -147,6 +147,11 @@ public class StockFundFlow extends BaseEntity {
     @Excel(name = "记录更新时间", width = 30, dateFormat = "yyyy-MM-dd")
     private Date updatedAt;
 
+    /**
+     * 排行天数 (前端查询参数)
+     */
+    private Integer rankDays;
+
     public void setId(String id) {
         this.id = id;
     }
@@ -313,6 +318,14 @@ public class StockFundFlow extends BaseEntity {
 
     public Date getUpdatedAt() {
         return updatedAt;
+    }
+
+    public Integer getRankDays() {
+        return rankDays;
+    }
+
+    public void setRankDays(Integer rankDays) {
+        this.rankDays = rankDays;
     }
 
     @Override

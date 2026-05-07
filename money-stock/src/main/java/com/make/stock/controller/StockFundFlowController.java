@@ -47,6 +47,15 @@ public class StockFundFlowController extends BaseController {
     }
 
     /**
+     * 获取主力资金流向图表数据
+     */
+    @PreAuthorize("@ss.hasPermi('stock:stockFlow:list')")
+    @GetMapping("/chartData")
+    public AjaxResult getChartData() {
+        return success(stockFundFlowService.selectChartData());
+    }
+
+    /**
      * 导出主力资金流向列表
      */
     @PreAuthorize("@ss.hasPermi('stock:stockFlow:export')")

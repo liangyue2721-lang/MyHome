@@ -38,7 +38,25 @@ public class StockFundFlowServiceImpl implements IStockFundFlowService {
      */
     @Override
     public List<StockFundFlow> selectStockFundFlowList(StockFundFlow stockFundFlow) {
+        if (stockFundFlow.getRankDays() != null && stockFundFlow.getRankDays() > 1) {
+            return stockFundFlowMapper.selectStockFundFlowListAggregated(stockFundFlow);
+        }
         return stockFundFlowMapper.selectStockFundFlowList(stockFundFlow);
+    }
+
+    /**
+     * 获取多维度的排行图表数据
+     *
+     * @return 包含 3日、5日、季度(60日)、年度(250日) 的Top10上榜次数数据
+     */
+    @Override
+    public java.util.Map<String, List<java.util.Map<String, Object>>> selectChartData() {
+        java.util.Map<String, List<java.util.Map<String, Object>>> result = new java.util.HashMap<>();
+        result.put("day3", stockFundFlowMapper.selectTop10Appearances(3));
+        result.put("day5", stockFundFlowMapper.selectTop10Appearances(5));
+        result.put("quarter", stockFundFlowMapper.selectTop10Appearances(60));
+        result.put("year", stockFundFlowMapper.selectTop10Appearances(250));
+        return result;
     }
 
     /**

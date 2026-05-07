@@ -1,5 +1,40 @@
 <template>
   <div class="app-container">
+    <el-row :gutter="20" class="mb8" v-if="chartDataLoaded">
+      <el-col :span="6">
+        <el-card shadow="hover">
+          <div slot="header" class="clearfix">
+            <span>3日排行 Top10 (次数)</span>
+          </div>
+          <div ref="chart3Day" style="height: 300px;"></div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card shadow="hover">
+          <div slot="header" class="clearfix">
+            <span>5日排行 Top10 (次数)</span>
+          </div>
+          <div ref="chart5Day" style="height: 300px;"></div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card shadow="hover">
+          <div slot="header" class="clearfix">
+            <span>季度排行 Top10 (次数)</span>
+          </div>
+          <div ref="chartQuarter" style="height: 300px;"></div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card shadow="hover">
+          <div slot="header" class="clearfix">
+            <span>年度排行 Top10 (次数)</span>
+          </div>
+          <div ref="chartYear" style="height: 300px;"></div>
+        </el-card>
+      </el-col>
+    </el-row>
+
     <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch" label-width="68px">
       <el-form-item label="交易日期 (按天分区或查询过滤使用)" prop="tradeDate">
         <el-date-picker clearable
@@ -422,8 +457,10 @@
 </template>
 
 <script>
-import {listStockFlow, getStockFlow, delStockFlow, addStockFlow, updateStockFlow} from "@/api/stock/stockFlow"
+import {listStockFlow, getStockFlow, delStockFlow, addStockFlow, updateStockFlow, getChartData} from "@/api/stock/stockFlow"
 import {listUser} from "@/api/stock/dropdown_component";  // 获取用户列表API
+import * as echarts from 'echarts';
+
 export default {
   name: "StockFlow",
   computed: {
@@ -434,6 +471,8 @@ export default {
 
   data() {
     return {
+      chartDataLoaded: false,
+      charts: {},
       // 遮罩层
       loading: true,
       // 选中数组
@@ -508,8 +547,81 @@ export default {
     await this.initUserList();
     // 加载数据
     this.getList();
+    this.loadChartData();
+  },
+  mounted() {
+    window.addEventListener('resize', this.resizeCharts);
+  },
+  beforeDestroy() {
+    window.removeEventListener('resize', this.resizeCharts);
+    Object.values(this.charts).forEach(chart => chart.dispose());
   },
   methods: {
+    loadChartData() {
+      getChartData().then(response => {
+        if (response.code === 200) {
+          this.chartDataLoaded = true;
+          this.$nextTick(() => {
+            this.initChart('chart3Day', response.data.day3 || []);
+            this.initChart('chart5Day', response.data.day5 || []);
+            this.initChart('chartQuarter', response.data.quarter || []);
+            this.initChart('chartYear', response.data.year || []);
+          });
+        }
+      });
+    },
+    initChart(refName, dataList) {
+      if (!this.$refs[refName]) return;
+
+      const chart = echarts.init(this.$refs[refName]);
+      this.charts[refName] = chart;
+
+      const xData = dataList.map(item => item.stockName);
+      const yData = dataList.map(item => item.count);
+
+      const option = {
+        tooltip: {
+          trigger: 'axis',
+          axisPointer: { type: 'shadow' }
+        },
+        grid: {
+          left: '3%',
+          right: '4%',
+          bottom: '3%',
+          containLabel: true
+        },
+        xAxis: {
+          type: 'category',
+          data: xData,
+          axisLabel: {
+            interval: 0,
+            rotate: 45
+          }
+        },
+        yAxis: {
+          type: 'value',
+          minInterval: 1
+        },
+        series: [
+          {
+            name: '上榜次数',
+            type: 'bar',
+            barWidth: '60%',
+            data: yData,
+            itemStyle: {
+              color: '#409EFF'
+            }
+          }
+        ]
+      };
+
+      chart.setOption(option);
+    },
+    resizeCharts() {
+      Object.values(this.charts).forEach(chart => {
+        if (chart) chart.resize();
+      });
+    },
     formatAmount(amount) {
       if (amount === null || amount === undefined) return '-';
       const num = Number(amount);

@@ -29,6 +29,13 @@ public interface IStockFundFlowService {
     public List<StockFundFlow> selectStockFundFlowList(StockFundFlow stockFundFlow);
 
     /**
+     * 获取多维度的排行图表数据
+     *
+     * @return 包含 3日、5日、季度(60日)、年度(250日) 的Top10上榜次数数据
+     */
+    public java.util.Map<String, List<java.util.Map<String, Object>>> selectChartData();
+
+    /**
      * 新增主力资金流向
      *
      * @param stockFundFlow 主力资金流向

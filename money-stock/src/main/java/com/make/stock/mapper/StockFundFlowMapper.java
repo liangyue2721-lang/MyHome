@@ -29,6 +29,22 @@ public interface StockFundFlowMapper {
     public List<StockFundFlow> selectStockFundFlowList(StockFundFlow stockFundFlow);
 
     /**
+     * 查询主力资金流向列表 (聚合计算多日)
+     *
+     * @param stockFundFlow 查询条件
+     * @return 主力资金流向聚合集合
+     */
+    public List<StockFundFlow> selectStockFundFlowListAggregated(StockFundFlow stockFundFlow);
+
+    /**
+     * 查询指定天数内单只股票上榜Top10的次数
+     *
+     * @param rankDays 天数
+     * @return 包含股票代码、名称和出现次数的列表
+     */
+    public List<java.util.Map<String, Object>> selectTop10Appearances(@org.apache.ibatis.annotations.Param("rankDays") Integer rankDays);
+
+    /**
      * 新增主力资金流向
      *
      * @param stockFundFlow 主力资金流向

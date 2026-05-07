@@ -35,6 +35,14 @@ export function updateStockFlow(data) {
   })
 }
 
+// 获取图表数据
+export function getChartData() {
+  return request({
+    url: '/stock/stockFlow/chartData',
+    method: 'get'
+  })
+}
+
 // 删除主力资金流向
 export function delStockFlow(id) {
   return request({
