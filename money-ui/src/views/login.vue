@@ -106,7 +106,7 @@ export default {
         code: [{required: true, trigger: "change", message: "請輸入驗證碼"}]
       },
       loading: false,
-      captchaEnabled: true,
+      captchaEnabled: false,
       register: false,
       redirect: undefined
     }

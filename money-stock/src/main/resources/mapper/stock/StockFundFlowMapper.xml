@@ -114,6 +114,42 @@
         ORDER BY main_net_inflow DESC
     </select>
 
+    <select id="selectDivergenceLargeInSmallOut" resultType="java.util.Map">
+        WITH LatestDate AS (
+            SELECT MAX(trade_date) as latest_date FROM stock_fund_flow
+        )
+        SELECT
+            stock_code AS stockCode,
+            stock_name AS stockName,
+            (super_large_inflow + large_inflow) AS largeNet,
+            (medium_inflow + small_inflow) AS smallNet,
+            (ABS(super_large_inflow + large_inflow) + ABS(medium_inflow + small_inflow)) AS divergence
+        FROM stock_fund_flow
+        WHERE trade_date = (SELECT latest_date FROM LatestDate)
+          AND (super_large_inflow + large_inflow) &gt; 0
+          AND (medium_inflow + small_inflow) &lt; 0
+        ORDER BY divergence DESC
+        LIMIT 10
+    </select>
+
+    <select id="selectDivergenceLargeOutSmallIn" resultType="java.util.Map">
+        WITH LatestDate AS (
+            SELECT MAX(trade_date) as latest_date FROM stock_fund_flow
+        )
+        SELECT
+            stock_code AS stockCode,
+            stock_name AS stockName,
+            (super_large_inflow + large_inflow) AS largeNet,
+            (medium_inflow + small_inflow) AS smallNet,
+            (ABS(super_large_inflow + large_inflow) + ABS(medium_inflow + small_inflow)) AS divergence
+        FROM stock_fund_flow
+        WHERE trade_date = (SELECT latest_date FROM LatestDate)
+          AND (super_large_inflow + large_inflow) &lt; 0
+          AND (medium_inflow + small_inflow) &gt; 0
+        ORDER BY divergence DESC
+        LIMIT 10
+    </select>
+
     <select id="selectTop10Appearances" resultType="java.util.Map">
         WITH RecentDates AS (
             SELECT DISTINCT trade_date

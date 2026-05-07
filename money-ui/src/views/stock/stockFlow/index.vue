@@ -35,6 +35,25 @@
       </el-col>
     </el-row>
 
+    <el-row :gutter="20" class="mb8" v-if="divergenceDataLoaded">
+      <el-col :span="12">
+        <el-card shadow="hover">
+          <div slot="header" class="clearfix">
+            <span>大单大幅净流入 + 小单大幅净流出 Top10</span>
+          </div>
+          <div ref="chartLargeInSmallOut" style="height: 300px;"></div>
+        </el-card>
+      </el-col>
+      <el-col :span="12">
+        <el-card shadow="hover">
+          <div slot="header" class="clearfix">
+            <span>大单大幅净流出 + 小单大幅净流入 Top10</span>
+          </div>
+          <div ref="chartLargeOutSmallIn" style="height: 300px;"></div>
+        </el-card>
+      </el-col>
+    </el-row>
+
     <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch" label-width="68px">
       <el-form-item label="交易日期" prop="tradeDate">
         <el-date-picker clearable
@@ -313,7 +332,7 @@
 </template>
 
 <script>
-import {listStockFlow, getStockFlow, delStockFlow, addStockFlow, updateStockFlow, getChartData} from "@/api/stock/stockFlow"
+import {listStockFlow, getStockFlow, delStockFlow, addStockFlow, updateStockFlow, getChartData, getDivergenceData} from "@/api/stock/stockFlow"
 import {listUser} from "@/api/stock/dropdown_component";  // 获取用户列表API
 import * as echarts from 'echarts';
 
@@ -328,6 +347,7 @@ export default {
   data() {
     return {
       chartDataLoaded: false,
+      divergenceDataLoaded: false,
       charts: {},
       // 遮罩层
       loading: true,
@@ -404,6 +424,7 @@ export default {
     // 加载数据
     this.getList();
     this.loadChartData();
+    this.loadDivergenceData();
   },
   mounted() {
     window.addEventListener('resize', this.resizeCharts);
@@ -413,6 +434,92 @@ export default {
     Object.values(this.charts).forEach(chart => chart.dispose());
   },
   methods: {
+    loadDivergenceData() {
+      getDivergenceData().then(response => {
+        if (response.code === 200) {
+          this.divergenceDataLoaded = true;
+          this.$nextTick(() => {
+            this.initDivergenceChart('chartLargeInSmallOut', response.data.largeInSmallOut || []);
+            this.initDivergenceChart('chartLargeOutSmallIn', response.data.largeOutSmallIn || []);
+          });
+        }
+      });
+    },
+    initDivergenceChart(refName, dataList) {
+      if (!this.$refs[refName]) return;
+
+      const chart = echarts.init(this.$refs[refName]);
+      this.charts[refName] = chart;
+
+      const xData = dataList.map(item => item.stockName);
+      const largeNetData = dataList.map(item => item.largeNet);
+      const smallNetData = dataList.map(item => item.smallNet);
+
+      const option = {
+        tooltip: {
+          trigger: 'axis',
+          axisPointer: { type: 'shadow' },
+          formatter: function (params) {
+            let html = params[0].name + '<br/>';
+            params.forEach(param => {
+              let val = param.value;
+              let displayVal = Math.abs(val) >= 10000 ? (val / 10000).toFixed(2) + '万' : val.toFixed(2);
+              html += param.marker + param.seriesName + ': ' + displayVal + '<br/>';
+            });
+            return html;
+          }
+        },
+        legend: {
+          data: ['大单净额', '小单净额']
+        },
+        grid: {
+          left: '3%',
+          right: '4%',
+          bottom: '3%',
+          containLabel: true
+        },
+        xAxis: {
+          type: 'category',
+          data: xData,
+          axisLabel: {
+            interval: 0,
+            rotate: 45
+          }
+        },
+        yAxis: {
+          type: 'value',
+          axisLabel: {
+            formatter: function (value) {
+              if (Math.abs(value) >= 10000) {
+                return (value / 10000) + '万';
+              }
+              return value;
+            }
+          }
+        },
+        series: [
+          {
+            name: '大单净额',
+            type: 'bar',
+            barGap: 0,
+            data: largeNetData,
+            itemStyle: {
+              color: '#f56c6c' // Red for large orders if positive (default colors can be customized)
+            }
+          },
+          {
+            name: '小单净额',
+            type: 'bar',
+            data: smallNetData,
+            itemStyle: {
+              color: '#3f9000' // Green for small orders
+            }
+          }
+        ]
+      };
+
+      chart.setOption(option);
+    },
     loadChartData() {
       getChartData().then(response => {
         if (response.code === 200) {

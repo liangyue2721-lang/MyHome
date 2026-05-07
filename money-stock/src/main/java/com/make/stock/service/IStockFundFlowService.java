@@ -36,6 +36,13 @@ public interface IStockFundFlowService {
     public java.util.Map<String, List<java.util.Map<String, Object>>> selectChartData();
 
     /**
+     * 获取大小单背离图表数据
+     *
+     * @return 包含 大单流入小单流出、大单流出小单流入 两种背离数据的Top10
+     */
+    public java.util.Map<String, List<java.util.Map<String, Object>>> selectDivergenceData();
+
+    /**
      * 新增主力资金流向
      *
      * @param stockFundFlow 主力资金流向

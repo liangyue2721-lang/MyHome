@@ -42,6 +42,20 @@ public interface StockFundFlowMapper {
      * @param rankDays 天数
      * @return 包含股票代码、名称和出现次数的列表
      */
+    /**
+     * 查询大单流入小单流出背离Top10
+     *
+     * @return 结果列表
+     */
+    public List<java.util.Map<String, Object>> selectDivergenceLargeInSmallOut();
+
+    /**
+     * 查询大单流出小单流入背离Top10
+     *
+     * @return 结果列表
+     */
+    public List<java.util.Map<String, Object>> selectDivergenceLargeOutSmallIn();
+
     public List<java.util.Map<String, Object>> selectTop10Appearances(@org.apache.ibatis.annotations.Param("rankDays") Integer rankDays);
 
     /**

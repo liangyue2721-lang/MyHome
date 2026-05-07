@@ -56,6 +56,15 @@ public class StockFundFlowController extends BaseController {
     }
 
     /**
+     * 获取大小单背离图表数据
+     */
+    @PreAuthorize("@ss.hasPermi('stock:stockFlow:list')")
+    @GetMapping("/divergenceData")
+    public AjaxResult getDivergenceData() {
+        return success(stockFundFlowService.selectDivergenceData());
+    }
+
+    /**
      * 导出主力资金流向列表
      */
     @PreAuthorize("@ss.hasPermi('stock:stockFlow:export')")

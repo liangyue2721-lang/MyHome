@@ -43,6 +43,14 @@ export function getChartData() {
   })
 }
 
+// 获取背离数据
+export function getDivergenceData() {
+  return request({
+    url: '/stock/stockFlow/divergenceData',
+    method: 'get'
+  })
+}
+
 // 删除主力资金流向
 export function delStockFlow(id) {
   return request({
