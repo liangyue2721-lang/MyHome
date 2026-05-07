@@ -43,6 +43,14 @@ public interface IStockFundFlowService {
     public java.util.Map<String, List<java.util.Map<String, Object>>> selectDivergenceData();
 
     /**
+     * 查询指定股票列表的最新资金流向数据
+     *
+     * @param stockCodes 股票代码列表
+     * @return 最新资金流向数据列表
+     */
+    public List<StockFundFlow> selectLatestFundFlowByCodes(List<String> stockCodes);
+
+    /**
      * 新增主力资金流向
      *
      * @param stockFundFlow 主力资金流向

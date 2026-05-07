@@ -59,6 +59,14 @@ public interface StockFundFlowMapper {
     public List<java.util.Map<String, Object>> selectTop10Appearances(@org.apache.ibatis.annotations.Param("rankDays") Integer rankDays);
 
     /**
+     * 查询指定股票列表的最新资金流向数据
+     *
+     * @param stockCodes 股票代码列表
+     * @return 最新资金流向数据列表
+     */
+    public List<StockFundFlow> selectLatestFundFlowByCodes(@org.apache.ibatis.annotations.Param("stockCodes") List<String> stockCodes);
+
+    /**
      * 新增主力资金流向
      *
      * @param stockFundFlow 主力资金流向

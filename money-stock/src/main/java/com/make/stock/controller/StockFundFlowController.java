@@ -65,6 +65,14 @@ public class StockFundFlowController extends BaseController {
     }
 
     /**
+     * 获取指定股票的最新资金流向数据
+     */
+    @GetMapping("/latestByCodes")
+    public AjaxResult getLatestByCodes(@org.springframework.web.bind.annotation.RequestParam("codes") List<String> codes) {
+        return success(stockFundFlowService.selectLatestFundFlowByCodes(codes));
+    }
+
+    /**
      * 导出主力资金流向列表
      */
     @PreAuthorize("@ss.hasPermi('stock:stockFlow:export')")

@@ -178,6 +178,20 @@
         LIMIT 10
     </select>
 
+    <select id="selectLatestFundFlowByCodes" resultMap="StockFundFlowResult">
+        SELECT a.*
+        FROM stock_fund_flow a
+        INNER JOIN (
+            SELECT stock_code, MAX(trade_date) AS max_date
+            FROM stock_fund_flow
+            WHERE stock_code IN
+            <foreach item="code" collection="stockCodes" open="(" separator="," close=")">
+                #{code}
+            </foreach>
+            GROUP BY stock_code
+        ) b ON a.stock_code = b.stock_code AND a.trade_date = b.max_date
+    </select>
+
     <select id="selectStockFundFlowById" parameterType="String" resultMap="StockFundFlowResult">
         <include refid="selectStockFundFlowVo"/>
         where id = #{id}
