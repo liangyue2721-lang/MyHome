@@ -137,7 +137,27 @@ export default {
         if (res.data && res.data.length > 0) {
           getLatestFundFlowByCodes(res.data).then(flowRes => {
             if (flowRes.data) {
-              this.stockFundFlows = flowRes.data;
+              // 计算 totalFlow
+              const calculateTotal = (flow) => {
+                const mainIn = (flow.superLargeAbsInflow || 0) + (flow.largeAbsInflow || 0);
+                const mainOut = (flow.superLargeOutflow || 0) + (flow.largeAbsOutflow || 0);
+                const smallIn = (flow.mediumAbsInflow || 0) + (flow.smallAbsInflow || 0);
+                const smallOut = (flow.mediumAbsOutflow || 0) + (flow.smallAbsOutflow || 0);
+                return mainIn + mainOut + smallIn + smallOut;
+              };
+
+              this.stockFundFlows = flowRes.data.sort((a, b) => {
+                const totalA = calculateTotal(a);
+                const totalB = calculateTotal(b);
+
+                // 如果 A 为 0 且 B 不为 0，A 排在后面
+                if (totalA === 0 && totalB !== 0) return 1;
+                // 如果 B 为 0 且 A 不为 0，B 排在后面
+                if (totalB === 0 && totalA !== 0) return -1;
+
+                // 其他情况保持原有顺序（或者可以添加其他排序逻辑）
+                return 0;
+              });
             }
           });
         }

@@ -12,11 +12,11 @@
         <!-- 左侧：流出 -->
         <div class="side-info left-side">
           <div class="info-item main-out">
-            <div class="amount-val"><span class="dot green-dot"></span>{{ formatAmount(flowData.superLargeOutflow + flowData.largeAbsOutflow) }}亿</div>
+            <div class="amount-val"><span class="dot green-dot"></span>{{ formatAmount(flowData.superLargeOutflow + flowData.largeAbsOutflow) }}千万</div>
             <div class="desc">主力流出 {{ formatRatio(mainOutRatio) }}%</div>
           </div>
           <div class="info-item small-out" style="margin-top: 80px;">
-            <div class="amount-val"><span class="dot light-green-dot"></span>{{ formatAmount(flowData.mediumAbsOutflow + flowData.smallAbsOutflow) }}亿</div>
+            <div class="amount-val"><span class="dot light-green-dot"></span>{{ formatAmount(flowData.mediumAbsOutflow + flowData.smallAbsOutflow) }}千万</div>
             <div class="desc">散户流出 {{ formatRatio(smallOutRatio) }}%</div>
           </div>
         </div>
@@ -29,11 +29,11 @@
         <!-- 右侧：流入 -->
         <div class="side-info right-side">
           <div class="info-item main-in">
-            <div class="amount-val"><span class="dot red-dot"></span>{{ formatAmount(flowData.superLargeAbsInflow + flowData.largeAbsInflow) }}亿</div>
+            <div class="amount-val"><span class="dot red-dot"></span>{{ formatAmount(flowData.superLargeAbsInflow + flowData.largeAbsInflow) }}千万</div>
             <div class="desc">主力流入 {{ formatRatio(mainInRatio) }}%</div>
           </div>
           <div class="info-item small-in" style="margin-top: 80px;">
-            <div class="amount-val"><span class="dot light-red-dot"></span>{{ formatAmount(flowData.mediumAbsInflow + flowData.smallAbsInflow) }}亿</div>
+            <div class="amount-val"><span class="dot light-red-dot"></span>{{ formatAmount(flowData.mediumAbsInflow + flowData.smallAbsInflow) }}千万</div>
             <div class="desc">散户流入 {{ formatRatio(smallInRatio) }}%</div>
           </div>
         </div>
@@ -105,10 +105,23 @@ export default {
     },
     analyzeTitle() {
       if (this.totalFlow === 0) return "暂无数据";
+
+      const smallRatio = (this.smallIn + this.smallOut) / this.totalFlow;
+      if (smallRatio > 0.80) {
+        return "散户交投活跃，主力参与度低";
+      }
+
       const netMain = this.mainIn - this.mainOut;
       const diffRatio = Math.abs(netMain) / this.totalFlow;
-      if (diffRatio < 0.05) return "买入卖出价格不存在明显差异";
-      if (netMain > 0) return "主力资金呈现明显净流入";
+
+      if (diffRatio <= 0.05) {
+        return "多空博弈激烈，资金未见明显方向";
+      }
+
+      if (netMain > 0) {
+        return "主力资金呈现明显净流入";
+      }
+
       return "主力资金呈现明显净流出";
     }
   },
@@ -133,7 +146,7 @@ export default {
   methods: {
     formatAmount(val) {
       if (!val) return '0.00';
-      return (val / 100000000).toFixed(2); // 转换为亿
+      return (val / 10000000).toFixed(2); // 转换为千万
     },
     formatRatio(val) {
       if (!val) return '0.0';
