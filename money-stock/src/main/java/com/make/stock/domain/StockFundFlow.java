@@ -6,6 +6,7 @@ import java.util.Date;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.make.common.annotation.Excel;
 import com.make.common.core.domain.BaseEntity;
+import lombok.Data;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
 
@@ -15,6 +16,7 @@ import org.apache.commons.lang3.builder.ToStringStyle;
  * @author erqi
  * @date 2026-05-07
  */
+@Data
 public class StockFundFlow extends BaseEntity {
 
     private static final long serialVersionUID = 1L;
@@ -148,185 +150,58 @@ public class StockFundFlow extends BaseEntity {
     private Date updatedAt;
 
     /**
+     * 超大单绝对流入 (元)
+     */
+    @Excel(name = "超大单绝对流入 (元)")
+    private BigDecimal superLargeAbsInflow;
+
+    /**
+     * 超大单流出 (元)
+     */
+    @Excel(name = "超大单流出 (元)")
+    private BigDecimal superLargeOutflow;
+
+    /**
+     * 大单绝对流入 (元)
+     */
+    @Excel(name = "大单绝对流入 (元)")
+    private BigDecimal largeAbsInflow;
+
+    /**
+     * 大单流出 (元)
+     */
+    @Excel(name = "大单流出 (元)")
+    private BigDecimal largeAbsOutflow;
+
+    /**
+     * 中单绝对流入 (元)
+     */
+    @Excel(name = "中单绝对流入 (元)")
+    private BigDecimal mediumAbsInflow;
+
+    /**
+     * 中单流出 (元)
+     */
+    @Excel(name = "中单流出 (元)")
+    private BigDecimal mediumAbsOutflow;
+
+    /**
+     * 小单绝对流入 (元)
+     */
+    @Excel(name = "小单绝对流入 (元)")
+    private BigDecimal smallAbsInflow;
+
+    /**
+     * 小单流出 (元)
+     */
+    @Excel(name = "小单流出 (元)")
+    private BigDecimal smallAbsOutflow;
+
+    /**
      * 排行天数 (前端查询参数)
      */
     private Integer rankDays;
 
-    public void setId(String id) {
-        this.id = id;
-    }
-
-    public String getId() {
-        return id;
-    }
-
-    public void setTradeDate(Date tradeDate) {
-        this.tradeDate = tradeDate;
-    }
-
-    public Date getTradeDate() {
-        return tradeDate;
-    }
-
-    public void setStockCode(String stockCode) {
-        this.stockCode = stockCode;
-    }
-
-    public String getStockCode() {
-        return stockCode;
-    }
-
-    public void setStockName(String stockName) {
-        this.stockName = stockName;
-    }
-
-    public String getStockName() {
-        return stockName;
-    }
-
-    public void setMarketType(Long marketType) {
-        this.marketType = marketType;
-    }
-
-    public Long getMarketType() {
-        return marketType;
-    }
-
-    public void setLatestPrice(BigDecimal latestPrice) {
-        this.latestPrice = latestPrice;
-    }
-
-    public BigDecimal getLatestPrice() {
-        return latestPrice;
-    }
-
-    public void setChangePercent(BigDecimal changePercent) {
-        this.changePercent = changePercent;
-    }
-
-    public BigDecimal getChangePercent() {
-        return changePercent;
-    }
-
-    public void setTotalAmount(BigDecimal totalAmount) {
-        this.totalAmount = totalAmount;
-    }
-
-    public BigDecimal getTotalAmount() {
-        return totalAmount;
-    }
-
-    public void setMainNetInflow(BigDecimal mainNetInflow) {
-        this.mainNetInflow = mainNetInflow;
-    }
-
-    public BigDecimal getMainNetInflow() {
-        return mainNetInflow;
-    }
-
-    public void setMainInflowRatio(BigDecimal mainInflowRatio) {
-        this.mainInflowRatio = mainInflowRatio;
-    }
-
-    public BigDecimal getMainInflowRatio() {
-        return mainInflowRatio;
-    }
-
-    public void setSuperLargeInflow(BigDecimal superLargeInflow) {
-        this.superLargeInflow = superLargeInflow;
-    }
-
-    public BigDecimal getSuperLargeInflow() {
-        return superLargeInflow;
-    }
-
-    public void setSuperLargeRatio(BigDecimal superLargeRatio) {
-        this.superLargeRatio = superLargeRatio;
-    }
-
-    public BigDecimal getSuperLargeRatio() {
-        return superLargeRatio;
-    }
-
-    public void setLargeInflow(BigDecimal largeInflow) {
-        this.largeInflow = largeInflow;
-    }
-
-    public BigDecimal getLargeInflow() {
-        return largeInflow;
-    }
-
-    public void setLargeRatio(BigDecimal largeRatio) {
-        this.largeRatio = largeRatio;
-    }
-
-    public BigDecimal getLargeRatio() {
-        return largeRatio;
-    }
-
-    public void setMediumInflow(BigDecimal mediumInflow) {
-        this.mediumInflow = mediumInflow;
-    }
-
-    public BigDecimal getMediumInflow() {
-        return mediumInflow;
-    }
-
-    public void setMediumRatio(BigDecimal mediumRatio) {
-        this.mediumRatio = mediumRatio;
-    }
-
-    public BigDecimal getMediumRatio() {
-        return mediumRatio;
-    }
-
-    public void setSmallInflow(BigDecimal smallInflow) {
-        this.smallInflow = smallInflow;
-    }
-
-    public BigDecimal getSmallInflow() {
-        return smallInflow;
-    }
-
-    public void setSmallRatio(BigDecimal smallRatio) {
-        this.smallRatio = smallRatio;
-    }
-
-    public BigDecimal getSmallRatio() {
-        return smallRatio;
-    }
-
-    public void setDataTimestamp(Long dataTimestamp) {
-        this.dataTimestamp = dataTimestamp;
-    }
-
-    public Long getDataTimestamp() {
-        return dataTimestamp;
-    }
-
-    public void setCreatedAt(Date createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public Date getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setUpdatedAt(Date updatedAt) {
-        this.updatedAt = updatedAt;
-    }
-
-    public Date getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public Integer getRankDays() {
-        return rankDays;
-    }
-
-    public void setRankDays(Integer rankDays) {
-        this.rankDays = rankDays;
-    }
 
     @Override
     public String toString() {
@@ -352,6 +227,14 @@ public class StockFundFlow extends BaseEntity {
                 .append("dataTimestamp", getDataTimestamp())
                 .append("createdAt", getCreatedAt())
                 .append("updatedAt", getUpdatedAt())
+                .append("superLargeAbsInflow", getSuperLargeAbsInflow())
+                .append("superLargeOutflow", getSuperLargeOutflow())
+                .append("largeAbsInflow", getLargeAbsInflow())
+                .append("largeAbsOutflow", getLargeAbsOutflow())
+                .append("mediumAbsInflow", getMediumAbsInflow())
+                .append("mediumAbsOutflow", getMediumAbsOutflow())
+                .append("smallAbsInflow", getSmallAbsInflow())
+                .append("smallAbsOutflow", getSmallAbsOutflow())
                 .toString();
     }
 }
