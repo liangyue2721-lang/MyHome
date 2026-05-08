@@ -56,7 +56,7 @@ export function getLatestFundFlowByCodes(codes) {
   return request({
     url: '/stock/stockFlow/latestByCodes',
     method: 'get',
-    params: { codes: codes }
+    params: {codes: codes.join(',')}
   })
 }
 
