@@ -46,6 +46,17 @@ public class WatchstockController extends BaseController {
     }
 
     /**
+     * 查询所有买入价位提醒的股票代码
+     */
+    @PreAuthorize("@ss.hasPermi('stock:watch_stock:list')")
+    @GetMapping("/allCodes")
+    public AjaxResult allCodes() {
+        List<Watchstock> list = watchstockService.selectWatchstockList(new Watchstock());
+        List<String> codes = list.stream().map(Watchstock::getCode).collect(java.util.stream.Collectors.toList());
+        return success(codes);
+    }
+
+    /**
      * 导出买入价位提醒列表
      */
     @PreAuthorize("@ss.hasPermi('stock:watch_stock:export')")

@@ -9,6 +9,14 @@ export function listWatch_stock(query) {
   })
 }
 
+// 查询所有买入价位提醒的股票代码
+export function allWatchStockCodes() {
+  return request({
+    url: '/stock/watch_stock/allCodes',
+    method: 'get'
+  })
+}
+
 // 查询买入价位提醒详细
 export function getWatch_stock(id) {
   return request({

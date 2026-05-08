@@ -93,7 +93,7 @@ import {
   renderLoanRepaymentComparisonChart  // 近一年还贷对比
 } from "@/api/finance/pieChart";
 
-import {listWatch_stock} from "@/api/stock/watch_stock";
+import {allWatchStockCodes} from "@/api/stock/watch_stock";
 import {getLatestFundFlowByCodes} from "@/api/stock/stockFlow";
 import FundFlowPieChart from "./FundFlowPieChart.vue";
 
@@ -133,10 +133,9 @@ export default {
   },
   methods: {
     loadStockFundFlows() {
-      listWatch_stock({}).then(res => {
-        if (res.rows && res.rows.length > 0) {
-          const codes = res.rows.map(item => item.stockCode);
-          getLatestFundFlowByCodes(codes).then(flowRes => {
+      allWatchStockCodes().then(res => {
+        if (res.data && res.data.length > 0) {
+          getLatestFundFlowByCodes(res.data).then(flowRes => {
             if (flowRes.data) {
               this.stockFundFlows = flowRes.data;
             }
