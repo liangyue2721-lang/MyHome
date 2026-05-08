@@ -507,7 +507,7 @@ def job():
 
     # 2. 定义A股交易时间段
     is_morning = "09:25" <= current_time <= "11:35"
-    is_afternoon = "13:00" <= current_time <= "19:00"
+    is_afternoon = "13:00" <= current_time <= "16:00"
 
     if not (is_morning or is_afternoon):
         print(f"[{time_str}] 当前非交易时间，跳过抓取。")
