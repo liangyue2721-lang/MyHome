@@ -26,6 +26,14 @@
         <result property="dataTimestamp" column="data_timestamp"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
+        <result property="superLargeAbsInflow" column="super_large_abs_inflow"/>
+        <result property="superLargeOutflow" column="super_large_outflow"/>
+        <result property="largeAbsInflow" column="large_abs_inflow"/>
+        <result property="largeAbsOutflow" column="large_abs_outflow"/>
+        <result property="mediumAbsInflow" column="medium_abs_inflow"/>
+        <result property="mediumAbsOutflow" column="medium_abs_outflow"/>
+        <result property="smallAbsInflow" column="small_abs_inflow"/>
+        <result property="smallAbsOutflow" column="small_abs_outflow"/>
     </resultMap>
 
     <sql id="selectStockFundFlowVo">
@@ -49,7 +57,15 @@
                small_ratio,
                data_timestamp,
                created_at,
-               updated_at
+               updated_at,
+               super_large_abs_inflow,
+               super_large_outflow,
+               large_abs_inflow,
+               large_abs_outflow,
+               medium_abs_inflow,
+               medium_abs_outflow,
+               small_abs_inflow,
+               small_abs_outflow
         from stock_fund_flow
     </sql>
 
@@ -84,29 +100,32 @@
 
     <select id="selectStockFundFlowListAggregated" parameterType="StockFundFlow" resultMap="StockFundFlowResult">
         SELECT
-            MIN(id) AS id,
-            MAX(trade_date) AS trade_date,
-            stock_code,
-            MAX(stock_name) AS stock_name,
-            MAX(market_type) AS market_type,
-            (SELECT latest_price FROM stock_fund_flow t2 WHERE t2.stock_code = stock_fund_flow.stock_code ORDER BY trade_date DESC LIMIT 1) AS latest_price,
-            (EXP(SUM(LN(1 + change_percent / 100))) - 1) * 100 AS change_percent,
-            SUM(total_amount) AS total_amount,
-            SUM(main_net_inflow) AS main_net_inflow,
-            CASE WHEN SUM(total_amount) = 0 THEN 0 ELSE (SUM(main_net_inflow) / SUM(total_amount)) * 100 END AS main_inflow_ratio,
-            SUM(super_large_inflow) AS super_large_inflow,
-            CASE WHEN SUM(total_amount) = 0 THEN 0 ELSE (SUM(super_large_inflow) / SUM(total_amount)) * 100 END AS super_large_ratio,
-            SUM(large_inflow) AS large_inflow,
-            CASE WHEN SUM(total_amount) = 0 THEN 0 ELSE (SUM(large_inflow) / SUM(total_amount)) * 100 END AS large_ratio,
-            SUM(medium_inflow) AS medium_inflow,
-            CASE WHEN SUM(total_amount) = 0 THEN 0 ELSE (SUM(medium_inflow) / SUM(total_amount)) * 100 END AS medium_ratio,
-            SUM(small_inflow) AS small_inflow,
-            CASE WHEN SUM(total_amount) = 0 THEN 0 ELSE (SUM(small_inflow) / SUM(total_amount)) * 100 END AS small_ratio
+        MIN(id) AS id,
+        MAX(trade_date) AS trade_date,
+        stock_code,
+        MAX(stock_name) AS stock_name,
+        MAX(market_type) AS market_type,
+        (SELECT latest_price FROM stock_fund_flow t2 WHERE t2.stock_code = stock_fund_flow.stock_code ORDER BY
+        trade_date DESC LIMIT 1) AS latest_price,
+        (EXP(SUM(LN(1 + change_percent / 100))) - 1) * 100 AS change_percent,
+        SUM(total_amount) AS total_amount,
+        SUM(main_net_inflow) AS main_net_inflow,
+        CASE WHEN SUM(total_amount) = 0 THEN 0 ELSE (SUM(main_net_inflow) / SUM(total_amount)) * 100 END AS
+        main_inflow_ratio,
+        SUM(super_large_inflow) AS super_large_inflow,
+        CASE WHEN SUM(total_amount) = 0 THEN 0 ELSE (SUM(super_large_inflow) / SUM(total_amount)) * 100 END AS
+        super_large_ratio,
+        SUM(large_inflow) AS large_inflow,
+        CASE WHEN SUM(total_amount) = 0 THEN 0 ELSE (SUM(large_inflow) / SUM(total_amount)) * 100 END AS large_ratio,
+        SUM(medium_inflow) AS medium_inflow,
+        CASE WHEN SUM(total_amount) = 0 THEN 0 ELSE (SUM(medium_inflow) / SUM(total_amount)) * 100 END AS medium_ratio,
+        SUM(small_inflow) AS small_inflow,
+        CASE WHEN SUM(total_amount) = 0 THEN 0 ELSE (SUM(small_inflow) / SUM(total_amount)) * 100 END AS small_ratio
         FROM stock_fund_flow
         WHERE trade_date IN (
-            SELECT trade_date FROM (
-                SELECT DISTINCT trade_date FROM stock_fund_flow ORDER BY trade_date DESC LIMIT #{rankDays}
-            ) AS recent_dates
+        SELECT trade_date FROM (
+        SELECT DISTINCT trade_date FROM stock_fund_flow ORDER BY trade_date DESC LIMIT #{rankDays}
+        ) AS recent_dates
         )
         <if test="stockCode != null and stockCode != ''">AND stock_code = #{stockCode}</if>
         <if test="stockName != null and stockName != ''">AND stock_name LIKE CONCAT('%', #{stockName}, '%')</if>
@@ -115,80 +134,68 @@
     </select>
 
     <select id="selectDivergenceLargeInSmallOut" resultType="java.util.Map">
-        WITH LatestDate AS (
-            SELECT MAX(trade_date) as latest_date FROM stock_fund_flow
-        )
-        SELECT
-            stock_code AS stockCode,
-            stock_name AS stockName,
-            (super_large_inflow + large_inflow) AS largeNet,
-            (medium_inflow + small_inflow) AS smallNet,
-            (ABS(super_large_inflow + large_inflow) + ABS(medium_inflow + small_inflow)) AS divergence
+        WITH LatestDate AS (SELECT MAX(trade_date) as latest_date
+                            FROM stock_fund_flow)
+        SELECT stock_code                                                                   AS stockCode,
+               stock_name                                                                   AS stockName,
+               (super_large_inflow + large_inflow)                                          AS largeNet,
+               (medium_inflow + small_inflow)                                               AS smallNet,
+               (ABS(super_large_inflow + large_inflow) + ABS(medium_inflow + small_inflow)) AS divergence
         FROM stock_fund_flow
         WHERE trade_date = (SELECT latest_date FROM LatestDate)
           AND (super_large_inflow + large_inflow) &gt; 0
           AND (medium_inflow + small_inflow) &lt; 0
-        ORDER BY divergence DESC
-        LIMIT 10
+        ORDER BY divergence DESC LIMIT 10
     </select>
 
     <select id="selectDivergenceLargeOutSmallIn" resultType="java.util.Map">
-        WITH LatestDate AS (
-            SELECT MAX(trade_date) as latest_date FROM stock_fund_flow
-        )
-        SELECT
-            stock_code AS stockCode,
-            stock_name AS stockName,
-            (super_large_inflow + large_inflow) AS largeNet,
-            (medium_inflow + small_inflow) AS smallNet,
-            (ABS(super_large_inflow + large_inflow) + ABS(medium_inflow + small_inflow)) AS divergence
+        WITH LatestDate AS (SELECT MAX(trade_date) as latest_date
+                            FROM stock_fund_flow)
+        SELECT stock_code                                                                   AS stockCode,
+               stock_name                                                                   AS stockName,
+               (super_large_inflow + large_inflow)                                          AS largeNet,
+               (medium_inflow + small_inflow)                                               AS smallNet,
+               (ABS(super_large_inflow + large_inflow) + ABS(medium_inflow + small_inflow)) AS divergence
         FROM stock_fund_flow
         WHERE trade_date = (SELECT latest_date FROM LatestDate)
           AND (super_large_inflow + large_inflow) &lt; 0
           AND (medium_inflow + small_inflow) &gt; 0
-        ORDER BY divergence DESC
-        LIMIT 10
+        ORDER BY divergence DESC LIMIT 10
     </select>
 
     <select id="selectTop10Appearances" resultType="java.util.Map">
-        WITH RecentDates AS (
-            SELECT DISTINCT trade_date
-            FROM stock_fund_flow
-            ORDER BY trade_date DESC
+        WITH RecentDates AS (SELECT DISTINCT trade_date
+                             FROM stock_fund_flow
+                             ORDER BY trade_date DESC
             LIMIT #{rankDays}
-        ),
-        DailyRankings AS (
-            SELECT
-                trade_date,
-                stock_code,
-                stock_name,
-                main_net_inflow,
-                ROW_NUMBER() OVER(PARTITION BY trade_date ORDER BY main_net_inflow DESC) as rn
-            FROM stock_fund_flow
-            WHERE trade_date IN (SELECT trade_date FROM RecentDates)
-        )
+            )
+           , DailyRankings AS (
         SELECT
-            stock_code AS stockCode,
-            stock_name AS stockName,
-            COUNT(*) AS count
+            trade_date, stock_code, stock_name, main_net_inflow, ROW_NUMBER() OVER(PARTITION BY trade_date ORDER BY main_net_inflow DESC) as rn
+        FROM stock_fund_flow
+        WHERE trade_date IN (SELECT trade_date FROM RecentDates)
+            )
+        SELECT stock_code AS stockCode,
+               stock_name AS stockName,
+               COUNT(*) AS count
         FROM DailyRankings
         WHERE rn &lt;= 10
         GROUP BY stock_code, stock_name
         ORDER BY count DESC
-        LIMIT 10
+            LIMIT 10
     </select>
 
     <select id="selectLatestFundFlowByCodes" resultMap="StockFundFlowResult">
         SELECT a.*
         FROM stock_fund_flow a
         INNER JOIN (
-            SELECT stock_code, MAX(trade_date) AS max_date
-            FROM stock_fund_flow
-            WHERE stock_code IN
-            <foreach item="code" collection="stockCodes" open="(" separator="," close=")">
-                #{code}
-            </foreach>
-            GROUP BY stock_code
+        SELECT stock_code, MAX(trade_date) AS max_date
+        FROM stock_fund_flow
+        WHERE stock_code IN
+        <foreach item="code" collection="stockCodes" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+        GROUP BY stock_code
         ) b ON a.stock_code = b.stock_code AND a.trade_date = b.max_date
     </select>
 
