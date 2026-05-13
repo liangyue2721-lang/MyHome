@@ -25,7 +25,7 @@ def fetch_auction_snapshot():
     while True:
         params = {
             'pn': page,
-            'pz': 5000,
+            'pz': 500,
             'po': 1,
             'np': 1,
             'fltt': 2,

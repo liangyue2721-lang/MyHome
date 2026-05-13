@@ -21,7 +21,7 @@ DB_CONFIG = {
 
 # ================= Redis配置 =================
 REDIS_CONFIG = {
-    'host': '192.168.1.241',
+    'host': '192.168.0.100',
     'port': 6379,
     'db': 0,
     'decode_responses': True,
@@ -74,6 +74,7 @@ LIMIT_POOL_PARAMS = {
     'dpt': 'wz.ztzt',
     'Pageindex': 0,
     'pagesize': 500,
+    'sort': 'fbt:asc',  # 必填! 按封板时间升序; 连板池用 zdp:desc 覆盖
 }
 
 # K线/逐笔明细

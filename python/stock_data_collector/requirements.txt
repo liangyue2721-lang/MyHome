@@ -1,5 +1,4 @@
-requests>=2.28.0
-urllib3>=1.26.0
+tls-client>=1.0.0
 pymysql>=1.1.0
 redis>=4.5.0
 schedule>=1.2.0

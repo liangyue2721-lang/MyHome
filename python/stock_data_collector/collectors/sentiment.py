@@ -21,7 +21,7 @@ MODULE_PREFIX = "market_smart"
 def fetch_limit_up_pool():
     """获取涨停股池"""
     today = datetime.now().strftime('%Y%m%d')
-    params = {**LIMIT_POOL_PARAMS, 'date': today}
+    params = {**LIMIT_POOL_PARAMS, 'date': today, 'sort': 'fbt:asc'}
     data = _fetch_json(LIMIT_UP_URL, params=params)
     if data and data.get('data') and data['data'].get('pool'):
         return data['data']['pool']
@@ -31,7 +31,7 @@ def fetch_limit_up_pool():
 def fetch_limit_down_pool():
     """获取跌停股池"""
     today = datetime.now().strftime('%Y%m%d')
-    params = {**LIMIT_POOL_PARAMS, 'date': today}
+    params = {**LIMIT_POOL_PARAMS, 'date': today, 'sort': 'fund:asc'}
     data = _fetch_json(LIMIT_DOWN_URL, params=params)
     if data and data.get('data') and data['data'].get('pool'):
         return data['data']['pool']
