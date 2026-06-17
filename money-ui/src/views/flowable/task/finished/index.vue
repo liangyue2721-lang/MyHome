@@ -11,7 +11,7 @@
         />
       </el-form-item>
       <el-form-item label="开始时间" prop="deployTime">
-        <el-date-picker clearable size="small"
+        <el-date-picker :editable="false" clearable size="small"
                         v-model="queryParams.deployTime"
                         type="date"
                         value-format="yyyy-MM-dd"

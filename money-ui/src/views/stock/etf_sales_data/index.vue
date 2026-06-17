@@ -2,7 +2,7 @@
   <div class="app-container">
     <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch" label-width="68px">
       <el-form-item label="数据记录日期" prop="recordDate">
-        <el-date-picker clearable
+        <el-date-picker :editable="false" clearable
                         v-model="queryParams.recordDate"
                         type="date"
                         value-format="yyyy-MM-dd"
@@ -126,7 +126,7 @@
     <el-dialog :title="title" :visible.sync="open" width="500px" append-to-body>
       <el-form ref="form" :model="form" :rules="rules" label-width="80px">
         <el-form-item label="数据记录日期" prop="recordDate">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.recordDate"
                           type="date"
                           value-format="yyyy-MM-dd"

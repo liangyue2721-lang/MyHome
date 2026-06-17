@@ -3,7 +3,7 @@
     <el-card class="box-card search-wrapper" shadow="hover">
       <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch" label-width="80px">
         <el-form-item label="记录日期" prop="recordDate">
-          <el-date-picker
+          <el-date-picker :editable="false"
             clearable
             v-model="queryParams.recordDate"
             type="date"
@@ -145,7 +145,7 @@
     <el-dialog :title="title" :visible.sync="open" width="500px" append-to-body :close-on-click-modal="false">
       <el-form ref="form" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="记录日期" prop="recordDate">
-          <el-date-picker
+          <el-date-picker :editable="false"
             style="width: 100%"
             clearable
             v-model="form.recordDate"

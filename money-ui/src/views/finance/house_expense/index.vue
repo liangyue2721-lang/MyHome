@@ -214,7 +214,7 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="发生日期" prop="paymentDate">
-              <el-date-picker
+              <el-date-picker :editable="false"
                 style="width: 100%"
                 clearable
                 v-model="form.paymentDate"

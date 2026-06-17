@@ -18,7 +18,7 @@
         />
       </el-form-item>
       <el-form-item label="更新时间" prop="updatedAt">
-        <el-date-picker clearable
+        <el-date-picker :editable="false" clearable
           v-model="queryParams.updatedAt"
           type="date"
           value-format="yyyy-MM-dd"
@@ -129,7 +129,7 @@
           <el-input v-model="form.category" placeholder="请输入交易分类类型" />
         </el-form-item>
         <el-form-item label="更新时间" prop="updatedAt">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
             v-model="form.updatedAt"
             type="date"
             value-format="yyyy-MM-dd"

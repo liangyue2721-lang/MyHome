@@ -2,7 +2,7 @@
   <div class="app-container">
     <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch" label-width="68px">
       <el-form-item label="发生日期" prop="tradeDate">
-        <el-date-picker clearable
+        <el-date-picker :editable="false" clearable
                         v-model="queryParams.tradeDate"
                         type="date"
                         value-format="yyyy-MM-dd"
@@ -142,7 +142,7 @@
     <el-dialog :title="title" :visible.sync="open" width="500px" append-to-body>
       <el-form ref="form" :model="form" :rules="rules" label-width="80px">
         <el-form-item label="交易发生日期，格式 yyyy-MM-dd" prop="tradeDate">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.tradeDate"
                           type="date"
                           value-format="yyyy-MM-dd"
@@ -150,7 +150,7 @@
           </el-date-picker>
         </el-form-item>
         <el-form-item label="交易入账日期，格式 yyyy-MM-dd" prop="postDate">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.postDate"
                           type="date"
                           value-format="yyyy-MM-dd"

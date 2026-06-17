@@ -12,7 +12,7 @@
       <el-row :gutter="20">
         <el-col :span="6">
           <el-form-item label="交易日期" prop="transactionDate">
-            <el-date-picker
+            <el-date-picker :editable="false"
               v-model="queryParams.transactionDate"
               type="date"
               value-format="yyyy-MM-dd"
@@ -209,7 +209,7 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="交易日期" prop="transactionDate">
-              <el-date-picker
+              <el-date-picker :editable="false"
                 v-model="form.transactionDate"
                 type="date"
                 value-format="yyyy-MM-dd"

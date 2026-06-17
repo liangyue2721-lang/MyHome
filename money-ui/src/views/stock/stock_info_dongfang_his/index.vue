@@ -96,7 +96,7 @@
     <el-dialog :title="title" :visible.sync="open" width="500px" append-to-body>
       <el-form ref="form" :model="form" :rules="rules" label-width="80px">
         <el-form-item label="保存时间" prop="inDate">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.inDate"
                           type="date"
                           value-format="yyyy-MM-dd"

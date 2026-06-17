@@ -143,7 +143,7 @@
           <el-input v-model="form.issuePrice" placeholder="请输入发行价格"/>
         </el-form-item>
         <el-form-item label="上市日期" prop="listingDate">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.listingDate"
                           type="date"
                           value-format="yyyy-MM-dd"

@@ -20,7 +20,7 @@
         </el-select>
       </el-form-item>
       <el-form-item label="繳費日期" prop="paymentDate">
-        <el-date-picker clearable v-model="queryParams.paymentDate" type="date" value-format="yyyy-MM-dd"
+        <el-date-picker :editable="false" clearable v-model="queryParams.paymentDate" type="date" value-format="yyyy-MM-dd"
                         placeholder="請選擇繳費日期"></el-date-picker>
       </el-form-item>
       <el-form-item>
@@ -139,7 +139,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="繳費日期" prop="paymentDate">
-          <el-date-picker clearable v-model="form.paymentDate" type="date" value-format="yyyy-MM-dd"
+          <el-date-picker :editable="false" clearable v-model="form.paymentDate" type="date" value-format="yyyy-MM-dd"
                           placeholder="請選擇繳費日期"></el-date-picker>
         </el-form-item>
       </el-form>

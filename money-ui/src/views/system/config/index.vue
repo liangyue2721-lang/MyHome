@@ -30,7 +30,7 @@
         </el-select>
       </el-form-item>
       <el-form-item label="创建时间">
-        <el-date-picker
+        <el-date-picker :editable="false"
           v-model="dateRange"
           style="width: 240px"
           value-format="yyyy-MM-dd"

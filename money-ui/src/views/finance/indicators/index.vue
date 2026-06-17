@@ -258,7 +258,7 @@
           <el-input v-model="form.currentValue" placeholder="请输入当前进度值"/>
         </el-form-item>
         <el-form-item label="开始日期" prop="startDate">
-          <el-date-picker
+          <el-date-picker :editable="false"
             clearable
             v-model="form.startDate"
             type="date"
@@ -267,7 +267,7 @@
           />
         </el-form-item>
         <el-form-item label="计划完成日期" prop="endDate">
-          <el-date-picker
+          <el-date-picker :editable="false"
             clearable
             v-model="form.endDate"
             type="date"

@@ -163,7 +163,7 @@
           <el-input v-model="form.amount" placeholder="请输入金额：精确到分"/>
         </el-form-item>
         <el-form-item label="消费日期" prop="expenseDate">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.expenseDate"
                           type="date"
                           value-format="yyyy-MM-dd"

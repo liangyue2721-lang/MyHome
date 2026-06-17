@@ -16,7 +16,7 @@
     <el-card shadow="never" class="search-card mb-4">
       <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch" label-width="70px">
         <el-form-item label="成交日期" prop="tradeDate">
-          <el-date-picker
+          <el-date-picker :editable="false"
             clearable
             v-model="queryParams.tradeDate"
             type="date"
@@ -170,7 +170,7 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="成交日期" prop="tradeDate">
-              <el-date-picker clearable
+              <el-date-picker :editable="false" clearable
                               style="width: 100%"
                               v-model="form.tradeDate"
                               type="date"

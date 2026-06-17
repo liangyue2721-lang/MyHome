@@ -42,7 +42,7 @@
         />
       </el-form-item>
       <el-form-item label="计划执行时间" prop="scheduledTime">
-        <el-date-picker clearable
+        <el-date-picker :editable="false" clearable
           v-model="queryParams.scheduledTime"
           type="date"
           value-format="yyyy-MM-dd"
@@ -50,7 +50,7 @@
         </el-date-picker>
       </el-form-item>
       <el-form-item label="开始执行时间" prop="startTime">
-        <el-date-picker clearable
+        <el-date-picker :editable="false" clearable
           v-model="queryParams.startTime"
           type="date"
           value-format="yyyy-MM-dd"
@@ -58,7 +58,7 @@
         </el-date-picker>
       </el-form-item>
       <el-form-item label="执行结束时间" prop="endTime">
-        <el-date-picker clearable
+        <el-date-picker :editable="false" clearable
           v-model="queryParams.endTime"
           type="date"
           value-format="yyyy-MM-dd"
@@ -209,7 +209,7 @@
           <el-input v-model="form.nodeId" placeholder="请输入执行节点ID" />
         </el-form-item>
         <el-form-item label="计划执行时间" prop="scheduledTime">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
             v-model="form.scheduledTime"
             type="date"
             value-format="yyyy-MM-dd"
@@ -217,7 +217,7 @@
           </el-date-picker>
         </el-form-item>
         <el-form-item label="开始执行时间" prop="startTime">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
             v-model="form.startTime"
             type="date"
             value-format="yyyy-MM-dd"
@@ -225,7 +225,7 @@
           </el-date-picker>
         </el-form-item>
         <el-form-item label="执行结束时间" prop="endTime">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
             v-model="form.endTime"
             type="date"
             value-format="yyyy-MM-dd"

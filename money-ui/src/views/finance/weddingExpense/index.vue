@@ -54,7 +54,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="支付日期">
-          <el-date-picker
+          <el-date-picker :editable="false"
             v-model="daterangePaymentDate"
             style="width: 240px"
             value-format="yyyy-MM-dd"
@@ -243,7 +243,7 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="支付日期" prop="paymentDate">
-              <el-date-picker clearable
+              <el-date-picker :editable="false" clearable
                               v-model="form.paymentDate"
                               type="date"
                               value-format="yyyy-MM-dd"

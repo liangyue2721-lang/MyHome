@@ -12,7 +12,7 @@
         </el-select>
       </el-form-item>
       <el-form-item label="触发时间" prop="alertDate">
-        <el-date-picker clearable
+        <el-date-picker :editable="false" clearable
                         v-model="queryParams.alertDate"
                         type="date"
                         value-format="yyyy-MM-dd"
@@ -163,7 +163,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="提醒触发时间" prop="alertDate">
-          <el-date-picker clearable
+          <el-date-picker :editable="false" clearable
                           v-model="form.alertDate"
                           type="date"
                           value-format="yyyy-MM-dd"
